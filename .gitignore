@@ -1,0 +1,55 @@
+# Secrets and local configuration (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+secrets/
+credentials*
+*.secret
+application-local.yml
+application-local.properties
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Backend build output (Maven)
+target/
+*.class
+*.log
+dependency-reduced-pom.xml
+.mvn/wrapper/maven-wrapper.jar
+
+# Frontend build output and dependencies (Next.js)
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test and tool output
+test-results/
+playwright-report/
+.playwright/
+.vitest/
+
+# IDEs and OS files
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Terraform / infrastructure local state, if added later
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Excluded by user decision (2026-10-17)
+Leadership platform wireframe.zip
