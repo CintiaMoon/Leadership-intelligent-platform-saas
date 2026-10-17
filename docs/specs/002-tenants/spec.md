@@ -2,7 +2,7 @@
 
 - ID: SPEC-TEN
 - Status: Approved
-- Re-approved on 2026-10-17. Approver: product owner.
+- Re-approved on 2026-10-17, including the later edits that day. Approver: product owner.
 - Requirements: TEN-001 through TEN-006
 
 ## Objective
@@ -24,7 +24,7 @@ A single user account can belong to multiple companies, with a different role in
 ### Role-permission matrix
 Permissions are defined explicitly in the matrix below, not through role names or scattered conditionals. The matrix is enforced on the backend. The frontend reflects the same policy but is not the security boundary.
 
-The matrix is a proposed starting point and assumes Agents work with the product's core business records.
+The matrix assumes Agents work with the product's core business records.
 - "Agent/Viewer only" means an Admin may act only on memberships whose role is Agent or Viewer, never on an Owner or another Admin (invariants 3 and 4; SPEC-MEM role-assignment table).
 - "View only" means read access to plan and entitlement data without the right to change it; only an Owner changes the plan (the Owner's authority over the plan is stated in "Role boundaries"). Confirmed 2026-10-16. The "View only" cell on the manage-plans row and the "View plan and entitlements" row mean the same thing for Admin.
 - Core business records are questionnaires (including their versions), assessment runs, and the people directory. Reports and dashboards are those derived from them (decision D-49).
@@ -78,7 +78,7 @@ The matrix is a proposed starting point and assumes Agents work with the product
 
 ### Company creation
 - Any user with a verified email and an active account can create a company, subject to abuse-prevention controls.
-- The user must not be locked or suspended.
+- The user's account must be ACTIVE, not DISABLED (D-56).
 - Company creation is rate limited per IP address to 5 creations per hour (matching the registration default in SPEC-AUTH) and per account to 10 creations per day (decided 2026-10-16).
 - The user becomes the initial Owner.
 - The company and the initial Owner membership are created in the same database transaction. If creation fails, neither is left partially created.
@@ -86,7 +86,7 @@ The matrix is a proposed starting point and assumes Agents work with the product
 - Plan limits and entitlements are enforced by the backend.
 
 ### Membership suspension and removal
-Membership status is kept separate from membership role and distinguishes suspension from removal. Proposed status values: ACTIVE, SUSPENDED, REMOVED (a member who leaves is recorded as REMOVED, with the member as the actor). Only ACTIVE memberships count as active members and active Owners. A role determines what a person can do; a status determines whether the person can access the company at all.
+Membership status is kept separate from membership role and distinguishes suspension from removal. Status values: ACTIVE, SUSPENDED, REMOVED (a member who leaves is recorded as REMOVED, with the member as the actor). Only ACTIVE memberships count as active members and active Owners. A role determines what a person can do; a status determines whether the person can access the company at all.
 
 Suspension is reversible. It is used to block a member temporarily without ending the membership relationship.
 - Preserves the user's role and membership history.
@@ -129,7 +129,7 @@ The deletion workflow (request, pending deletion, cancellation, purge, and tombs
 - AC-TEN-08: A request that references a related record belonging to a different company than the authorized tenant context is rejected and changes no data.
 - AC-TEN-09: Suspending or removing a user's membership in one company does not affect their active membership or access in another company.
 - AC-TEN-10: Every Yes/No cell and every defined-condition cell ("Agent/Viewer only", "View only") of the role-permission matrix is tested for every role: granted permissions succeed and every other role-permission pair is denied by the backend. Operations not listed in the matrix or in the not-role-based list are denied.
-- AC-TEN-11: A user whose account is locked or suspended cannot create a company.
+- AC-TEN-11: A user whose account is DISABLED cannot create a company.
 - AC-TEN-12: An Admin can view the company's plan and entitlements but cannot change them; a plan change requested by an Admin, Agent, or Viewer is rejected.
 - AC-TEN-13: The 6th company-creation attempt from one IP address within an hour is throttled.
 - AC-TEN-14: A data export is rejected for an Agent or Viewer, and for an Owner or Admin whose company's plan lacks the export entitlement or whose expired trial is within its 14-day read-only window.

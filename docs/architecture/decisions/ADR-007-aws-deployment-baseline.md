@@ -22,7 +22,7 @@ The BFF topology (ADR-001) needs a public BFF, a private API, a trusted-proxy po
 - Source hosting: a private GitHub repository, with Git initialized before any further implementation.
 - The RTO is kept at 4 hours and is defined as a recovery-capability target, separate from human support coverage (see "Availability, recovery, and operations").
 
-Git was initialized locally on 2026-10-17 (branch `main`, with a `.gitignore`); nothing has been committed or pushed. The private GitHub repository `Leadership-intelligent-platform-saas` was created by the user on 2026-10-17 but is not yet added as a remote.
+Git was initialized locally on 2026-10-17 (branch `main`, with a `.gitignore`); the first commit was pushed on 2026-10-17 to the private GitHub repository `Leadership-intelligent-platform-saas` (remote `origin`).
 
 ## Decision (proposed baseline on AWS)
 Items marked **(P)** are proposals that nothing in the specs or the inputs requires.
@@ -70,7 +70,7 @@ Items marked **(P)** are proposals that nothing in the specs or the inputs requi
 - Delivery goes through the outbox (ADR-003), so a failed send is retried and does not run inside a database transaction.
 
 ### Delivery pipeline (GitHub Actions)
-- The repository is a private GitHub repository, and Git must be initialized before any further implementation (decided 2026-10-17). Git is initialized locally; the GitHub repository `Leadership-intelligent-platform-saas` exists but is not yet added as a remote.
+- The repository is a private GitHub repository, and Git must be initialized before any further implementation (decided 2026-10-17). Git is initialized and the first commit is pushed to the private GitHub repository `Leadership-intelligent-platform-saas`.
 - CI authenticates to AWS with GitHub's OIDC federation and a separate least-privilege role per environment, so no long-lived AWS keys are stored.
 - Third-party actions are pinned to full commit hashes. Branch protection requires review and passing checks. Production deployments use a protected GitHub environment with a required approver **(P)**.
 - Enable GitHub secret scanning with push protection and dependency updates through Dependabot **(P)**.
@@ -108,7 +108,7 @@ The figures below are my rough estimates of us-east-1 list prices from memory. T
 - The AWS Pricing Calculator check of the lean profile against the US$300 ceiling, including whether production keeps Multi-AZ.
 - Confirmation of the lean profile.
 - The legal and privacy position on purged data remaining in backups for up to 40 days (D-40).
-- Adding the GitHub repository as `origin` and making the first commit. This needs the repository URL, and you need to decide whether the wireframe zip and PNGs in the repository root are committed.
+- Enabling branch protection, secret scanning with push protection, and Dependabot on the GitHub repository.
 
 ## Alternatives considered
 - EKS or self-managed Kubernetes: more flexibility, much more operating cost.

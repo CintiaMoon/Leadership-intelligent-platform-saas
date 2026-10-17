@@ -10,7 +10,7 @@ SPEC-AUTH requires distributed limits by account, IP, and operation, shared acro
 
 ## Decision
 - Counters are stored in PostgreSQL, so limits hold across instances without new infrastructure.
-- If the store is unavailable, login, registration, verification-resend, invitation-token, and company-creation endpoints fail closed (the request is rejected).
+- If the store is unavailable, login, registration, verification-resend, password-reset, invitation-token, and company-creation endpoints fail closed (the request is rejected).
 - Limits follow SPEC-AUTH, SPEC-INV, and SPEC-TEN: login 5 failed attempts per account and IP pair per 15 minutes with progressive delay, an account-only ceiling of 20 failed attempts per hour that adds a capped delay and never locks the account, and 20 per IP per minute; invitation emails 20 per inviter per hour, 50 per company per day, and 3 per recipient per 24 hours; registration 5 per IP per hour; verification resend 3 per account and 10 per IP per hour; invitation-token failures 10 per IP per hour; company creation 5 per IP per hour and 10 per account per day.
 
 ## Alternatives considered

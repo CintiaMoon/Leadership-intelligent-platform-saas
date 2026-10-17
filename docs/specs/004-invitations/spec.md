@@ -24,7 +24,9 @@ Allow authorized company members to invite users through a secure, time-limited,
 - Token handling: the invitation link carries the raw token in the URL fragment; the client sends it in the request body; the token never appears in a request path or query string (D-44).
 - Abuse control: failed invitation-token attempts are rate limited per IP address (limit in AC-INV-11).
 - Outbound invitation emails are limited to 20 per inviter per hour, 50 per company per day, and 3 sends per recipient address per 24 hours, with resends counting (D-52, decided 2026-10-16).
-- Member limit: accepting an invitation is rejected when the company's active-member limit for its plan has been reached (SPEC-PLAN).
+- Member limit: accepting an invitation is rejected when the company's active-member limit for its plan has been reached (SPEC-PLAN). Creating an invitation is not capped by remaining plan capacity; the interface shows a warning (decided 2026-10-17).
+- Inviter changes: when an inviter's membership is removed or suspended, or their role changes so they can no longer grant the invited role, their pending invitations for roles they can no longer grant are revoked automatically (D-62, decided 2026-10-17).
+- New users: an invited person without an account signs up and verifies their email through the normal flow, then accepts. Following an invitation link does not mark an email as verified (D-63, decided 2026-10-17).
 
 ## Acceptance criteria
 - AC-INV-01: Unauthorized users cannot issue invitations.
@@ -49,6 +51,9 @@ Allow authorized company members to invite users through a secure, time-limited,
 - AC-INV-20: The invitation accept page sends `Referrer-Policy: no-referrer` and removes the token fragment from the address bar after reading it.
 - AC-INV-21: Resending or revoking an invitation updates the invitation and rotates or invalidates its token in a single transaction.
 - AC-INV-22: Accepting with a token whose invitation email does not match the signed-in user returns the same error code as an invalid token.
+- AC-INV-24: When an inviter is removed or suspended, or loses the ability to grant an invited role, their pending invitations for roles they can no longer grant are revoked and can no longer be accepted.
+- AC-INV-25: Following an invitation link does not mark the invitee's email as verified; acceptance still requires a verified email matching the invitation.
+- AC-INV-26: Creating an invitation is not rejected because of the company's remaining plan capacity; acceptance is rejected at the limit (AC-INV-12).
 - AC-INV-23: The 21st invitation by one inviter within an hour, the 51st invitation for one company within a day, and the 4th send to one recipient address within 24 hours are rejected.
 
 ## Traceability
@@ -56,10 +61,10 @@ Allow authorized company members to invite users through a secure, time-limited,
 |---|---|
 | INV-001 | AC-INV-01, AC-INV-16, AC-INV-17 |
 | INV-002 | AC-INV-03, AC-INV-05, AC-INV-14, AC-INV-15, AC-INV-19, AC-INV-21 |
-| INV-003 | AC-INV-02, AC-INV-08, AC-INV-22 |
-| INV-004 | AC-INV-03, AC-INV-09 |
+| INV-003 | AC-INV-02, AC-INV-08, AC-INV-22, AC-INV-25 |
+| INV-004 | AC-INV-03, AC-INV-09, AC-INV-24 |
 | INV-005 | AC-INV-04, AC-INV-10 |
-| Supporting | AC-INV-06 (tenant boundary), AC-INV-07, AC-INV-18, and AC-INV-20 (NFR-SEC-003, token handling), AC-INV-11 and AC-INV-23 (abuse control), AC-INV-12 (PLAN-003, PLAN-005 member quota), AC-INV-13 (pending-deletion block) |
+| Supporting | AC-INV-06 (tenant boundary), AC-INV-07, AC-INV-18, and AC-INV-20 (NFR-SEC-003, token handling), AC-INV-11 and AC-INV-23 (abuse control), AC-INV-12 and AC-INV-26 (PLAN-003, PLAN-005 member quota), AC-INV-13 (pending-deletion block) |
 
 ## Tests
 Test matching/mismatching email, expiry at 7 days, replay, revocation, resend token rotation, concurrent acceptance, concurrent invitation creation, inactive company, inviter permissions per role, existing members, and cross-tenant manipulation.

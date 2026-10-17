@@ -13,6 +13,10 @@ PENDING -> COMPLETED | CANCELLED | EXPIRED
 
 A transfer expires 7 days after it is initiated. The initiator can cancel a pending transfer.
 
+Expiry is enforced when a transfer is read or acted on: a pending transfer older than 7 days is treated as EXPIRED. A periodic sweep also marks overdue transfers EXPIRED and sends the notifications (D-64, decided 2026-10-17).
+
+Notifications: the recipient is emailed when a transfer is initiated, and the initiator and the recipient are emailed when it is accepted, cancelled, or expires. The emails link to the application and contain no secret, because acceptance is an authenticated action in the application.
+
 ## Completion transaction
 1. Verify the transfer is pending and unexpired.
 2. Lock the company row first, then the transfer row. Under the lock, require the company to be ACTIVE (not PENDING_DELETION) and the transfer's initiator to still be the active Owner.
@@ -49,6 +53,8 @@ Do not call email or other external providers inside the database transaction.
 - AC-OWN-12: Accepting an ownership transfer is rejected unless the recipient's last authentication was within the previous 10 minutes (SPEC-AUTH).
 - AC-OWN-13: On completion the recipient is the Owner and the previous Owner is an Admin.
 - AC-OWN-14: A transfer pending for more than 7 days is EXPIRED and cannot be accepted.
+- AC-OWN-16: An overdue transfer is treated as EXPIRED when read and is rejected for acceptance even if the periodic sweep has not run; the sweep later marks it EXPIRED.
+- AC-OWN-17: Transfer notifications (initiation, acceptance, cancellation, expiry) are enqueued through the outbox and contain no token or other secret.
 - AC-OWN-15: Completing a transfer is rejected if, at completion time, the company is not ACTIVE or the transfer's initiator is no longer the active Owner.
 
 ## Traceability
@@ -57,8 +63,8 @@ Do not call email or other external providers inside the database transaction.
 | OWN-001 | AC-OWN-01, AC-OWN-08, AC-OWN-09, AC-OWN-11 |
 | OWN-002 | AC-OWN-02, AC-OWN-12 |
 | OWN-003 | AC-OWN-04, AC-OWN-05, AC-OWN-10, AC-OWN-13, AC-OWN-15 |
-| OWN-004 | AC-OWN-03, AC-OWN-07, AC-OWN-14 |
-| OWN-005 | AC-OWN-05, AC-OWN-06 |
+| OWN-004 | AC-OWN-03, AC-OWN-07, AC-OWN-14, AC-OWN-16 |
+| OWN-005 | AC-OWN-05, AC-OWN-06, AC-OWN-17 |
 
 ## Tests
 Concurrent acceptance, competing transfers, expiry at 7 days, initiator cancellation, recipient ineligibility, pending deletion in both directions, and database rollback after an injected failure.

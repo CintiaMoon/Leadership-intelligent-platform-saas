@@ -2,7 +2,7 @@
 
 - ID: SPEC-MEM
 - Status: Approved
-- Re-approved on 2026-10-17. Approver: product owner.
+- Re-approved on 2026-10-17, including the later edits that day. Approver: product owner.
 - Requirements: TEN-003 through TEN-006
 
 ## Objective
@@ -68,7 +68,7 @@ Membership removal takes effect on the next protected API request, without requi
 - Requests already in progress may complete unless cancellation is explicitly implemented; requests starting after revocation are denied.
 
 ## Open items
-- The retention policy referenced for deleted accounts (decision D-40).
+- Account deletion is not a V1 flow, so the retention policy for deleted accounts is deferred until such a flow exists (D-40).
 
 ## Acceptance criteria
 - AC-MEM-01: Unauthorized users cannot change membership or role.
