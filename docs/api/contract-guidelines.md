@@ -12,8 +12,22 @@ Before implementing a feature that crosses frontend/backend boundaries, update a
 - Document authentication, CSRF requirements, authorization requirements, idempotency, rate limits, and expected status codes per operation.
 - Treat tenant identifiers as selectors only; the backend must verify the caller's membership and permission.
 - Do not expose raw invitation/verification tokens in logs. Tokens may appear in user-targeted links only as required and must be single-use, expiring, and stored as hashes.
-- Define pagination and sorting conventions before list endpoints are implemented.
+- Follow the pagination and sorting rules and the export rules below (D-72, D-73).
 - Make breaking changes explicit; do not silently alter existing response semantics.
+
+## Pagination and sorting (D-72, decided 2026-10-17)
+- List endpoints use cursor (keyset) pagination: query parameters `limit` (default 25, maximum 100) and `cursor`; the response has `items`, `nextCursor` (null on the last page), and `totalCount`.
+- `totalCount` is returned on every list response. It counts only rows in the authorized tenant and the applied filters. The extra count query is part of the endpoint's performance test.
+- Sorting uses a per-endpoint allowlist (`sort=field` or `sort=-field`) with `id` as a stable tiebreaker. Unknown sort fields or invalid limits return a 400 problem response.
+- Cursors are opaque and validated. A cursor never carries a tenant ID that the server trusts, and a cursor from one tenant or query is rejected for another.
+
+## Data export (D-73, decided 2026-10-17)
+- Export is always asynchronous: the request creates a job through the outbox (ADR-003) and returns 202 with a job resource; the client polls for status.
+- Format is CSV. Content is the company's core business records and derived reports (SPEC-TEN). Credentials, sessions, audit events, and other users' personal data beyond the people directory are excluded.
+- Authorization: Owner or Admin, plan export entitlement, recent authentication (SPEC-AUTH), and not in the read-only window (SPEC-PLAN).
+- The download link is short-lived, bound to the requesting member and tenant, and the file expires after 24 hours (proposed value).
+- Limit: 3 export requests per company per day (proposed value). Cells beginning with `=`, `+`, `-`, or `@` are escaped against CSV injection.
+- Each request and each download writes an audit event (`docs/architecture/audit-events.md`).
 
 ## Suggested endpoint families (illustrative; approve exact paths and semantics)
 - Authentication: `/api/v1/auth/signup`, `/api/v1/auth/verify-email`, `/api/v1/auth/login`, `/api/v1/auth/logout`, `/api/v1/auth/session`
