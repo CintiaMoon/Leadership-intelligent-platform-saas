@@ -2,7 +2,7 @@
 
 - Status: Accepted (suggestion approved by the user on 2026-10-16)
 - Date: 2026-10-16
-- Decision owners: TBD
+- Decision owners: Architect (roles, see the decision register)
 - Related: decision register D-05; SPEC-AUTH, SPEC-INV, SPEC-OWN, SPEC-DEL
 
 ## Context

@@ -2,7 +2,7 @@
 
 - Status: Accepted (suggestion approved by the user on 2026-10-16)
 - Date: 2026-10-16
-- Decision owners: TBD
+- Decision owners: Architect (roles, see the decision register)
 - Related: decision register D-09; `docs/api/contract-guidelines.md`
 
 ## Context

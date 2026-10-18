@@ -2,7 +2,7 @@
 
 - Status: Proposed — approved as a suggestion on 2026-10-16; reviewed by the security-engineer agent the same day (findings applied below). The login throttle key is decided (D-51)
 - Date: 2026-10-16
-- Decision owners: TBD
+- Decision owners: Security owner, Architect (roles, see the decision register)
 - Related: decision register D-06, D-13; SPEC-AUTH, SPEC-INV, SPEC-TEN; ADR-001
 
 ## Context

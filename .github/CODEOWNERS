@@ -1,0 +1,8 @@
+# Review ownership. With a single maintainer, this file documents ownership;
+# required code-owner review is switched on when a second reviewer joins.
+*                         @CintiaMoon
+/docs/specs/              @CintiaMoon
+/docs/architecture/       @CintiaMoon
+/docs/api/                @CintiaMoon
+/.github/                 @CintiaMoon
+# Add when they exist: backend migrations, security configuration, infrastructure code.

@@ -2,7 +2,7 @@
 
 - Status: Proposed — the inputs below were given by the user on 2026-10-17; the AWS design built on them is a proposed industry-practice baseline that still needs review
 - Date: 2026-10-17
-- Decision owners: TBD
+- Decision owners: DevOps lead, Architect (roles, see the decision register)
 - Related: decision register D-08, D-40, D-41, D-50, D-42; ADR-001, ADR-003, ADR-004; NFR-SEC-005, NFR-OPS-001, NFR-REL-003
 
 ## Context

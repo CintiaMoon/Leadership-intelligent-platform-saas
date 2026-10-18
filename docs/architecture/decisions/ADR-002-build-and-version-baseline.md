@@ -2,7 +2,7 @@
 
 - Status: Approved
 - Date: 10/17/2026
-- Decision owners: TBD
+- Decision owners: Architect (roles, see the decision register)
 - Related: decision register D-04
 
 ## Context

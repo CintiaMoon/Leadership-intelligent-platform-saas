@@ -2,7 +2,7 @@
 
 - Status: Proposed — Option A (Next.js BFF) is selected in SPEC-AUTH; the proposals below were approved as suggestions on 2026-10-16 and reviewed by the security-engineer agent the same day (findings applied). The deployment topology (D-08) is still open, so this ADR is not yet accepted
 - Date: TBD
-- Decision owners: TBD
+- Decision owners: Security owner, Architect (roles, see the decision register)
 - Related: decision register D-01, D-02, D-06; SPEC-AUTH; SPEC-MEM
 
 ## Context

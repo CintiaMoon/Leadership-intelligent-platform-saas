@@ -18,7 +18,7 @@ Draft — set measurable targets before production.
 - NFR-REL-004: The availability target is 99%, with business-hours operational support (decision D-08, 2026-10-17). Recovery targets are an RPO of 15 minutes and an RTO of 4 hours; the RTO is a recovery-capability target and does not promise an out-of-hours human response (see ADR-007).
 
 ## Performance and capacity
-- NFR-PERF-001: Product owner must define expected load, latency objectives, and capacity targets.
+- NFR-PERF-001: Starting baseline, approved by the product owner on 2026-10-18 as a proposal to be validated, not a commitment: 100 companies, 25 concurrent users, and 10 requests per second at peak; p95 latency under 500 ms for reads and under 1 s for writes, measured at the BFF, excluding password hashing (Argon2id is slow by design). The release-gate load test (ADR-004) confirms or revises these numbers.
 - NFR-PERF-002: Rate-limit and session storage must support the intended deployment topology.
 
 ## Privacy and retention
@@ -35,6 +35,8 @@ Draft — set measurable targets before production.
 - NFR-OPS-001: Migrations are reviewed and applied through controlled deployment steps.
 - NFR-OPS-002: Logs, metrics, and alerts do not expose secrets or unnecessary personal data.
 - NFR-OPS-003: Production recovery and incident procedures are documented.
+- NFR-OPS-004: Monitoring uses CloudWatch alarms for the 5xx rate, load-balancer latency, database CPU, storage and connections, outbox backlog, rate-limit store errors, and the billing budget (80%). Alarms notify by email; there is no 24x7 on-call (ADR-007). Logs are structured JSON with a correlation ID and no secrets (NFR-OPS-002).
+- NFR-OPS-005: Incidents use the severity scheme and business-hours response targets in `docs/runbooks/operations/incident-response.md`. The targets are proposed values.
 
 
 ## Implementation alignment

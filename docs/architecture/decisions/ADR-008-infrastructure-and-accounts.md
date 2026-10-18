@@ -2,7 +2,7 @@
 
 - Status: Proposed. The product owner approved the recommendations on 2026-10-17 (D-69, D-70, D-71); this ADR is not Accepted until it is reviewed together with ADR-007
 - Date: 2026-10-17
-- Decision owners: TBD
+- Decision owners: DevOps lead (roles, see the decision register)
 - Related: decision register D-69, D-70, D-71, D-08; ADR-001, ADR-007
 
 ## Context
