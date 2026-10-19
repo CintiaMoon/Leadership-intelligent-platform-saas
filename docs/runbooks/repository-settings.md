@@ -30,3 +30,5 @@ Applied by Claude Code with `gh api` at the product owner's instruction. The fir
 | Signed commits | Not enabled (preferred only) |
 
 Notes: the repository is public, so the full history is visible; the `secret-scan` job scans full history and passed, but that is not a substitute for a manual review. With `enforce_admins: false` the owner can still bypass protection; turn it on once a second maintainer exists or if bypass is not wanted.
+
+Rulesets (2026-10-19): two rulesets created in the GitHub UI (`main-1`: block deletion and force pushes; `main-2`: PR required with 1 approval, admin bypass) were found. With one maintainer the 1-approval rule blocked every merge, so `main-2` was set to 0 approvals and `main-1` was deleted because classic branch protection already blocks deletion and force pushes. Raise `main-2` back to 1 approval when a second reviewer joins.
