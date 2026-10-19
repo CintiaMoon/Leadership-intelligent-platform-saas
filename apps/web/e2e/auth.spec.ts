@@ -38,16 +38,21 @@ test("signup, email verification, login, profile and logout", async ({ page, con
   await expect(page.getByText(email).first()).toBeVisible();
 
   // The session cookie is hardened and invisible to scripts.
-  const session = (await context.cookies()).find((cookie) => cookie.name === "session");
+  const sessionName = process.env.E2E_PROD_COOKIES === "true" ? "__Host-session" : "session";
+  const session = (await context.cookies()).find((cookie) => cookie.name === sessionName);
   expect(session?.httpOnly).toBe(true);
   expect(session?.sameSite).toBe("Lax");
+  expect(session?.path).toBe("/");
+  if (process.env.E2E_PROD_COOKIES === "true") {
+    expect(session?.secure).toBe(true);
+  }
   expect(await page.evaluate(() => document.cookie)).not.toContain("session");
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto("/account");
   await expect(page).toHaveURL(/\/login$/);
-  expect((await context.cookies()).find((cookie) => cookie.name === "session")).toBeUndefined();
+  expect((await context.cookies()).find((cookie) => cookie.name === sessionName)).toBeUndefined();
 });
 
 test("a verification link works once", async ({ page }) => {

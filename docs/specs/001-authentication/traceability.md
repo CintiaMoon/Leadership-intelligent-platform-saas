@@ -63,8 +63,15 @@ End-to-end (Playwright, 8, real BFF, API, PostgreSQL, Mailpit), `e2e/auth.spec.t
 | No serious or critical axe violations (WCAG 2 A, AA, 2.2 AA tags) | n/a | two accessibility tests |
 Mutation check: leaving the token in the address bar fails 3 end-to-end tests.
 
+## Phase 6 (hardening) results, 2026-10-19
+- **Argon2id benchmark** (`Argon2BenchmarkTest`, opt-in with `-Dbenchmark=true`): run on a developer laptop only (8 CPUs, Java 24). It does not give the D-12 values, because the production task size is not fixed. See plan section 14 for the numbers and the procedure for the target machine.
+- **Rate-limit store load test** (`RateLimitLoadTest`, opt-in): 64 threads, local PostgreSQL 17 in Docker. Exactly 100 of 25,600 hits on one hot key were allowed; the same holds across 8 separate limiter instances sharing the database (100 of 3,200). 5,600 writes per second with a pool of 4 (p99 61 ms); a 200,000-row expired backlog was swept in 445 ms. The fail-closed path under pool exhaustion was not reached (no request exceeded the 250 ms wait), so it is still covered only by `FailClosedTests` and `JdbcRateLimiterTests`.
+- **Cookies as in production** (`E2E_PROD_COOKIES=true npm run e2e`): all 8 end-to-end tests pass with `__Host-` names and `Secure` cookies on `http://localhost` in Chromium, which accepts Secure cookies there. This is not a real HTTPS edge or routing environment; that check is still open.
+- **Independent reviews** (security-engineer and code-reviewer agents, read-only, nothing executed): findings and their triage are in plan section 14. Corrections to this file they prompted: AC-AUTH-39 is verified for the error mapping and the semaphore, not for real signup, login or reset under saturation; AC-AUTH-18 is satisfied under the D-78 reading (the sixth failure is refused for one minute); the "a link without a token explains itself" test is about the page, not AC-AUTH-37.
+
 ## Not run or not yet possible
-- Load test of the rate-limit store (ADR-004 release gate), the Argon2id benchmark on the production task size (D-12), and the cookie check in a production-like environment (ADR-001): Phase 6.
-- Independent security and code review: Phase 6.
-- Playwright tests were run locally in Chromium only; the new CI `e2e` job runs them on every pull request. Firefox, WebKit, and real mobile devices were not tested.
+- Argon2id values on the production task size (D-12) and the rate-limit load test against the production database class.
+- The cookie and client-address checks through a real HTTPS edge (ADR-001).
+- Playwright tests ran in Chromium only (locally and in the CI `e2e` job). Firefox, WebKit, and real mobile devices were not tested.
 - Manual keyboard-only and screen-reader review of the auth pages: not done. Automated axe scans pass for serious and critical issues, which is not proof of accessibility.
+- Runbooks are drafts and have not been rehearsed.
