@@ -1,0 +1,6 @@
+# Test-only values; none of these is a real secret.
+app:
+  security:
+    bff-credentials: test-bff-credential-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,test-bff-credential-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+  rate-limit:
+    hmac-key: test-rate-limit-hmac-key-0123456789abcdef0123456789abcdef

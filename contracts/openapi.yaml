@@ -458,12 +458,15 @@ components:
       description: Stable application error code (ADR-005). The frontend maps codes to messages.
       enum:
         - VALIDATION_FAILED
+        - REQUEST_REJECTED
         - INVALID_CREDENTIALS
         - TOKEN_INVALID
         - UNAUTHENTICATED
+        - FORBIDDEN
         - CSRF_REJECTED
         - RATE_LIMITED
         - SERVICE_UNAVAILABLE
+        - INTERNAL_ERROR
     FieldError:
       type: object
       required: [field, code]
@@ -472,7 +475,7 @@ components:
           type: string
         code:
           type: string
-          description: Stable field error code, for example `REQUIRED`, `TOO_LONG`, `TOO_SHORT`, `BREACHED_PASSWORD`.
+          description: Stable field error code, for example `REQUIRED`, `INVALID_LENGTH`, `INVALID`, `BREACHED_PASSWORD`.
     Problem:
       type: object
       description: RFC 9457 problem details with a stable `code`.
