@@ -21,6 +21,9 @@ public final class AuthRateLimits {
 
 	public static final RateLimitPolicy RESEND_ACCOUNT = new RateLimitPolicy("resend-account", 3, Duration.ofHours(1));
 
+	/** Login attempts per client address per minute; also counted for step-up (AC-AUTH-18). */
+	public static final RateLimitPolicy LOGIN_IP = new RateLimitPolicy("login-ip", 20, Duration.ofMinutes(1));
+
 	public static final RateLimitPolicy RESEND_IP = new RateLimitPolicy("resend-ip", 10, Duration.ofHours(1));
 
 	private AuthRateLimits() {

@@ -33,9 +33,14 @@ class RateLimitConfig {
 		return new JdbcRateLimiter(store, new KeyHasher(properties.hmacKey()), clock);
 	}
 
+	@Bean
+	LoginThrottle loginThrottle(RateLimitStore store, RateLimitProperties properties, Clock clock) {
+		return new LoginThrottle(store, new KeyHasher(properties.hmacKey()), clock);
+	}
+
 }
 
-/** Removes expired counters. Safe to run on every instance: the delete is idempotent. */
+/** Removes expired counters. Safe to run on every instance: the deletes are idempotent. */
 @Component
 class RateLimitSweeper {
 
@@ -43,16 +48,19 @@ class RateLimitSweeper {
 
 	private final JdbcRateLimiter limiter;
 
-	RateLimitSweeper(JdbcRateLimiter limiter) {
+	private final LoginThrottle loginThrottle;
+
+	RateLimitSweeper(JdbcRateLimiter limiter, LoginThrottle loginThrottle) {
 		this.limiter = limiter;
+		this.loginThrottle = loginThrottle;
 	}
 
 	@Scheduled(fixedDelayString = "${app.rate-limit.sweep-interval:5m}", initialDelayString = "${app.rate-limit.sweep-interval:5m}")
 	void sweep() {
 		try {
-			int removed = limiter.sweepExpired();
+			int removed = limiter.sweepExpired() + loginThrottle.sweepExpired();
 			if (removed > 0) {
-				log.debug("Removed {} expired rate-limit counters", removed);
+				log.debug("Removed {} expired rate-limit rows", removed);
 			}
 		}
 		catch (RuntimeException ex) {

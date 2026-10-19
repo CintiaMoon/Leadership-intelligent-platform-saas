@@ -457,7 +457,10 @@ components:
           description: Fixed text, identical for every outcome of the operation.
     ErrorCode:
       type: string
-      description: Stable application error code (ADR-005). The frontend maps codes to messages.
+      description: |
+        Stable application error code (ADR-005). The frontend maps codes to messages. `REAUTHENTICATION_REQUIRED`
+        (403) is returned by the sensitive operations of later slices when the session is valid but the last login or
+        step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry.
       enum:
         - VALIDATION_FAILED
         - REQUEST_REJECTED
@@ -466,6 +469,7 @@ components:
         - UNAUTHENTICATED
         - FORBIDDEN
         - CSRF_REJECTED
+        - REAUTHENTICATION_REQUIRED
         - RATE_LIMITED
         - SERVICE_UNAVAILABLE
         - INTERNAL_ERROR
@@ -524,7 +528,10 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     InvalidCredentials:
-      description: Login failed. The same status, body shape, and code for every failure reason.
+      description: |
+        Login failed. The same status, body shape, and code for every failure reason: unknown account, wrong
+        password, unverified email, disabled account, and a throttled attempt (too many from this address, or a
+        blocked account and address pair).
       headers:
         Cache-Control:
           $ref: '#/components/headers/NoStore'

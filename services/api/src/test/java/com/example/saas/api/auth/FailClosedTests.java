@@ -63,6 +63,18 @@ class FailClosedTests extends AuthIntegrationTest {
 	}
 
 	@Test
+	void loginIsRejectedAndOpensNoSession() throws Exception {
+		int sessionsBefore = count("SELECT count(*) FROM spring_session");
+
+		MvcResult result = api.login(uniqueEmail(), STRONG_PASSWORD, freshIp());
+
+		assertThat(result.getResponse().getStatus()).isEqualTo(503);
+		assertThat(AuthApi.parse(result).path("code").asString()).isEqualTo("SERVICE_UNAVAILABLE");
+		assertThat(AuthApi.sessionCookie(result)).isNull();
+		assertThat(count("SELECT count(*) FROM spring_session")).isEqualTo(sessionsBefore);
+	}
+
+	@Test
 	void verifyingATokenDoesNotDependOnTheCounterStore() throws Exception {
 		MvcResult result = api.verify("x".repeat(43), freshIp());
 

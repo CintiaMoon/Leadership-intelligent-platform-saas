@@ -14,6 +14,7 @@ public enum ErrorCode {
 	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Authentication is required."),
 	FORBIDDEN(HttpStatus.FORBIDDEN, "The request is not permitted."),
 	CSRF_REJECTED(HttpStatus.FORBIDDEN, "The request was rejected."),
+	REAUTHENTICATION_REQUIRED(HttpStatus.FORBIDDEN, "Confirm your password to continue."),
 	TOKEN_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "The link is invalid or has expired."),
 	RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Too many requests. Try again later."),
 	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "The service is temporarily unavailable. Try again later."),

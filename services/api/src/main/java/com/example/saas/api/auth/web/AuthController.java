@@ -1,12 +1,21 @@
 package com.example.saas.api.auth.web;
 
+import com.example.saas.api.auth.application.AuthenticatedAccount;
+import com.example.saas.api.auth.application.LoginRecorder;
+import com.example.saas.api.auth.application.LoginService;
 import com.example.saas.api.auth.application.ResendVerificationService;
 import com.example.saas.api.auth.application.SignupService;
+import com.example.saas.api.auth.application.StepUpService;
 import com.example.saas.api.auth.application.VerifyEmailService;
+import com.example.saas.api.auth.persistence.UserAccount;
+import com.example.saas.api.auth.persistence.UserAccountRepository;
+import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.security.ClientAddress;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,11 +38,28 @@ class AuthController {
 
 	private final ResendVerificationService resendVerificationService;
 
+	private final LoginService loginService;
+
+	private final StepUpService stepUpService;
+
+	private final LoginRecorder recorder;
+
+	private final SessionManager sessions;
+
+	private final UserAccountRepository users;
+
 	AuthController(SignupService signupService, VerifyEmailService verifyEmailService,
-			ResendVerificationService resendVerificationService) {
+			ResendVerificationService resendVerificationService, LoginService loginService,
+			StepUpService stepUpService, LoginRecorder recorder, SessionManager sessions,
+			UserAccountRepository users) {
 		this.signupService = signupService;
 		this.verifyEmailService = verifyEmailService;
 		this.resendVerificationService = resendVerificationService;
+		this.loginService = loginService;
+		this.stepUpService = stepUpService;
+		this.recorder = recorder;
+		this.sessions = sessions;
+		this.users = users;
 	}
 
 	@PostMapping("/signup")
@@ -53,6 +79,34 @@ class AuthController {
 	ResponseEntity<NeutralResponse> resend(@Valid @RequestBody EmailRequest request, HttpServletRequest http) {
 		resendVerificationService.resend(request.email(), ClientAddress.of(http).limitKey());
 		return ResponseEntity.accepted().body(RESEND_ACCEPTED);
+	}
+
+	@PostMapping("/login")
+	ResponseEntity<SessionInfoResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+		AuthenticatedAccount account = loginService.login(request.email(), request.password(),
+				ClientAddress.of(http).limitKey());
+		return ResponseEntity.ok(sessions.establish(http, account));
+	}
+
+	@PostMapping("/logout")
+	ResponseEntity<Void> logout(HttpServletRequest http) {
+		sessions.end(http).ifPresent(recorder::sessionRevoked);
+		return ResponseEntity.noContent().build();
+	}
+
+	@GetMapping("/session")
+	ResponseEntity<SessionInfoResponse> session(@AuthenticationPrincipal AuthenticatedUser principal) {
+		UserAccount user = users.findById(principal.userId()).orElseThrow();
+		return ResponseEntity.ok(new SessionInfoResponse(user.getId(), user.getEmailOriginal(), user.getDisplayName(),
+				user.isEmailVerified(), principal.lastAuthenticatedAt(), principal.sessionExpiresAt()));
+	}
+
+	@PostMapping("/step-up")
+	ResponseEntity<Void> stepUp(@Valid @RequestBody StepUpRequest request, HttpServletRequest http,
+			@AuthenticationPrincipal AuthenticatedUser principal) {
+		stepUpService.confirmPassword(principal.userId(), request.password(), ClientAddress.of(http).limitKey());
+		sessions.reauthenticated(http);
+		return ResponseEntity.noContent().build();
 	}
 
 }

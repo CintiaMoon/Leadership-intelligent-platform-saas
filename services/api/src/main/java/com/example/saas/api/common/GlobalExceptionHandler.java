@@ -3,6 +3,7 @@ package com.example.saas.api.common;
 import java.net.URI;
 import java.util.List;
 
+import com.example.saas.api.auth.application.InvalidCredentialsException;
 import com.example.saas.api.auth.application.TokenInvalidException;
 import com.example.saas.api.auth.domain.PasswordHashingBusyException;
 import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
@@ -84,6 +85,12 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		ProblemDetail problem = problem(ErrorCode.VALIDATION_FAILED, request.getRequestURI());
 		problem.setProperty("errors", ex.errors());
 		return ResponseEntity.badRequest().body(problem);
+	}
+
+	@ExceptionHandler(InvalidCredentialsException.class)
+	ResponseEntity<Object> handleInvalidCredentials(InvalidCredentialsException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+			.body(problem(ErrorCode.INVALID_CREDENTIALS, request.getRequestURI()));
 	}
 
 	@ExceptionHandler(TokenInvalidException.class)

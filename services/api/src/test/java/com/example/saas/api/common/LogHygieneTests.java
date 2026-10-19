@@ -155,4 +155,36 @@ class LogHygieneTests {
 		assertThat(appender.list).isNotEmpty();
 	}
 
+	@Test
+	void loginSessionAndLogoutNeverLogThePasswordTheSessionIdentifierOrTheCsrfToken() throws Exception {
+		AuthApi api = new AuthApi(mockMvc);
+		String email = AuthApi.uniqueEmail();
+		String ip = AuthApi.freshIp();
+		api.signup(email, AuthApi.STRONG_PASSWORD, "Session Log Subject", ip);
+		while (worker.runOnce() > 0) {
+			// deliver every pending email
+		}
+		api.verify(RecordingEmailSender.tokenIn(mail.sentTo(email).get(0)), AuthApi.freshIp());
+
+		api.login(email, "a wrong password for the log test", ip);
+		var login = api.login(email, AuthApi.STRONG_PASSWORD, ip);
+		var cookie = AuthApi.sessionCookie(login);
+		String csrf = api.sessionCsrf(cookie, ip);
+		api.get("/api/v1/auth/session", cookie, ip);
+		api.postWithSession("/api/v1/auth/logout", "", cookie, csrf, ip);
+
+		for (ILoggingEvent event : appender.list) {
+			String text = event.getFormattedMessage() + " " + event.getMDCPropertyMap() + " "
+					+ (event.getThrowableProxy() == null ? "" : ThrowableProxyUtil.asString(event.getThrowableProxy()));
+			assertThat(text).as("log line from %s", event.getLoggerName())
+				.doesNotContain(AuthApi.STRONG_PASSWORD)
+				.doesNotContain("a wrong password for the log test")
+				.doesNotContain(cookie.getValue())
+				.doesNotContain(csrf)
+				.doesNotContain(BFF_CREDENTIAL);
+		}
+		assertThat(appender.list).isNotEmpty();
+	}
+
 }
+
