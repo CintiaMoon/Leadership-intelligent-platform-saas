@@ -53,3 +53,6 @@ Thumbs.db
 
 # Excluded by user decision (2026-10-17)
 Leadership platform wireframe.zip
+
+# Local Docker volumes / data
+postgres-data/

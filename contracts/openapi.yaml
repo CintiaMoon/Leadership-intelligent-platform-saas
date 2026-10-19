@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info:
+  title: SaaS Platform API
+  version: 0.0.1
+  description: |
+    Skeleton contract. No business endpoints are defined yet; each is added with its approved
+    feature spec (see docs/api/contract-guidelines.md). Errors will use RFC 9457
+    application/problem+json (ADR-005).
+servers:
+  - url: http://localhost:8080
+    description: Local development only
+paths: {}
