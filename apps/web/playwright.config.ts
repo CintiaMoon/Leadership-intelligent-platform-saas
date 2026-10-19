@@ -16,8 +16,13 @@ const WEB_URL = `http://localhost:${WEB_PORT}`;
 const BFF_CREDENTIAL = "e2e-only-bff-credential-".repeat(3);
 const DB_PASSWORD = process.env.E2E_DB_PASSWORD ?? "e2e-local-only";
 
-// Cookie names match on both sides. The __Host- prefix needs HTTPS, which the local stack does not use.
-const COOKIES = { CSRF_COOKIE_NAME: "csrf", SESSION_COOKIE_NAME: "session" };
+// Cookie names match on both sides. The default run uses plain names and non-Secure cookies. E2E_PROD_COOKIES=true
+// leaves both sides on their production defaults (__Host- names, Secure): Chromium accepts Secure cookies on
+// localhost, so the whole suite then proves the production cookie settings work end to end.
+const PROD_COOKIES = process.env.E2E_PROD_COOKIES === "true";
+// Named explicitly because a developer's .env (which Next.js loads) may carry the plain local names.
+const COOKIES = PROD_COOKIES ? { CSRF_COOKIE_NAME: "__Host-csrf", SESSION_COOKIE_NAME: "__Host-session" } : { CSRF_COOKIE_NAME: "csrf", SESSION_COOKIE_NAME: "session" };
+const COOKIE_SECURITY = PROD_COOKIES ? { CSRF_COOKIE_SECURE: "true", SESSION_COOKIE_SECURE: "true" } : { CSRF_COOKIE_SECURE: "false", SESSION_COOKIE_SECURE: "false" };
 
 export default defineConfig({
   testDir: "./e2e",
@@ -48,8 +53,7 @@ export default defineConfig({
         CSRF_HMAC_KEY: "e2e-only-csrf-signing-key-".repeat(3),
         PUBLIC_BASE_URL: WEB_URL,
         CSRF_ALLOWED_ORIGINS: WEB_URL,
-        CSRF_COOKIE_SECURE: "false",
-        SESSION_COOKIE_SECURE: "false",
+        ...COOKIE_SECURITY,
         SMTP_HOST: "localhost",
         SMTP_PORT,
         ...COOKIES,

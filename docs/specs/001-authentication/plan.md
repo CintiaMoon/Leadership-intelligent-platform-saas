@@ -150,3 +150,44 @@ Deviations and additions found while building; none changes an approved requirem
 - **Client types** are generated from `contracts/openapi.yaml` (`npm run gen:api`); CI regenerates them and fails on drift.
 - **Not done in this phase:** a script-src Content-Security-Policy (needs per-request nonces; only frame-ancestors, base-uri, form-action, and object-src are set), a rate-limit-aware retry UI beyond the message, and the real client-address chain through a production edge (the BFF forwards `X-Forwarded-For` as received, so the edge must append the true client address and the API's trusted-proxy list must name the BFF). All three go to the Phase 6 review.
 - **Known visual limits:** the mockups use 11 to 12 px text and a border color on inputs with a low contrast ratio; both were kept as asked, with 16 px inputs and 40 px controls below 640 px. Automated axe scans pass; no manual screen-reader or keyboard-only review was done yet.
+
+## 14. Phase 6 report (2026-10-19)
+### Measurements
+Argon2id on a developer laptop (8 CPUs, Java 24; median per-hash latency at concurrency 1 / 8, hashes per second at 8):
+
+| memory KiB | iterations | 1 thread | 8 threads | hashes/s at 8 |
+|---|---|---|---|---|
+| 19456 (current default) | 2 | 32 ms | 69 ms | 104 |
+| 19456 | 3 | 78 ms | 97 ms | 77 |
+| 46080 | 1 | 78 ms | 128 ms | 58 |
+| 65536 | 2 | 203 ms | 293 ms | 27 |
+
+The target of 250 to 500 ms per hash is not reached on this machine even at 64 MiB, so the laptop cannot set the final values. **Decision needed from the security owner:** the task size (vCPU and memory) and whether 250 ms is the floor. Then run `./mvnw test -Dtest=Argon2BenchmarkTest -Dbenchmark=true` on that size and choose the smallest parameters that reach the target. Until then the OWASP floor stays and D-12 stays provisional.
+
+Rate-limit store: see traceability (Phase 6 results). The ADR-004 gate passes on a local database for correctness and throughput; it is not yet run on the production database class.
+
+### Review findings and proposed handling
+Both reviews were read-only and executed nothing. I have not verified every finding by running it; those marked (unverified) are code reading only.
+
+| Ref | Finding | Type | Proposal |
+|---|---|---|---|
+| SEC-H1 / CR-P1 | BFF forwards the browser's `X-Forwarded-For` as received (ADR-001 says the BFF or edge overwrites). Spoofing defeats per-IP limits; a wrong trusted-proxy list puts all users in one bucket | High, needs deployment decision | Decide the edge (ADR-007), then make the BFF set the header from the platform's client address and refuse to start in production with the loopback-only proxy list. Add an end-to-end spoof test |
+| SEC-M1 (unverified) | BFF-credential and pre-login CSRF filters match the raw URI; authorization matches the decoded path. A percent-encoded path may skip them | Medium, code fix | Use one matcher for all three and add an encoded-path test |
+| SEC-M5 | `GlobalExceptionHandler` logs the full throwable, which can contain row data | Medium, code fix | Log class name and correlation id only |
+| CR-M1 | A password-hash upgrade at login can overwrite a password reset that commits meanwhile | Medium, code fix | Make the upgrade conditional on the hash that was verified |
+| SEC-M4 / CR-M2 | A login can create a session just after a reset revoked all sessions | Medium, design | Credentials-version in the session, checked by the session filter |
+| CR-M3 / SEC-L4 | Login throttle is check-then-act; a burst gets more than 5 guesses (bounded by the per-IP limit). The concurrency test only asserts 401s | Medium to Low | Record the attempt atomically; strengthen the test |
+| SEC-M2 / CR-S3 | The account-wide throttle lets an attacker keep a known address blocked | Product decision (D-51) | Re-confirm, or add a trusted-device exemption |
+| SEC-M3 / CR-P3 | Pre-hijacking: an attacker registers a victim's address with their own password; the victim's click verifies it. Attacker-chosen display name appears in the email | Spec-level, product decision | Drop the display name from verification mail; consider claim-on-verify rules |
+| CR-S1 | Per-email signup limit of 3 per 24 hours is not in the spec | Needs approval or removal | Already an open question |
+| CR-S2 | Issuing a token invalidates earlier unused tokens, so a third party can keep burning a victim's reset link | Product decision | Decide whether to keep the old link valid until expiry |
+| CR-M4 / SEC-L6 | `outbox_event` and `audit_event` have no retention; outbox payloads hold addresses that have no account | Medium to Low | Retention periods are a product and legal decision, then a purge job |
+| CR-M5 | OpenAPI says password max 128 and display name max 100; DTOs allow 1024 and 400; documented 429s on token endpoints are never produced | Contract drift | Align the DTOs to the contract (the contract matches the spec) |
+| CR tests | AC-AUTH-39 and the login fail-closed path are tested less deeply than the traceability implied | Test gap | Add a real-endpoint saturation test and a login fail-closed test |
+| SEC-L1, L2 | Placeholder BFF credential passes length check; empty allowed-origins disables the Origin check | Low | Reject known placeholders; require origins in production |
+| SEC-L7 | No script-src CSP, HSTS or Permissions-Policy | Low | Nonce CSP in Next.js middleware; HSTS at the edge |
+| SEC-L8 | CI installs Redocly via `npx` without a lockfile; service images pinned by tag only; no dependency audit | Low | Pin by digest and add an audit step |
+
+### Slice status
+Slice 001 is **not closed**. Open: the items above, the edge-dependent checks, D-12 values, D-87, D-08, the `signup-account` limit question, and runbook rehearsals.
+
