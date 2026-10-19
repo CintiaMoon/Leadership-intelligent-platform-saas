@@ -143,6 +143,14 @@ class FoundationHttpTests {
 	}
 
 	@Test
+	void exhaustedHashingCapacityIsA503WithRetryAfter() throws Exception {
+		mockMvc.perform(get("/api/v1/test/hash-busy").header(BFF, CREDENTIAL))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(header().string("Retry-After", "5"))
+			.andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+	}
+
+	@Test
 	void authenticationResponsesCarryExactlyNoStore() throws Exception {
 		mockMvc.perform(get("/api/v1/auth/test/ping").header(BFF, CREDENTIAL))
 			.andExpect(status().isOk())

@@ -364,7 +364,9 @@ components:
           minLength: 8
           maxLength: 128
           writeOnly: true
-          description: 8 to 128 code points, NFKC-normalized server-side, not on the compromised-password list.
+          description: |
+            8 to 128 code points, NFKC-normalized server-side, not on the compromised-password list. The
+            server answers `TOO_SHORT`, `TOO_LONG`, or `BREACHED_PASSWORD`.
         displayName:
           type: string
           minLength: 1
@@ -475,7 +477,7 @@ components:
           type: string
         code:
           type: string
-          description: Stable field error code, for example `REQUIRED`, `INVALID_LENGTH`, `INVALID`, `BREACHED_PASSWORD`.
+          description: 'Stable field error code. One of REQUIRED, INVALID, INVALID_LENGTH, INVALID_EMAIL, TOO_SHORT, TOO_LONG, BREACHED_PASSWORD.'
     Problem:
       type: object
       description: RFC 9457 problem details with a stable `code`.

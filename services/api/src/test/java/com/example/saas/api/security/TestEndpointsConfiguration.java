@@ -82,6 +82,11 @@ public class TestEndpointsConfiguration {
 			throw new RateLimitStoreUnavailableException(new RuntimeException("jdbc:postgresql://secret-host/db"));
 		}
 
+		@GetMapping("/api/v1/test/hash-busy")
+		void hashBusy() {
+			throw new com.example.saas.api.auth.domain.PasswordHashingBusyException();
+		}
+
 		@GetMapping("/api/v1/test/limited")
 		ResponseEntity<Map<String, Object>> limited(HttpServletRequest request) {
 			RateLimitResult result = rateLimiter.hit(LIMITED, ClientAddress.of(request).limitKey());
