@@ -108,3 +108,16 @@ AC-AUTH-01 to 35 map to the phases above: 01, 02, 03, 11, 12, 17, 20 in Phase 2;
 1. Approve, change, or reject each of P-01 to P-17 (P-01, P-02, P-04, P-08, P-11, P-12, and P-16 to P-17 are security decisions; P-13 is the product owner's).
 2. Approve the phase order and one-PR-per-phase approach.
 3. Confirm that I may then record the decisions and start Phase 0.
+
+## 10. Implementation notes (Phase 2, 2026-10-19)
+Deviations and additions found while building; none changes an approved requirement.
+- **Pre-login CSRF moved into Phase 2.** The signup, verify, and resend endpoints need CSRF protection from the day they exist, so the stateless signed double-submit token (D-75), `GET /api/v1/auth/csrf`, and the filter were built here instead of Phase 3. Phase 3 adds the session-bound token for authenticated requests.
+- **No token or secret is stored in the outbox.** Outbox payloads hold identifiers only (user ID or normalized email); the verification token is minted when the worker delivers the email, so the raw token exists only in the sent message. This replaces the idea of encrypting a token in the payload.
+- **Resend does its lookup in the worker.** Every accepted resend writes the same outbox record, whether or not an account exists, which removes the timing difference (AC-AUTH-20).
+- **Added limit (to confirm):** `signup-account`, 3 per normalized email per 24 hours, applied to new and existing addresses alike, so the "account already exists" email cannot be used to flood a victim. The spec does not set it; the value is a proposal.
+- **Blocklist size:** the bundled list has 46,948 entries (the SecLists top 100,000, keeping entries of 8 or more characters, since shorter ones fail the length rule anyway). It is a starting point; refreshing it is an operational task.
+- **Mail health check disabled.** Email goes through the outbox, so a mail-server outage must not mark the API unhealthy.
+- **Unknown JSON fields are rejected** (`additionalProperties: false` in the contract).
+- **Audit trigger blocks UPDATE only.** Restricting DELETE and TRUNCATE needs database roles, which are deferred to the deployment slice as planned (D-88).
+- **Logging finding:** the log-hygiene test found that Spring's TRACE logging of the CSRF response body would have printed the token; the response record now redacts itself.
+

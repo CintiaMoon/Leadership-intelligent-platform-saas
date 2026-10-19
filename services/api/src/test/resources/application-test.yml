@@ -1,6 +1,17 @@
 # Test-only values; none of these is a real secret.
 app:
+  public-base-url: https://app.test.example
+  outbox:
+    worker-enabled: false
   security:
+    csrf:
+      hmac-key: test-csrf-hmac-key-0123456789abcdef0123456789abcdef
+      allowed-origins: https://app.test.example
+    password-hash:
+      # Cheap parameters keep tests fast; production defaults are asserted in PasswordHasherTest.
+      memory-kib: 512
+      iterations: 1
+      max-concurrent: 4
     bff-credentials: test-bff-credential-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,test-bff-credential-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
   rate-limit:
     hmac-key: test-rate-limit-hmac-key-0123456789abcdef0123456789abcdef

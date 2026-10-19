@@ -9,6 +9,10 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.ThrowableProxyUtil;
 import ch.qos.logback.core.read.ListAppender;
 import com.example.saas.api.TestcontainersConfiguration;
+import com.example.saas.api.auth.AuthApi;
+import com.example.saas.api.auth.AuthTestConfiguration;
+import com.example.saas.api.auth.RecordingEmailSender;
+import com.example.saas.api.auth.outbox.OutboxWorker;
 import com.example.saas.api.security.TestEndpointsConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * not reach the logs, including at DEBUG level and on error paths where exception messages could quote
  * request content.
  */
-@Import({ TestcontainersConfiguration.class, TestEndpointsConfiguration.class })
+@Import({ TestcontainersConfiguration.class, TestEndpointsConfiguration.class, AuthTestConfiguration.class })
 @ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,6 +49,12 @@ class LogHygieneTests {
 
 	@Autowired
 	MockMvc mockMvc;
+
+	@Autowired
+	OutboxWorker worker;
+
+	@Autowired
+	RecordingEmailSender mail;
 
 	private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
 
@@ -115,6 +125,34 @@ class LogHygieneTests {
 			.content("{\"name\":\"x\",\"password\":\"hunter2-password-secret\"}"));
 		mockMvc.perform(get("/api/v1/test/boom").header("X-BFF-Credential", BFF_CREDENTIAL));
 		assertNoSecretLogged();
+	}
+
+	@Test
+	void theWholeSignupAndVerificationJourneyNeverLogsPasswordsTokensOrCsrfValues() throws Exception {
+		AuthApi api = new AuthApi(mockMvc);
+		String email = AuthApi.uniqueEmail();
+		String ip = AuthApi.freshIp();
+		String csrf = api.csrf(ip).token();
+
+		api.signup(email, AuthApi.STRONG_PASSWORD, "Log Subject", ip);
+		while (worker.runOnce() > 0) {
+			// deliver every pending email
+		}
+		String token = RecordingEmailSender.tokenIn(mail.sentTo(email).get(0));
+		api.verify(token, AuthApi.freshIp());
+		api.verify("not-the-real-token-" + "x".repeat(24), AuthApi.freshIp());
+
+		for (ILoggingEvent event : appender.list) {
+			String text = event.getFormattedMessage() + " " + event.getMDCPropertyMap() + " "
+					+ (event.getThrowableProxy() == null ? "" : ThrowableProxyUtil.asString(event.getThrowableProxy()));
+			assertThat(text).as("log line from %s", event.getLoggerName())
+				.doesNotContain(AuthApi.STRONG_PASSWORD)
+				.doesNotContain(token)
+				.doesNotContain(csrf)
+				.doesNotContain(BFF_CREDENTIAL)
+				.doesNotContain("not-the-real-token");
+		}
+		assertThat(appender.list).isNotEmpty();
 	}
 
 }

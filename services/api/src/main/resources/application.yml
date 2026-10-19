@@ -18,7 +18,21 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+  jackson:
+    deserialization:
+      # The contract sets additionalProperties: false, so unknown request fields are rejected.
+      fail-on-unknown-properties: true
+
 management:
+  health:
+    mail:
+      # Email goes through the outbox, so a mail server outage must not take the API out of rotation.
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -29,7 +43,22 @@ management:
         enabled: true
 
 app:
+  # Public address of the web app, used in email links. Required; never taken from the Host header.
+  public-base-url: ${PUBLIC_BASE_URL:}
+  mail:
+    from: ${MAIL_FROM:no-reply@liptech.io}
+  outbox:
+    worker-enabled: true
+    poll-interval: 2s
   security:
+    csrf:
+      # Required, no default: signs pre-login CSRF tokens (D-75).
+      hmac-key: ${CSRF_HMAC_KEY:}
+      # Origins the BFF may send; empty skips the check. Local development only: set cookie-secure=false
+      # and a cookie name without the __Host- prefix when serving over plain HTTP.
+      allowed-origins: ${CSRF_ALLOWED_ORIGINS:}
+      cookie-name: ${CSRF_COOKIE_NAME:__Host-csrf}
+      cookie-secure: ${CSRF_COOKIE_SECURE:true}
     # Shared secrets that authenticate the BFF (ADR-001, D-50): comma-separated, at most two (current and
     # previous during rotation), each at least 43 characters. No default: unset rejects every /api request.
     bff-credentials: ${BFF_CREDENTIALS:}

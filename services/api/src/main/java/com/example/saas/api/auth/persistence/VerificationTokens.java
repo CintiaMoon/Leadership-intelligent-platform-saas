@@ -1,0 +1,92 @@
+package com.example.saas.api.auth.persistence;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Hashed single-use tokens (D-81). Consumption is one conditional {@code UPDATE ... RETURNING}, so when
+ * several requests present the same token exactly one succeeds, with no read-then-write gap.
+ */
+@Repository
+public class VerificationTokens {
+
+	public enum Purpose {
+
+		EMAIL_VERIFICATION, PASSWORD_RESET
+
+	}
+
+	private final JdbcClient jdbc;
+
+	VerificationTokens(JdbcClient jdbc) {
+		this.jdbc = jdbc;
+	}
+
+	/** Stores a new token and invalidates the user's other outstanding tokens of the same purpose. */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void issue(UUID userId, Purpose purpose, String tokenHash, Instant now, Duration lifetime) {
+		jdbc.sql("""
+				UPDATE verification_token SET consumed_at = :now
+				WHERE user_id = :userId AND purpose = :purpose AND consumed_at IS NULL
+				""")
+			.param("now", utc(now))
+			.param("userId", userId)
+			.param("purpose", purpose.name())
+			.update();
+		jdbc.sql("""
+				INSERT INTO verification_token (user_id, purpose, token_hash, expires_at, created_at)
+				VALUES (:userId, :purpose, :hash, :expiresAt, :now)
+				""")
+			.param("userId", userId)
+			.param("purpose", purpose.name())
+			.param("hash", tokenHash)
+			.param("expiresAt", utc(now.plus(lifetime)))
+			.param("now", utc(now))
+			.update();
+	}
+
+	/**
+	 * Atomically consumes a token that is unknown-safe: returns the owning user only if the token exists,
+	 * matches the purpose, is unexpired, and was not consumed before.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public Optional<UUID> consume(String tokenHash, Purpose purpose, Instant now) {
+		return jdbc.sql("""
+				UPDATE verification_token SET consumed_at = :now
+				WHERE token_hash = :hash AND purpose = :purpose AND consumed_at IS NULL AND expires_at > :now
+				RETURNING user_id
+				""")
+			.param("now", utc(now))
+			.param("hash", tokenHash)
+			.param("purpose", purpose.name())
+			.query(UUID.class)
+			.optional();
+	}
+
+	/** Invalidates all of a user's unconsumed tokens of one purpose, for example after one of them was used. */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void invalidateOutstanding(UUID userId, Purpose purpose, Instant now) {
+		jdbc.sql("""
+				UPDATE verification_token SET consumed_at = :now
+				WHERE user_id = :userId AND purpose = :purpose AND consumed_at IS NULL
+				""")
+			.param("now", utc(now))
+			.param("userId", userId)
+			.param("purpose", purpose.name())
+			.update();
+	}
+
+	private static OffsetDateTime utc(Instant instant) {
+		return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+	}
+
+}

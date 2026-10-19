@@ -1,0 +1,96 @@
+package com.example.saas.api.auth;
+
+import java.util.Random;
+
+import jakarta.servlet.http.Cookie;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+
+/** Test client for the authentication endpoints, speaking as the BFF would. */
+public final class AuthApi {
+
+	public static final String BFF_CREDENTIAL = "test-bff-credential-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	public static final String CSRF_COOKIE = "__Host-csrf";
+
+	private static final JsonMapper JSON = JsonMapper.builder().build();
+
+	private static final Random RANDOM = new Random();
+
+	private final MockMvc mvc;
+
+	public AuthApi(MockMvc mvc) {
+		this.mvc = mvc;
+	}
+
+	/** A client address no other test uses, so IP-based limits never collide across tests. */
+	public static String freshIp() {
+		return "198.18." + RANDOM.nextInt(256) + "." + (1 + RANDOM.nextInt(254));
+	}
+
+	public record Csrf(String token, Cookie cookie) {
+	}
+
+	public Csrf csrf(String ip) throws Exception {
+		MvcResult result = mvc.perform(get("/api/v1/auth/csrf")
+			.header("X-BFF-Credential", BFF_CREDENTIAL)
+			.header("X-Forwarded-For", ip)).andReturn();
+		JsonNode body = JSON.readTree(result.getResponse().getContentAsString());
+		String token = body.path("token").asString();
+		return new Csrf(token, new Cookie(CSRF_COOKIE, token));
+	}
+
+	public MockHttpServletRequestBuilder request(String path, String body, String ip, Csrf csrf) {
+		MockHttpServletRequestBuilder builder = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
+			.header("X-BFF-Credential", BFF_CREDENTIAL)
+			.header("X-Forwarded-For", ip)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(body);
+		if (csrf != null) {
+			builder.header("X-CSRF-TOKEN", csrf.token()).cookie(csrf.cookie());
+		}
+		return builder;
+	}
+
+	/** POSTs JSON with a freshly issued, valid CSRF token. */
+	public MvcResult postJson(String path, String body, String ip) throws Exception {
+		return mvc.perform(request(path, body, ip, csrf(ip))).andReturn();
+	}
+
+	public MvcResult signup(String email, String password, String displayName, String ip) throws Exception {
+		return postJson("/api/v1/auth/signup", json("email", email, "password", password, "displayName", displayName), ip);
+	}
+
+	public MvcResult verify(String token, String ip) throws Exception {
+		return postJson("/api/v1/auth/verify-email", json("token", token), ip);
+	}
+
+	public MvcResult resend(String email, String ip) throws Exception {
+		return postJson("/api/v1/auth/verify-email/resend", json("email", email), ip);
+	}
+
+	public static String json(String... keysAndValues) {
+		var node = JSON.createObjectNode();
+		for (int i = 0; i < keysAndValues.length; i += 2) {
+			node.put(keysAndValues[i], keysAndValues[i + 1]);
+		}
+		return node.toString();
+	}
+
+	public static JsonNode parse(MvcResult result) throws Exception {
+		return JSON.readTree(result.getResponse().getContentAsString());
+	}
+
+	public static String uniqueEmail() {
+		return "user." + java.util.UUID.randomUUID() + "@example.com";
+	}
+
+	public static final String STRONG_PASSWORD = "correct horse battery staple 7!";
+
+}

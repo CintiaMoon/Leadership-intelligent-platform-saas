@@ -3,7 +3,10 @@ package com.example.saas.api.common;
 import java.net.URI;
 import java.util.List;
 
+import com.example.saas.api.auth.application.TokenInvalidException;
+import com.example.saas.api.auth.domain.PasswordHashingBusyException;
 import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
+import com.example.saas.api.ratelimit.RateLimitedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +62,34 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
 			.header(HttpHeaders.RETRY_AFTER, String.valueOf(STORE_RETRY_AFTER_SECONDS))
 			.body(problem(ErrorCode.SERVICE_UNAVAILABLE, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(RateLimitedException.class)
+	ResponseEntity<Object> handleRateLimited(RateLimitedException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+			.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
+			.body(problem(ErrorCode.RATE_LIMITED, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(PasswordHashingBusyException.class)
+	ResponseEntity<Object> handleHashingBusy(PasswordHashingBusyException ex, HttpServletRequest request) {
+		log.warn("Password hashing capacity exhausted");
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+			.header(HttpHeaders.RETRY_AFTER, String.valueOf(STORE_RETRY_AFTER_SECONDS))
+			.body(problem(ErrorCode.SERVICE_UNAVAILABLE, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(ValidationFailedException.class)
+	ResponseEntity<Object> handleValidation(ValidationFailedException ex, HttpServletRequest request) {
+		ProblemDetail problem = problem(ErrorCode.VALIDATION_FAILED, request.getRequestURI());
+		problem.setProperty("errors", ex.errors());
+		return ResponseEntity.badRequest().body(problem);
+	}
+
+	@ExceptionHandler(TokenInvalidException.class)
+	ResponseEntity<Object> handleTokenInvalid(TokenInvalidException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+			.body(problem(ErrorCode.TOKEN_INVALID, request.getRequestURI()));
 	}
 
 	@ExceptionHandler(Exception.class)
