@@ -169,7 +169,8 @@ class PreLoginCsrfTests extends AuthIntegrationTest {
 
 	@Test
 	void everyPreLoginEndpointEnforcesTheCheck() throws Exception {
-		for (String path : new String[] { SIGNUP, VERIFY, "/api/v1/auth/verify-email/resend", "/api/v1/auth/login" }) {
+		for (String path : new String[] { SIGNUP, VERIFY, "/api/v1/auth/verify-email/resend", "/api/v1/auth/login",
+				"/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm" }) {
 			MvcResult result = mvc.perform(api.request(path, "{}", freshIp(), null)).andReturn();
 			assertThat(result.getResponse().getStatus()).as(path).isEqualTo(403);
 		}

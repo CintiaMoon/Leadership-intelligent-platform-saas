@@ -186,5 +186,39 @@ class LogHygieneTests {
 		assertThat(appender.list).isNotEmpty();
 	}
 
+	@Test
+	void thePasswordResetJourneyNeverLogsTheTokenOrEitherPassword() throws Exception {
+		AuthApi api = new AuthApi(mockMvc);
+		String email = AuthApi.uniqueEmail();
+		String ip = AuthApi.freshIp();
+		api.signup(email, AuthApi.STRONG_PASSWORD, "Reset Log Subject", ip);
+		while (worker.runOnce() > 0) {
+			// deliver every pending email
+		}
+		api.verify(RecordingEmailSender.tokenIn(mail.sentTo(email).get(0)), AuthApi.freshIp());
+		mail.clear();
+
+		api.requestReset(email, ip);
+		while (worker.runOnce() > 0) {
+			// deliver the reset email and later the notice
+		}
+		String token = RecordingEmailSender.tokenIn(mail.sentTo(email).get(0));
+		String newPassword = "reset log test passphrase 31";
+		api.confirmReset(token, "password123", AuthApi.freshIp());
+		api.confirmReset(token, newPassword, AuthApi.freshIp());
+		api.confirmReset(token, newPassword, AuthApi.freshIp());
+
+		for (ILoggingEvent event : appender.list) {
+			String text = event.getFormattedMessage() + " " + event.getMDCPropertyMap() + " "
+					+ (event.getThrowableProxy() == null ? "" : ThrowableProxyUtil.asString(event.getThrowableProxy()));
+			assertThat(text).as("log line from %s", event.getLoggerName())
+				.doesNotContain(token)
+				.doesNotContain(newPassword)
+				.doesNotContain(AuthApi.STRONG_PASSWORD)
+				.doesNotContain(BFF_CREDENTIAL);
+		}
+		assertThat(appender.list).isNotEmpty();
+	}
+
 }
 

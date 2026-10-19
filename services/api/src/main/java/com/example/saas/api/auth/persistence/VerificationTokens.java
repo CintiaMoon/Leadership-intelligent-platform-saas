@@ -55,6 +55,22 @@ public class VerificationTokens {
 	}
 
 	/**
+	 * A cheap, non-consuming check used to refuse an unusable token before expensive work. It does not reserve
+	 * the token: {@link #consume} remains the only authority, and it decides atomically.
+	 */
+	public boolean isUsable(String tokenHash, Purpose purpose, Instant now) {
+		return Boolean.TRUE.equals(jdbc.sql("""
+				SELECT EXISTS (SELECT 1 FROM verification_token
+				               WHERE token_hash = :hash AND purpose = :purpose AND consumed_at IS NULL AND expires_at > :now)
+				""")
+			.param("hash", tokenHash)
+			.param("purpose", purpose.name())
+			.param("now", utc(now))
+			.query(Boolean.class)
+			.single());
+	}
+
+	/**
 	 * Atomically consumes a token that is unknown-safe: returns the owning user only if the token exists,
 	 * matches the purpose, is unexpired, and was not consumed before.
 	 */

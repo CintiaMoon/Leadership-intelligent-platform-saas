@@ -115,6 +115,14 @@ public final class AuthApi {
 		return mvc.perform(builder).andReturn();
 	}
 
+	public MvcResult requestReset(String email, String ip) throws Exception {
+		return postJson("/api/v1/auth/password-reset/request", json("email", email), ip);
+	}
+
+	public MvcResult confirmReset(String token, String newPassword, String ip) throws Exception {
+		return postJson("/api/v1/auth/password-reset/confirm", json("token", token, "newPassword", newPassword), ip);
+	}
+
 	public MvcResult resend(String email, String ip) throws Exception {
 		return postJson("/api/v1/auth/verify-email/resend", json("email", email), ip);
 	}
