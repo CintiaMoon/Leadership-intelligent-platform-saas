@@ -1,6 +1,6 @@
 # SPEC-AUTH Traceability (implementation status)
 
-- Updated: 2026-10-19, after Phase 4 (password reset). All backend acceptance criteria now have tests; the browser parts are Phase 5.
+- Updated: 2026-10-19, after Phase 5 (web UI). All backend acceptance criteria have tests; the browser flows are covered by Playwright end-to-end tests (see the last section).
 - "Verified" means the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL). Phases not yet built are listed as Pending. Nothing here has been independently reviewed yet (Phase 6).
 
 | AC | Status | Tests |
@@ -49,7 +49,22 @@
 ## Outbox and platform (ADR-003, ADR-004, D-83)
 `OutboxWorkerTests` (10), `SmtpEmailSenderTest` (5), `LoginThrottleTest` (4), and `SessionSchemaDriftTest`, which fails if a Spring Session upgrade changes the schema that migration V6 vendors.
 
+## Browser and BFF (Phase 5)
+Unit (Vitest, 18): `bff.test.ts` (header and cookie allowlists, unlisted operations, Origin, Sec-Fetch-Site, content type, body limit, Set-Cookie and Retry-After passthrough, 503 without details, pre-login token without session cookie), `messages.test.ts` (one login failure message, field errors, throttle text), `forms.test.tsx` (CSRF header, fixed notices only, field errors, navigation).
+End-to-end (Playwright, 8, real BFF, API, PostgreSQL, Mailpit), `e2e/auth.spec.ts`:
+| Behavior | AC | Test |
+|---|---|---|
+| Signup, verification by emailed link, login, profile, logout; unverified login looks like a wrong password; cookie is HttpOnly and SameSite=Lax and not readable by scripts; logout clears it | AC-AUTH-02, 05, 06, 19 | `signup, email verification, login, profile and logout` |
+| Verification link works once, then offers a new link | AC-AUTH-12, 37 | `a verification link works once` |
+| Resend answers the same for any address | AC-AUTH-20 | `the resend form gives the same answer for any address` |
+| Reset: neutral request, token leaves the address bar and never appears in a request URL, breached password refused with the link still usable, other browser signed out, old password fails, link spent, notice email sent | AC-AUTH-30 to 35, 37 | `password reset: neutral request, policy check, one-time link, sessions revoked` |
+| BFF refuses cross-origin and token-less POSTs and unlisted operations | AC-AUTH-36 | `the BFF refuses a state-changing request ...` |
+| Pages without a token explain it | AC-AUTH-37 | `a link without a token explains itself` |
+| No serious or critical axe violations (WCAG 2 A, AA, 2.2 AA tags) | n/a | two accessibility tests |
+Mutation check: leaving the token in the address bar fails 3 end-to-end tests.
+
 ## Not run or not yet possible
 - Load test of the rate-limit store (ADR-004 release gate), the Argon2id benchmark on the production task size (D-12), and the cookie check in a production-like environment (ADR-001): Phase 6.
 - Independent security and code review: Phase 6.
-- End-to-end browser tests: Phase 5.
+- Playwright tests were run locally in Chromium only; the new CI `e2e` job runs them on every pull request. Firefox, WebKit, and real mobile devices were not tested.
+- Manual keyboard-only and screen-reader review of the auth pages: not done. Automated axe scans pass for serious and critical issues, which is not proof of accessibility.
