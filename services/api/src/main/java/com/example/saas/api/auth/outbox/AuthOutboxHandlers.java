@@ -3,6 +3,7 @@ package com.example.saas.api.auth.outbox;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.example.saas.api.auth.application.PasswordResetEmails;
 import com.example.saas.api.auth.application.VerificationEmails;
 import com.example.saas.api.auth.email.AuthEmails;
 import com.example.saas.api.auth.email.EmailMessage;
@@ -19,7 +20,66 @@ public final class AuthOutboxHandlers {
 
 	public static final String RESEND_VERIFICATION = "AUTH_RESEND_VERIFICATION";
 
+	public static final String PASSWORD_RESET_REQUEST = "AUTH_PASSWORD_RESET_REQUEST";
+
+	public static final String PASSWORD_CHANGED_NOTICE = "AUTH_PASSWORD_CHANGED_NOTICE";
+
 	private AuthOutboxHandlers() {
+	}
+
+	/**
+	 * Payload {@code email} (normalized): the lookup happens here, after the request returned, so the request
+	 * takes the same time whether or not an eligible account exists (AC-AUTH-30).
+	 */
+	@Component
+	static class PasswordResetRequestHandler implements OutboxHandler {
+
+		private final UserAccountRepository users;
+
+		private final PasswordResetEmails resetEmails;
+
+		PasswordResetRequestHandler(UserAccountRepository users, PasswordResetEmails resetEmails) {
+			this.users = users;
+			this.resetEmails = resetEmails;
+		}
+
+		@Override
+		public String eventType() {
+			return PASSWORD_RESET_REQUEST;
+		}
+
+		@Override
+		public Optional<EmailMessage> handle(OutboxEvent event) {
+			return users.findByEmailNormalized(event.payload().get("email"))
+				.flatMap(user -> resetEmails.prepare(user.getId()));
+		}
+
+	}
+
+	/** Payload {@code userId}: tells the owner their password changed. Carries no secret and no link to act on. */
+	@Component
+	static class PasswordChangedNoticeHandler implements OutboxHandler {
+
+		private final UserAccountRepository users;
+
+		private final AuthEmails emails;
+
+		PasswordChangedNoticeHandler(UserAccountRepository users, AuthEmails emails) {
+			this.users = users;
+			this.emails = emails;
+		}
+
+		@Override
+		public String eventType() {
+			return PASSWORD_CHANGED_NOTICE;
+		}
+
+		@Override
+		public Optional<EmailMessage> handle(OutboxEvent event) {
+			return users.findById(UUID.fromString(event.payload().get("userId")))
+				.map(user -> emails.passwordChanged(user.getEmailOriginal(), user.getDisplayName()));
+		}
+
 	}
 
 	/** Payload {@code userId}: send the verification link for a new account. */

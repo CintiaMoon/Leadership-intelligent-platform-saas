@@ -63,6 +63,17 @@ class FailClosedTests extends AuthIntegrationTest {
 	}
 
 	@Test
+	void passwordResetRequestIsRejectedAndQueuesNothing() throws Exception {
+		int outboxBefore = count("SELECT count(*) FROM outbox_event");
+
+		MvcResult result = api.requestReset(uniqueEmail(), freshIp());
+
+		assertThat(result.getResponse().getStatus()).isEqualTo(503);
+		assertThat(AuthApi.parse(result).path("code").asString()).isEqualTo("SERVICE_UNAVAILABLE");
+		assertThat(count("SELECT count(*) FROM outbox_event")).isEqualTo(outboxBefore);
+	}
+
+	@Test
 	void loginIsRejectedAndOpensNoSession() throws Exception {
 		int sessionsBefore = count("SELECT count(*) FROM spring_session");
 

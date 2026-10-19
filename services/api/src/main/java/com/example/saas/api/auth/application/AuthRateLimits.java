@@ -26,6 +26,12 @@ public final class AuthRateLimits {
 
 	public static final RateLimitPolicy RESEND_IP = new RateLimitPolicy("resend-ip", 10, Duration.ofHours(1));
 
+	/** Password-reset requests per normalized email per hour (AC-AUTH-34). */
+	public static final RateLimitPolicy RESET_ACCOUNT = new RateLimitPolicy("reset-account", 3, Duration.ofHours(1));
+
+	/** Password-reset requests per client address per hour (AC-AUTH-34). */
+	public static final RateLimitPolicy RESET_IP = new RateLimitPolicy("reset-ip", 10, Duration.ofHours(1));
+
 	private AuthRateLimits() {
 	}
 

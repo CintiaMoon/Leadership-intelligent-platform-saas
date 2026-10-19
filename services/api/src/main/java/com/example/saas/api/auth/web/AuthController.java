@@ -3,6 +3,8 @@ package com.example.saas.api.auth.web;
 import com.example.saas.api.auth.application.AuthenticatedAccount;
 import com.example.saas.api.auth.application.LoginRecorder;
 import com.example.saas.api.auth.application.LoginService;
+import com.example.saas.api.auth.application.PasswordResetRequestService;
+import com.example.saas.api.auth.application.PasswordResetService;
 import com.example.saas.api.auth.application.ResendVerificationService;
 import com.example.saas.api.auth.application.SignupService;
 import com.example.saas.api.auth.application.StepUpService;
@@ -32,6 +34,13 @@ class AuthController {
 	static final NeutralResponse RESEND_ACCEPTED = new NeutralResponse(
 			"If an unverified account exists for this address, we have sent a new verification email.");
 
+	static final NeutralResponse RESET_ACCEPTED = new NeutralResponse(
+			"If an account exists for this address, we have sent password reset instructions.");
+
+	private final PasswordResetRequestService passwordResetRequestService;
+
+	private final PasswordResetService passwordResetService;
+
 	private final SignupService signupService;
 
 	private final VerifyEmailService verifyEmailService;
@@ -51,7 +60,10 @@ class AuthController {
 	AuthController(SignupService signupService, VerifyEmailService verifyEmailService,
 			ResendVerificationService resendVerificationService, LoginService loginService,
 			StepUpService stepUpService, LoginRecorder recorder, SessionManager sessions,
-			UserAccountRepository users) {
+			UserAccountRepository users, PasswordResetRequestService passwordResetRequestService,
+			PasswordResetService passwordResetService) {
+		this.passwordResetRequestService = passwordResetRequestService;
+		this.passwordResetService = passwordResetService;
 		this.signupService = signupService;
 		this.verifyEmailService = verifyEmailService;
 		this.resendVerificationService = resendVerificationService;
@@ -79,6 +91,19 @@ class AuthController {
 	ResponseEntity<NeutralResponse> resend(@Valid @RequestBody EmailRequest request, HttpServletRequest http) {
 		resendVerificationService.resend(request.email(), ClientAddress.of(http).limitKey());
 		return ResponseEntity.accepted().body(RESEND_ACCEPTED);
+	}
+
+	@PostMapping("/password-reset/request")
+	ResponseEntity<NeutralResponse> requestPasswordReset(@Valid @RequestBody EmailRequest request,
+			HttpServletRequest http) {
+		passwordResetRequestService.request(request.email(), ClientAddress.of(http).limitKey());
+		return ResponseEntity.accepted().body(RESET_ACCEPTED);
+	}
+
+	@PostMapping("/password-reset/confirm")
+	ResponseEntity<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+		passwordResetService.confirm(request.token(), request.newPassword());
+		return ResponseEntity.noContent().build();
 	}
 
 	@PostMapping("/login")

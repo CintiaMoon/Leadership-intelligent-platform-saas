@@ -132,3 +132,12 @@ Deviations and additions found while building; none changes an approved requirem
 - **New error code `REAUTHENTICATION_REQUIRED` (403)** for sessions whose last authentication is stale; added to the contract.
 - **Required new settings:** `SESSION_COOKIE_NAME` and `SESSION_COOKIE_SECURE` (defaults are the production values; local HTTP development overrides both, see `.env.example`).
 
+## 12. Implementation notes (Phase 4, 2026-10-19)
+- **No new table.** Reset tokens reuse `verification_token` with purpose `PASSWORD_RESET` (the Phase 2 migration already allowed it): hashed, single use, one hour. Issuing a new token invalidates the user's earlier reset tokens; confirming invalidates any others.
+- **Request is deferred like resend.** Every accepted request queues the same outbox record for any well-formed address; the lookup, token minting, audit event, and email happen in the worker, so neither the response nor its timing depends on the account.
+- **Order of checks at confirm:** malformed or unusable token (generic 422, cheap, no hashing) first, then the password policy (400, token left unused so the user can retry), then hashing, then one short transaction that consumes the token, stores the hash, invalidates other tokens, queues the notice, writes the audit events, and ends every session of the user as its last step.
+- **Throttle behavior:** per account (3 an hour) is silent and neutral, per address (10 an hour) returns 429, and an unavailable counter store returns 503, as for resend.
+- **Notice email** says the password changed and every device was signed out and links only to the forgot-password page; it carries no token.
+- **Session revocation on reset** uses the same `SessionRevoker` that operators will use to disable an account.
+- **Not changed:** the new password is not checked against the old one, and a reset does not clear login throttle state for the account (the user can reset, then wait out a block).
+

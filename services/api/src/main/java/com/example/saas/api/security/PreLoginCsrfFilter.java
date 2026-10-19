@@ -21,9 +21,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 public final class PreLoginCsrfFilter extends OncePerRequestFilter {
 
-	/** POST paths that run before a session exists. Password reset joins in the next phase. */
+	/** POST paths that run before a session exists. */
 	public static final Set<String> PATHS = Set.of("/api/v1/auth/signup", "/api/v1/auth/verify-email",
-			"/api/v1/auth/verify-email/resend", "/api/v1/auth/login");
+			"/api/v1/auth/verify-email/resend", "/api/v1/auth/login", "/api/v1/auth/password-reset/request",
+			"/api/v1/auth/password-reset/confirm");
 
 	public static final String HEADER = "X-CSRF-TOKEN";
 

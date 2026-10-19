@@ -28,6 +28,28 @@ public class AuthEmails {
 				""".formatted(displayName, properties.publicBaseUrl(), token));
 	}
 
+	public EmailMessage passwordReset(String to, String displayName, String token) {
+		return new EmailMessage(to, "Reset your password", """
+				Hello %s,
+
+				Someone asked to reset the password for this account. To choose a new password, open this link within 1 hour:
+
+				%s/reset-password#token=%s
+
+				If you did not ask for this, you can ignore this message. Your password has not changed.
+				""".formatted(displayName, properties.publicBaseUrl(), token));
+	}
+
+	public EmailMessage passwordChanged(String to, String displayName) {
+		return new EmailMessage(to, "Your password was changed", """
+				Hello %s,
+
+				The password for your account was just changed, and every device was signed out.
+
+				If this was you, no action is needed. If it was not, reset your password at %s/forgot-password right away.
+				""".formatted(displayName, properties.publicBaseUrl()));
+	}
+
 	public EmailMessage accountAlreadyExists(String to, String displayName) {
 		return new EmailMessage(to, "Someone tried to register with your email address", """
 				Hello %s,
