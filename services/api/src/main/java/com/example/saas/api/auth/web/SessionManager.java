@@ -45,6 +45,7 @@ public class SessionManager {
 		session.setAttribute(SessionAttributes.USER_ID, userId);
 		session.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, userId);
 		session.setAttribute(SessionAttributes.LAST_AUTHENTICATED_AT, now.toEpochMilli());
+		session.setAttribute(SessionAttributes.CREDENTIALS_VERSION, account.credentialsVersion());
 		Instant expiresAt = Instant.ofEpochMilli(session.getCreationTime()).plus(properties.absoluteLifetime());
 		return new SessionInfoResponse(account.id(), account.email(), account.displayName(), account.emailVerified(),
 				now, expiresAt);

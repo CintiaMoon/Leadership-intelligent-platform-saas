@@ -42,7 +42,7 @@ public final class PreLoginCsrfFilter extends OncePerRequestFilter {
 
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		return !"POST".equals(request.getMethod()) || !PATHS.contains(request.getRequestURI());
+		return !"POST".equals(request.getMethod()) || !PATHS.contains(RequestPaths.of(request));
 	}
 
 	@Override

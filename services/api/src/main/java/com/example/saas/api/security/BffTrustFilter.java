@@ -49,7 +49,7 @@ public final class BffTrustFilter extends OncePerRequestFilter {
 
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		return !request.getRequestURI().startsWith(API_PREFIX);
+		return !RequestPaths.of(request).startsWith(API_PREFIX);
 	}
 
 	@Override

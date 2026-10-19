@@ -101,7 +101,8 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<Object> handleUnexpected(Exception ex, HttpServletRequest request) {
-		log.error("Unhandled exception of type {}", ex.getClass().getName(), ex);
+		// Only the type: messages of persistence errors can quote row data such as emails and password hashes.
+		log.error("Unhandled exception of type {}", ex.getClass().getName());
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 			.body(problem(ErrorCode.INTERNAL_ERROR, request.getRequestURI()));
 	}

@@ -191,3 +191,14 @@ Both reviews were read-only and executed nothing. I have not verified every find
 ### Slice status
 Slice 001 is **not closed**. Open: the items above, the edge-dependent checks, D-12 values, D-87, D-08, the `signup-account` limit question, and runbook rehearsals.
 
+## 15. Phase 6 part 2: code fixes (2026-10-19)
+Made, with tests (all in `./mvnw verify`, 239 tests, 0 failures):
+- **SEC-M1:** the BFF-credential, pre-login CSRF and session filters now decide on the decoded path (`RequestPaths`, Spring's `UrlPathHelper`), not the raw URI. `EncodedPathTests` failed before the change (both requests got past the filters) and passes after.
+- **SEC-M5:** the unhandled-exception handler logs the exception type and correlation id only, no throwable. Not covered by a new test.
+- **CR-M1:** the hash upgrade at login is a conditional `UPDATE ... WHERE password_hash = <verified hash>`; `CredentialsVersionTests.aPasswordHashUpgradeNeverOverwritesAPasswordThatChangedMeanwhile`.
+- **SEC-M4 / CR-M2:** migration `V8` adds `app_user.credentials_version`; a reset increments it, a session records the value it was opened with, and the session filter rejects a session whose value is stale. Existing sessions without the value are rejected (none exist yet). `CredentialsVersionTests` (two tests).
+- **CR-M3 / SEC-L4:** attempts for one account from one address run one at a time on an instance (256 striped locks), so a burst is evaluated only up to the threshold. `LoginTests.aBurstOfGuessesIsStoppedAtTheThresholdNotAfterIt` asserts exactly 5 evaluated failures out of 12; with the lock removed it saw 12. **Residual:** across several API instances the check is still not atomic; the per-IP limit bounds it.
+- **CR-M5:** removed the two `429` responses that no code path produces (verify-email, password-reset confirm) from the contract and regenerated the client types. The DTO size guards (1024 and 400 UTF-16 units) stay above the contract's code-point limits on purpose: the domain checks return the specific field error.
+
+Not done (still open, see section 14): X-Forwarded-For chain, pre-hijacking and display name in mail, outbox and audit retention, token-invalidation and account-throttle product decisions, the AC-AUTH-39 and login fail-closed test gaps, placeholder-credential and empty-origins guards, CSP/HSTS, CI pinning and audit.
+

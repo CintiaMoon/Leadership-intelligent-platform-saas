@@ -51,6 +51,9 @@ public class UserAccount {
 	@Version
 	private long version;
 
+	@Column(name = "credentials_version", nullable = false)
+	private long credentialsVersion;
+
 	protected UserAccount() {
 	}
 
@@ -77,10 +80,15 @@ public class UserAccount {
 		return emailNormalized;
 	}
 
-	/** Replaces the hash, for example to upgrade it to the current Argon2id parameters at login. */
-	public void changePasswordHash(String newHash, Instant now) {
+	/** Replaces the password after a reset. Sessions opened before this are no longer valid (credentials version). */
+	public void resetPassword(String newHash, Instant now) {
 		this.passwordHash = newHash;
 		this.updatedAt = now;
+		this.credentialsVersion++;
+	}
+
+	public long getCredentialsVersion() {
+		return credentialsVersion;
 	}
 
 	public String getEmailOriginal() {

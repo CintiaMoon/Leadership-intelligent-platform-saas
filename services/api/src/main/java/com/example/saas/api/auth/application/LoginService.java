@@ -2,6 +2,8 @@ package com.example.saas.api.auth.application;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
 
 import com.example.saas.api.auth.domain.EmailAddress;
 import com.example.saas.api.auth.domain.PasswordHasher;
@@ -35,6 +37,8 @@ public class LoginService {
 
 	private final LoginRecorder recorder;
 
+	private final ReentrantLock[] gates = Stream.generate(ReentrantLock::new).limit(256).toArray(ReentrantLock[]::new);
+
 	LoginService(RateLimiter rateLimiter, LoginThrottle throttle, UserAccountRepository users,
 			PasswordHasher hasher, LoginRecorder recorder) {
 		this.rateLimiter = rateLimiter;
@@ -60,11 +64,31 @@ public class LoginService {
 		String normalized = address.normalized();
 
 		boolean withinIpLimit = rateLimiter.hit(AuthRateLimits.LOGIN_IP, clientKey).allowed();
-		if (!withinIpLimit || throttle.isBlocked(normalized, clientKey)) {
+		if (!withinIpLimit) {
 			throw new InvalidCredentialsException();
 		}
 
-		String candidate = PasswordPolicy.normalize(password);
+		// Attempts for one account from one address run one at a time on this instance, so a burst cannot all pass the
+		// block check before the first failure is counted (AC-AUTH-18). Other accounts and addresses are unaffected.
+		ReentrantLock gate = gateFor(normalized, clientKey);
+		gate.lock();
+		try {
+			return evaluate(normalized, PasswordPolicy.normalize(password), clientKey);
+		}
+		finally {
+			gate.unlock();
+		}
+	}
+
+	private ReentrantLock gateFor(String normalizedEmail, String clientKey) {
+		return gates[Math.floorMod((normalizedEmail + "|" + clientKey).hashCode(), gates.length)];
+	}
+
+	private AuthenticatedAccount evaluate(String normalized, String candidate, String clientKey) {
+		if (throttle.isBlocked(normalized, clientKey)) {
+			throw new InvalidCredentialsException();
+		}
+
 		Optional<UserAccount> found = users.findByEmailNormalized(normalized);
 		boolean passwordMatches;
 		if (found.isPresent()) {
@@ -86,8 +110,9 @@ public class LoginService {
 		UserAccount user = found.get();
 		throttle.recordSuccess(normalized, clientKey);
 		String upgradedHash = hasher.needsUpgrade(user.getPasswordHash()) ? hasher.hash(candidate) : null;
-		recorder.succeeded(user.getId(), upgradedHash);
-		return new AuthenticatedAccount(user.getId(), user.getEmailOriginal(), user.getDisplayName(), true);
+		recorder.succeeded(user.getId(), user.getPasswordHash(), upgradedHash);
+		return new AuthenticatedAccount(user.getId(), user.getEmailOriginal(), user.getDisplayName(), true,
+				user.getCredentialsVersion());
 	}
 
 }

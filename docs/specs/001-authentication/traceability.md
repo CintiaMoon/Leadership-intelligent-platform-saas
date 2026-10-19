@@ -69,6 +69,8 @@ Mutation check: leaving the token in the address bar fails 3 end-to-end tests.
 - **Cookies as in production** (`E2E_PROD_COOKIES=true npm run e2e`): all 8 end-to-end tests pass with `__Host-` names and `Secure` cookies on `http://localhost` in Chromium, which accepts Secure cookies there. This is not a real HTTPS edge or routing environment; that check is still open.
 - **Independent reviews** (security-engineer and code-reviewer agents, read-only, nothing executed): findings and their triage are in plan section 14. Corrections to this file they prompted: AC-AUTH-39 is verified for the error mapping and the semaphore, not for real signup, login or reset under saturation; AC-AUTH-18 is satisfied under the D-78 reading (the sixth failure is refused for one minute); the "a link without a token explains itself" test is about the page, not AC-AUTH-37.
 
+- **Code fixes from the reviews** (plan section 15): `EncodedPathTests`, `CredentialsVersionTests`, and the strengthened burst test in `LoginTests` (AC-AUTH-18) were added. Mutation check: removing the per-pair lock makes the burst test see 12 counted failures instead of 5.
+
 ## Not run or not yet possible
 - Argon2id values on the production task size (D-12) and the rate-limit load test against the production database class.
 - The cookie and client-address checks through a real HTTPS edge (ADR-001).

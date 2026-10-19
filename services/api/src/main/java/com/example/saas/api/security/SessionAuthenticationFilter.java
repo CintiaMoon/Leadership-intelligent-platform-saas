@@ -45,7 +45,7 @@ public final class SessionAuthenticationFilter extends OncePerRequestFilter {
 
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		return !request.getRequestURI().startsWith("/api/");
+		return !RequestPaths.of(request).startsWith("/api/");
 	}
 
 	@Override
@@ -70,7 +70,9 @@ public final class SessionAuthenticationFilter extends OncePerRequestFilter {
 	private AuthenticatedUser authenticate(HttpSession session) {
 		Object userId = session.getAttribute(SessionAttributes.USER_ID);
 		Object lastAuthenticated = session.getAttribute(SessionAttributes.LAST_AUTHENTICATED_AT);
-		if (!(userId instanceof String id) || !(lastAuthenticated instanceof Long lastMillis)) {
+		Object version = session.getAttribute(SessionAttributes.CREDENTIALS_VERSION);
+		if (!(userId instanceof String id) || !(lastAuthenticated instanceof Long lastMillis)
+				|| !(version instanceof Long credentialsVersion)) {
 			return null;
 		}
 		Instant now = clock.instant();
@@ -87,7 +89,8 @@ public final class SessionAuthenticationFilter extends OncePerRequestFilter {
 			session.invalidate();
 			return null;
 		}
-		if (!users.existsByIdAndStatusAndEmailVerifiedAtIsNotNull(uuid, UserAccount.Status.ACTIVE)) {
+		if (!users.existsByIdAndStatusAndEmailVerifiedAtIsNotNullAndCredentialsVersion(uuid, UserAccount.Status.ACTIVE,
+				credentialsVersion)) {
 			session.invalidate();
 			return null;
 		}
