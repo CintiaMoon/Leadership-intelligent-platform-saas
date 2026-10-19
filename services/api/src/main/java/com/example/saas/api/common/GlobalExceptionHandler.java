@@ -1,0 +1,108 @@
+package com.example.saas.api.common;
+
+import java.net.URI;
+import java.util.List;
+
+import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+/**
+ * Turns every MVC failure into an RFC 9457 problem with a stable code (ADR-005). Response text is fixed
+ * per code; exception messages are never returned or logged because they can quote request content
+ * (for example a malformed JSON body containing a password).
+ */
+@RestControllerAdvice
+class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+	static final int STORE_RETRY_AFTER_SECONDS = 5;
+
+	@Override
+	protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+		List<FieldProblem> errors = ex.getBindingResult().getFieldErrors().stream()
+			.map(GlobalExceptionHandler::toFieldProblem)
+			.toList();
+		ProblemDetail problem = problem(ErrorCode.VALIDATION_FAILED, request);
+		problem.setProperty("errors", errors);
+		return ResponseEntity.badRequest().headers(headers).body(problem);
+	}
+
+	@Override
+	protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+			HttpStatusCode statusCode, WebRequest request) {
+		ErrorCode code = statusCode.value() == HttpStatus.BAD_REQUEST.value() ? ErrorCode.VALIDATION_FAILED
+				: statusCode.is5xxServerError() ? ErrorCode.INTERNAL_ERROR : ErrorCode.REQUEST_REJECTED;
+		log.debug("Request rejected: {} -> {}", ex.getClass().getSimpleName(), statusCode.value());
+		return ResponseEntity.status(statusCode).headers(headers).body(problem(code, request, statusCode));
+	}
+
+	@ExceptionHandler(RateLimitStoreUnavailableException.class)
+	ResponseEntity<Object> handleStoreUnavailable(RateLimitStoreUnavailableException ex, HttpServletRequest request) {
+		// Fail closed (ADR-004). The cause may mention connection details, so only the type is logged.
+		log.warn("Rate-limit store unavailable: {}", ex.getCause() == null ? "unknown" : ex.getCause().getClass().getName());
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+			.header(HttpHeaders.RETRY_AFTER, String.valueOf(STORE_RETRY_AFTER_SECONDS))
+			.body(problem(ErrorCode.SERVICE_UNAVAILABLE, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(Exception.class)
+	ResponseEntity<Object> handleUnexpected(Exception ex, HttpServletRequest request) {
+		log.error("Unhandled exception of type {}", ex.getClass().getName(), ex);
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+			.body(problem(ErrorCode.INTERNAL_ERROR, request.getRequestURI()));
+	}
+
+	private static FieldProblem toFieldProblem(FieldError error) {
+		String constraint = error.getCode() == null ? "" : error.getCode();
+		String code = switch (constraint) {
+			case "NotNull", "NotBlank", "NotEmpty" -> "REQUIRED";
+			case "Size", "Length", "Max", "Min" -> "INVALID_LENGTH";
+			default -> "INVALID";
+		};
+		return new FieldProblem(error.getField(), code);
+	}
+
+	private static ProblemDetail problem(ErrorCode code, WebRequest request) {
+		return problem(code, request, code.status());
+	}
+
+	private static ProblemDetail problem(ErrorCode code, WebRequest request, HttpStatusCode status) {
+		String path = request instanceof ServletWebRequest servletRequest ? servletRequest.getRequest().getRequestURI()
+				: "";
+		ProblemDetail problem = problem(code, path);
+		problem.setStatus(status.value());
+		return problem;
+	}
+
+	private static ProblemDetail problem(ErrorCode code, String path) {
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(code.status(), code.detail());
+		problem.setType(URI.create(code.type()));
+		problem.setTitle(code.status().getReasonPhrase());
+		// Path only: the query string can carry data that must not be echoed.
+		try {
+			problem.setInstance(URI.create(path));
+		}
+		catch (IllegalArgumentException ex) {
+			// Leave the instance unset rather than echo a malformed value.
+		}
+		problem.setProperty("code", code.name());
+		return problem;
+	}
+
+}
