@@ -13,6 +13,12 @@ SPEC-AUTH requires distributed limits by account, IP, and operation, shared acro
 - If the store is unavailable, login, registration, verification-resend, password-reset, invitation-token, and company-creation endpoints fail closed (the request is rejected).
 - Limits follow SPEC-AUTH, SPEC-INV, and SPEC-TEN: login 5 failed attempts per account and IP pair per 15 minutes with progressive delay, an account-only ceiling of 20 failed attempts per hour that adds a capped delay and never locks the account, and 20 per IP per minute; invitation emails 20 per inviter per hour, 50 per company per day, and 3 per recipient per 24 hours; registration 5 per IP per hour; verification resend 3 per account and 10 per IP per hour; invitation-token failures 10 per IP per hour; company creation 5 per IP per hour and 10 per account per day.
 
+## Amendments (2026-10-19, D-78, D-86)
+- Counters are fixed-window. The key is an HMAC-SHA-256 of the normalized identifier and the client IP, so raw emails and addresses are not stored. Updates use one atomic upsert with `RETURNING`.
+- The counter pool is small and dedicated, with a 250 ms timeout; exceeding it means "store unavailable" and fails closed.
+- Progressive delay is an escalating block window (1, 2, 4, 8, then 15 minutes), not a server-side sleep. While a key is blocked, the password is not evaluated and the generic login failure is returned.
+- Neutral endpoints (verification resend, password-reset request) that are throttled by account still return the neutral response and send nothing; IP-only limits may return 429 with `Retry-After`.
+
 ## Alternatives considered
 Redis, or an edge or WAF control. Both add infrastructure; an edge control may complement this later.
 

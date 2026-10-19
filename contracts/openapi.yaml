@@ -1,12 +1,561 @@
 openapi: 3.1.0
 info:
   title: SaaS Platform API
-  version: 0.0.1
+  version: 0.1.0
   description: |
-    Skeleton contract. No business endpoints are defined yet; each is added with its approved
-    feature spec (see docs/api/contract-guidelines.md). Errors will use RFC 9457
-    application/problem+json (ADR-005).
+    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001) operations are defined so far;
+    each further endpoint is added with its approved feature spec (docs/api/contract-guidelines.md).
+
+    Conventions
+    - Errors use RFC 9457 `application/problem+json` with a stable `code` (ADR-005).
+    - The browser reaches this API only through the Next.js BFF, which authenticates to the API with
+      the `bffCredential` header (ADR-001, D-50, D-91). The BFF passes the session cookie through.
+    - Every state-changing operation requires `X-CSRF-TOKEN` (D-75). Obtain it from `GET /api/v1/auth/csrf`.
+    - All `/api/v1/auth/**` responses carry `Cache-Control: no-store` (AC-AUTH-24).
+    - Secrets (passwords, verification and reset tokens) travel only in request bodies, never in a
+      path or query string (D-44, AC-AUTH-35).
 servers:
   - url: http://localhost:8080
     description: Local development only
-paths: {}
+security:
+  - bffCredential: []
+tags:
+  - name: Authentication
+    description: Signup, email verification, login, logout, session, step-up, and password reset (SPEC-AUTH).
+paths:
+  /api/v1/auth/csrf:
+    get:
+      tags: [Authentication]
+      operationId: getCsrfToken
+      summary: Get a CSRF token
+      description: |
+        Before login this returns a stateless signed double-submit token; after login it returns the
+        session-bound token. Re-fetch after login, logout, and any session-id rotation.
+      responses:
+        '200':
+          description: CSRF token.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/signup:
+    post:
+      tags: [Authentication]
+      operationId: signup
+      summary: Register an account
+      description: |
+        Always returns the same 202 response whether or not the normalized email already exists
+        (AC-AUTH-02). A new account receives a verification email; an existing account receives an
+        attempted-registration email. Limit: 5 per IP per hour.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Neutral'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/auth/verify-email:
+    post:
+      tags: [Authentication]
+      operationId: verifyEmail
+      summary: Verify an email address with a single-use token
+      description: Unknown, expired, and already-consumed tokens return the same `TOKEN_INVALID` problem (AC-AUTH-37).
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '204':
+          description: Email verified.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '422':
+          $ref: '#/components/responses/TokenInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/auth/verify-email/resend:
+    post:
+      tags: [Authentication]
+      operationId: resendVerificationEmail
+      summary: Request a new verification email
+      description: |
+        Always returns the same neutral 202 whether or not an unverified account exists (AC-AUTH-20),
+        including when throttled per account. Limits: 3 per account and 10 per IP per hour.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Neutral'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Log in with email and password
+      description: |
+        Establishes a server-side session and rotates the session identifier. The session cookie is
+        set by this response and is never present in a body or URL. Unknown account, wrong password,
+        unverified email, DISABLED account, and throttled attempts all return the same 401
+        `INVALID_CREDENTIALS` problem (AC-AUTH-13, 19, 26, 29).
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Logged in.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: The `__Host-session` cookie (HttpOnly, Secure, SameSite=Lax, Path=/).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionInfo'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Log out and revoke the session
+      description: Revokes the server-side session and clears the cookie.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: Session revoked and cookie cleared.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+  /api/v1/auth/session:
+    get:
+      tags: [Authentication]
+      operationId: getSession
+      summary: Get the current session
+      description: Returns the authenticated user. Never returns the session identifier.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      responses:
+        '200':
+          description: Current session.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/step-up:
+    post:
+      tags: [Authentication]
+      operationId: stepUp
+      summary: Re-enter the password to refresh the last-authentication time
+      description: |
+        Sets `lastAuthenticatedAt`; only login and this operation do (AC-AUTH-22). Required within
+        10 minutes for the sensitive operations in SPEC-AUTH. A wrong password returns 401
+        `INVALID_CREDENTIALS` and is counted against the login throttle.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepUpRequest'
+      responses:
+        '204':
+          description: Recent authentication recorded.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/auth/password-reset/request:
+    post:
+      tags: [Authentication]
+      operationId: requestPasswordReset
+      summary: Request a password-reset email
+      description: |
+        Always returns the same neutral 202 (AC-AUTH-30). Limits: 3 per account and 10 per IP per hour.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Neutral'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [Authentication]
+      operationId: confirmPasswordReset
+      summary: Set a new password with a reset token
+      description: |
+        The token travels in the body (it reaches the client in the URL fragment). On success all of
+        the user's sessions are revoked and other reset tokens are invalidated (AC-AUTH-32).
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+      responses:
+        '204':
+          description: Password changed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
+        '422':
+          $ref: '#/components/responses/TokenInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+components:
+  securitySchemes:
+    bffCredential:
+      type: apiKey
+      in: header
+      name: X-BFF-Credential
+      description: |
+        Per-environment shared secret (at least 256 bits) that authenticates the BFF as a client. It does
+        not identify the user (D-50, D-91). Requests without it have forwarded headers ignored and are
+        rejected.
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-session
+      description: Server-side session identifier set by login. HttpOnly, Secure, SameSite=Lax.
+  headers:
+    NoStore:
+      description: Always `no-store` on authentication responses.
+      schema:
+        type: string
+        const: no-store
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 1
+  parameters:
+    CsrfHeader:
+      name: X-CSRF-TOKEN
+      in: header
+      required: true
+      description: CSRF token from `GET /api/v1/auth/csrf` (D-75).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 512
+  schemas:
+    CsrfToken:
+      type: object
+      required: [headerName, token]
+      properties:
+        headerName:
+          type: string
+          const: X-CSRF-TOKEN
+        token:
+          type: string
+          minLength: 1
+          maxLength: 512
+    SignupRequest:
+      type: object
+      required: [email, password, displayName]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          description: Normalized server-side (trim, lowercase, punycode domain); the original text is stored.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          writeOnly: true
+          description: 8 to 128 code points, NFKC-normalized server-side, not on the compromised-password list.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Trimmed server-side; must not be empty afterwards.
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+    StepUpRequest:
+      type: object
+      required: [password]
+      additionalProperties: false
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+    EmailRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          maxLength: 254
+    TokenRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+    PasswordResetConfirmRequest:
+      type: object
+      required: [token, newPassword]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+          writeOnly: true
+    SessionInfo:
+      type: object
+      required: [userId, email, displayName, emailVerified, lastAuthenticatedAt, expiresAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        emailVerified:
+          type: boolean
+        lastAuthenticatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: Absolute session end (12 hours after login).
+    NeutralResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Fixed text, identical for every outcome of the operation.
+    ErrorCode:
+      type: string
+      description: Stable application error code (ADR-005). The frontend maps codes to messages.
+      enum:
+        - VALIDATION_FAILED
+        - INVALID_CREDENTIALS
+        - TOKEN_INVALID
+        - UNAUTHENTICATED
+        - CSRF_REJECTED
+        - RATE_LIMITED
+        - SERVICE_UNAVAILABLE
+    FieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+          description: Stable field error code, for example `REQUIRED`, `TOO_LONG`, `TOO_SHORT`, `BREACHED_PASSWORD`.
+    Problem:
+      type: object
+      description: RFC 9457 problem details with a stable `code`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+  responses:
+    Neutral:
+      description: Accepted. Identical for every outcome of the operation.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NeutralResponse'
+    ValidationError:
+      description: Input failed server-side validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: No valid session.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvalidCredentials:
+      description: Login failed. The same status, body shape, and code for every failure reason.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    CsrfRejected:
+      description: Missing or invalid CSRF token, or a disallowed `Origin`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TokenInvalid:
+      description: The token is unknown, expired, or already consumed (one response for all three).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RateLimited:
+      description: An IP-level limit was exceeded.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unavailable:
+      description: |
+        The rate-limit store is unavailable (fail closed, ADR-004) or no password-hash capacity is
+        available within the wait limit (D-85).
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
