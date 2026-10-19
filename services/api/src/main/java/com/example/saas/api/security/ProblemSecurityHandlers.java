@@ -7,6 +7,7 @@ import com.example.saas.api.common.ProblemResponseWriter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -32,8 +33,14 @@ public class ProblemSecurityHandlers implements AuthenticationEntryPoint, Access
 	@Override
 	public void handle(HttpServletRequest request, HttpServletResponse response,
 			AccessDeniedException accessDeniedException) throws IOException {
-		ErrorCode code = accessDeniedException instanceof CsrfException ? ErrorCode.CSRF_REJECTED
-				: ErrorCode.FORBIDDEN;
+		ErrorCode code = ErrorCode.FORBIDDEN;
+		if (accessDeniedException instanceof CsrfException) {
+			code = ErrorCode.CSRF_REJECTED;
+		}
+		else if (accessDeniedException instanceof AuthorizationDeniedException denied
+				&& denied.getAuthorizationResult() instanceof RecentAuthenticationAuthorizationManager.Stale) {
+			code = ErrorCode.REAUTHENTICATION_REQUIRED;
+		}
 		problems.write(request, response, code);
 	}
 

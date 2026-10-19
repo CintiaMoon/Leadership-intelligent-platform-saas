@@ -10,8 +10,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-
 /** Test client for the authentication endpoints, speaking as the BFF would. */
 public final class AuthApi {
 
@@ -38,7 +36,7 @@ public final class AuthApi {
 	}
 
 	public Csrf csrf(String ip) throws Exception {
-		MvcResult result = mvc.perform(get("/api/v1/auth/csrf")
+		MvcResult result = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/auth/csrf")
 			.header("X-BFF-Credential", BFF_CREDENTIAL)
 			.header("X-Forwarded-For", ip)).andReturn();
 		JsonNode body = JSON.readTree(result.getResponse().getContentAsString());
@@ -69,6 +67,52 @@ public final class AuthApi {
 
 	public MvcResult verify(String token, String ip) throws Exception {
 		return postJson("/api/v1/auth/verify-email", json("token", token), ip);
+	}
+
+	public static final String SESSION_COOKIE = "__Host-session";
+
+	public MvcResult login(String email, String password, String ip) throws Exception {
+		return postJson("/api/v1/auth/login", json("email", email, "password", password), ip);
+	}
+
+	/** The session cookie set by a response, or null. */
+	public static Cookie sessionCookie(MvcResult result) {
+		return result.getResponse().getCookie(SESSION_COOKIE);
+	}
+
+	/** A request carrying a session cookie, as the BFF would forward it. */
+	public MvcResult get(String path, Cookie session, String ip) throws Exception {
+		MockHttpServletRequestBuilder builder = org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+			.get(path)
+			.header("X-BFF-Credential", BFF_CREDENTIAL)
+			.header("X-Forwarded-For", ip);
+		if (session != null) {
+			builder.cookie(session);
+		}
+		return mvc.perform(builder).andReturn();
+	}
+
+	/** The CSRF token bound to a session. */
+	public String sessionCsrf(Cookie session, String ip) throws Exception {
+		return parse(get("/api/v1/auth/csrf", session, ip)).path("token").asString();
+	}
+
+	/** A state-changing request on a session, with the given CSRF token (or none). */
+	public MvcResult postWithSession(String path, String body, Cookie session, String csrfToken, String ip)
+			throws Exception {
+		MockHttpServletRequestBuilder builder = org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+			.post(path)
+			.header("X-BFF-Credential", BFF_CREDENTIAL)
+			.header("X-Forwarded-For", ip)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(body);
+		if (session != null) {
+			builder.cookie(session);
+		}
+		if (csrfToken != null) {
+			builder.header("X-CSRF-TOKEN", csrfToken);
+		}
+		return mvc.perform(builder).andReturn();
 	}
 
 	public MvcResult resend(String email, String ip) throws Exception {

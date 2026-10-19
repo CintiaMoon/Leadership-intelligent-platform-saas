@@ -1,8 +1,11 @@
 package com.example.saas.api.security;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 
+import com.example.saas.api.auth.persistence.UserAccountRepository;
+import com.example.saas.api.auth.web.SessionManager;
 import com.example.saas.api.common.ProblemResponseWriter;
 import com.example.saas.api.ratelimit.RateLimitPolicy;
 import com.example.saas.api.ratelimit.RateLimitResult;
@@ -12,13 +15,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,21 +33,30 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Test-only endpoints and a security chain that mirrors the production filter setup for them, so the
- * foundation (BFF trust, problem format, headers, rate limiting) is exercised over HTTP without adding any
- * public endpoint to the production chain.
+ * Test-only endpoints and a security chain that mirrors the production filter setup for them (BFF trust, session
+ * authentication, session-bound CSRF), so the foundation and the reusable mechanisms (recent authentication,
+ * verified-only access, session rotation) are exercised over HTTP without adding any endpoint to the production chain.
  */
 @TestConfiguration(proxyBeanMethods = false)
+@EnableConfigurationProperties(SessionProperties.class)
 public class TestEndpointsConfiguration {
 
 	@Bean
 	@Order(1)
 	SecurityFilterChain testEndpointsChain(HttpSecurity http, SecurityProperties properties,
-			ProblemResponseWriter problems, ProblemSecurityHandlers handlers) throws Exception {
+			SessionProperties sessionProperties, ProblemResponseWriter problems, ProblemSecurityHandlers handlers,
+			UserAccountRepository users, Clock clock, RecentAuthenticationAuthorizationManager recentAuthentication)
+			throws Exception {
 		http
 			.securityMatcher("/api/v1/test/**", "/api/v1/auth/test/**")
+			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.NEVER))
+			.securityContext(context -> context.securityContextRepository(new RequestAttributeSecurityContextRepository()))
 			.addFilterBefore(new BffTrustFilter(properties, problems), CsrfFilter.class)
-			.authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+			.addFilterBefore(new SessionAuthenticationFilter(users, sessionProperties, clock), CsrfFilter.class)
+			.authorizeHttpRequests(auth -> auth
+				.requestMatchers(HttpMethod.GET, "/api/v1/test/sensitive").access(recentAuthentication)
+				.requestMatchers("/api/v1/test/authenticated", "/api/v1/test/rotate").authenticated()
+				.anyRequest().permitAll())
 			.exceptionHandling(handling -> handling.authenticationEntryPoint(handlers).accessDeniedHandler(handlers))
 			.csrf(Customizer.withDefaults());
 		return http.build();
@@ -57,8 +73,11 @@ public class TestEndpointsConfiguration {
 
 		private final RateLimiter rateLimiter;
 
-		TestEndpointsController(RateLimiter rateLimiter) {
+		private final SessionManager sessions;
+
+		TestEndpointsController(RateLimiter rateLimiter, SessionManager sessions) {
 			this.rateLimiter = rateLimiter;
+			this.sessions = sessions;
 		}
 
 		@GetMapping("/api/v1/test/ip")
@@ -100,6 +119,25 @@ public class TestEndpointsConfiguration {
 
 		@GetMapping("/api/v1/test/ping")
 		Map<String, String> ping() {
+			return Map.of("ok", "true");
+		}
+
+		/** Any valid, verified session: the verified-only mechanism (AC-AUTH-04). */
+		@GetMapping("/api/v1/test/authenticated")
+		Map<String, String> authenticated() {
+			return Map.of("ok", "true");
+		}
+
+		/** Needs a login or step-up within 10 minutes: the mechanism behind AC-AUTH-14 and AC-AUTH-22. */
+		@GetMapping("/api/v1/test/sensitive")
+		Map<String, String> sensitive() {
+			return Map.of("ok", "true");
+		}
+
+		/** Stands in for a change to the caller's own role or membership (AC-AUTH-23). */
+		@PostMapping("/api/v1/test/rotate")
+		Map<String, String> rotate(HttpServletRequest request) {
+			sessions.rotate(request);
 			return Map.of("ok", "true");
 		}
 

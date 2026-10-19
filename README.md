@@ -53,7 +53,7 @@ Backend (`services/api`):
 DB_PASSWORD=... RATE_LIMIT_HMAC_KEY=... CSRF_HMAC_KEY=... PUBLIC_BASE_URL=... BFF_CREDENTIALS=... ./mvnw spring-boot:run
 ```
 The schema is owned by Flyway (`src/main/resources/db/migration`); Hibernate only validates it (`ddl-auto: validate`).
-The API requires `RATE_LIMIT_HMAC_KEY`, `CSRF_HMAC_KEY`, and `PUBLIC_BASE_URL` (it will not start without them; see `.env.example`). Local email goes to Mailpit at http://localhost:8025 (started with the compose file). Every `/api/` request must carry a `BFF_CREDENTIALS` secret in `X-BFF-Credential`, and the API denies every request except `/actuator/health` until SPEC-AUTH is implemented. The JVM runs in UTC.
+The API requires `RATE_LIMIT_HMAC_KEY`, `CSRF_HMAC_KEY`, and `PUBLIC_BASE_URL` (it will not start without them; see `.env.example`). Sessions use the `__Host-session` cookie, which needs HTTPS; over plain HTTP set `SESSION_COOKIE_NAME`, `SESSION_COOKIE_SECURE=false`, `CSRF_COOKIE_NAME` and `CSRF_COOKIE_SECURE=false` (local development only). Local email goes to Mailpit at http://localhost:8025 (started with the compose file). Every `/api/` request must carry a `BFF_CREDENTIALS` secret in `X-BFF-Credential`, and the API denies every request except `/actuator/health` until SPEC-AUTH is implemented. The JVM runs in UTC.
 
 Frontend (`apps/web`):
 ```

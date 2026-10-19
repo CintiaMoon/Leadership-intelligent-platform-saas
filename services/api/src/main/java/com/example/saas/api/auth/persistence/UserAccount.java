@@ -77,6 +77,12 @@ public class UserAccount {
 		return emailNormalized;
 	}
 
+	/** Replaces the hash, for example to upgrade it to the current Argon2id parameters at login. */
+	public void changePasswordHash(String newHash, Instant now) {
+		this.passwordHash = newHash;
+		this.updatedAt = now;
+	}
+
 	public String getEmailOriginal() {
 		return emailOriginal;
 	}
