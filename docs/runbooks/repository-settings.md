@@ -1,6 +1,6 @@
 # Repository Settings (GitHub)
 
-- Status: Proposed. Approved by the product owner on 2026-10-18; **not yet applied**. These are repository settings, not files, so they must be set in GitHub by an administrator. Nothing here has been run or verified.
+- Status: Proposed. Approved by the product owner on 2026-10-18; **not yet applied**. CI (`.github/workflows/ci.yml`: api, web, contract, secret-scan) and `.github/dependabot.yml` are added by the PR that introduces them; branch protection requiring those checks is applied only after that PR is merged. These are repository settings, not files, so they must be set in GitHub by an administrator. Nothing here has been run or verified.
 
 ## Branch protection for `main`
 - Require a pull request before merging.
