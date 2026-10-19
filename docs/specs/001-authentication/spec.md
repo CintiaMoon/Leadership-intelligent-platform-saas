@@ -3,6 +3,7 @@
 - ID: SPEC-AUTH
 - Status: Approved
 - Re-approved on 2026-10-17, including the later edits that day (password reset, account status, email normalization, hashing parameters). Approver: product owner.
+- Amended on 2026-10-19 with the plan-derived decisions D-75 to D-91 and AC-AUTH-36 to AC-AUTH-40, approved by the user together with `plan.md`. No earlier decision or acceptance criterion was changed.
 - Requirements: AUTH-001 through AUTH-010
 
 ## Objective
@@ -30,6 +31,16 @@ Provide secure signup, email verification, login/logout, revocable server-side s
 - Rate-limit store: Counters are kept in PostgreSQL so limits are shared across instances. If the store is unavailable, login, registration, verification resend, password reset, and invitation-token endpoints fail closed (D-06, decided 2026-10-16; ADR-004).
 - Email normalization: trim the address, lowercase the whole address, convert the domain to its ASCII (punycode) form, reject addresses longer than 254 characters or containing control characters, and store the original text. Plus-tags and dots are not altered (D-55, decided 2026-10-17).
 - Account status: ACTIVE or DISABLED, where DISABLED is set only by an operator, with email verification tracked as a separate flag. There is no account lockout state; throttling replaces it. A DISABLED account cannot authenticate (D-56, decided 2026-10-17).
+- Plan-derived decisions (approved 2026-10-19, D-75 to D-91; details in `plan.md` and the decision register):
+  - Pre-login CSRF (D-75): requests made before a session exists use a stateless signed double-submit token plus the BFF `Origin` and `Sec-Fetch-Site` check and JSON-only content type. Authenticated requests use the session-bound synchronizer token.
+  - Password input (D-76, D-77): 8 to 128 code points, Unicode NFKC applied before the policy check and hashing, never trimmed or truncated; the blocklist is a bundled offline list.
+  - Progressive delay (D-78): an escalating block window of 1, 2, 4, 8, then 15 minutes (cap) after the 5th failure per account and IP. While blocked the password is not evaluated and the generic failure is returned.
+  - Oracles (D-79, D-80): signup returns an identical 202 for new and existing emails (existing accounts get an attempted-registration email); every login failure runs one Argon2id verification (dummy hash if needed) and returns one generic failure code and body.
+  - Tokens (D-81): 256-bit random, SHA-256 stored, consumed by one conditional update, one generic `TOKEN_INVALID` code for unknown, expired, and consumed tokens.
+  - Sessions (D-82): `createdAt` and `lastAuthenticatedAt` session attributes, a filter enforcing the absolute limit and ACTIVE status on every request, principal name is the user UUID, a non-persistent `__Host-session` cookie, no remember-me.
+  - Hash cap (D-85): bounded permits, 2-second wait, then 503 with `Retry-After`.
+  - Signup fields (D-87): `email`, `password`, required `displayName` (1 to 100 characters). Recording terms or privacy acceptance is not decided and needs legal review.
+  - Audit (D-88): authentication events are written to the append-only audit table; failed logins are recorded only for existing accounts.
 - Security invariants: No cross-tenant data access; no client-only authorization; no raw password or verification-token logging; no permanent lockout caused solely by attacker-controlled failed attempts.
 - Validation: Security tests must cover rate limiting, enumeration, token replay and expiry, session expiry and revocation, CSRF, privilege changes, and tenant isolation before release.
 
@@ -99,6 +110,11 @@ Exact paths, DTOs, response codes, and CSRF headers must be approved in OpenAPI.
 - AC-AUTH-33: A password reset is rejected if the new password does not satisfy the password policy (AC-AUTH-17).
 - AC-AUTH-34: The 4th password reset request for one account within an hour and the 11th from one IP address within an hour are throttled.
 - AC-AUTH-35: The reset token is never placed in a request path or query string and never logged.
+- AC-AUTH-36: A state-changing request made before a session exists (signup, login, verify-email, resend, password-reset request and confirm) without a valid pre-login CSRF token, or with a disallowed `Origin`, is rejected.
+- AC-AUTH-37: An unknown, expired, and already-consumed verification or reset token produce the same response (status, body shape, and `TOKEN_INVALID` code).
+- AC-AUTH-38: Passwords longer than 128 code points are rejected, and a password is Unicode NFKC-normalized before the policy check and hashing, so equivalent forms authenticate the same.
+- AC-AUTH-39: When no password-hash permit is available within the wait limit, the request is rejected with 503 and `Retry-After` and memory use stays bounded.
+- AC-AUTH-40: Signup requires a `displayName` of 1 to 100 characters after trimming.
 
 ## Traceability
 | Requirement | Acceptance criteria |
@@ -113,7 +129,8 @@ Exact paths, DTOs, response codes, and CSRF headers must be approved in OpenAPI.
 | AUTH-008 | AC-AUTH-08, AC-AUTH-18, AC-AUTH-21, AC-AUTH-25 |
 | AUTH-009 | AC-AUTH-08 (lockout), AC-AUTH-30, AC-AUTH-31, AC-AUTH-32, AC-AUTH-33, AC-AUTH-34, AC-AUTH-35 (recovery) |
 | AUTH-010 | AC-AUTH-02, AC-AUTH-13, AC-AUTH-20, AC-AUTH-26 |
-| NFR-SEC-003 (supporting) | AC-AUTH-09, AC-AUTH-10 |
+| NFR-SEC-003 (supporting) | AC-AUTH-09, AC-AUTH-10, AC-AUTH-36 |
+| Plan-derived (supporting) | AC-AUTH-37, AC-AUTH-38, AC-AUTH-39, AC-AUTH-40 |
 | Recent authentication (supporting) | AC-AUTH-14, AC-AUTH-22 |
 | Response caching (supporting) | AC-AUTH-24 |
 

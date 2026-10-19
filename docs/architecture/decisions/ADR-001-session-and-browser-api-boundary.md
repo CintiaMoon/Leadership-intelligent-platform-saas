@@ -1,6 +1,6 @@
 # ADR-001: Session Authority and Browser-to-API Boundary
 
-- Status: Proposed — Option A (Next.js BFF) is selected in SPEC-AUTH; the proposals below were approved as suggestions on 2026-10-16 and reviewed by the security-engineer agent the same day (findings applied). The deployment topology (D-08) is still open, so this ADR is not yet accepted
+- Status: Accepted (design) on 2026-10-19 by the user, with the amendments below. Option A (Next.js BFF) is selected in SPEC-AUTH; the policies were approved as suggestions on 2026-10-16 and reviewed by the security-engineer agent the same day (findings applied). Not yet verified: the CSRF flow tests and cookie behavior in a production-like environment (D-08 topology) remain release gates
 - Date: TBD
 - Decision owners: Security owner, Architect (roles, see the decision register)
 - Related: decision register D-01, D-02, D-06; SPEC-AUTH; SPEC-MEM
@@ -39,6 +39,12 @@ Session revocation stated in SPEC-MEM: every protected tenant request verifies t
 - Forwarded headers: the BFF or ingress overwrites `X-Forwarded-For` with the socket address of the client connection and never appends to a client-supplied value. Spring Boot processes forwarded headers only from known proxy addresses (a configured CIDR allowlist) and takes the rightmost untrusted hop as the client address. Per-IP rate limits use that address.
 - Session store: Spring Session JDBC with framework-managed tables. The browser cookie carries the Spring session identifier; the BFF passes it through unchanged and holds no separate session state.
 
+## Amendments (2026-10-19, D-75, D-82, D-83, D-91)
+- Pre-login CSRF (D-75): before a session exists there is no session-bound token, and anonymous database sessions are not created. `GET /api/v1/auth/csrf` returns a stateless signed double-submit token (HMAC over a random value with a server key, mirrored in a cookie that is not the session cookie). Pre-login POSTs require it in the `X-CSRF-TOKEN` header, an allowed `Origin`, and `Content-Type: application/json`. After login the token is the Spring Security session-bound synchronizer token, re-issued on session-id rotation.
+- Session mechanics (D-82): cookie `__Host-session`, non-persistent; `createdAt` and `lastAuthenticatedAt` attributes; a filter enforces the 12-hour absolute limit and re-checks the account is ACTIVE on each request; principal name is the user UUID so all of a user's sessions can be revoked.
+- Schema (D-83): Spring Session tables are created by a Flyway migration, not by the framework.
+- BFF trust (D-91): the shared secret is checked before any forwarded header is honored, with a constant-time comparison.
+
 ## Consequences
 - Auth.js must not maintain a separate authoritative application session unless a future ADR defines a deliberate federation/bridge design.
 - The BFF is a proxy, not an authority: it must not bypass or duplicate backend authorization, and its own routes must not expose data without the backend's checks.
@@ -47,8 +53,8 @@ Session revocation stated in SPEC-MEM: every protected tenant request verifies t
 - Deployment topology and cookie behavior must be tested in an environment matching production routing.
 
 ## Open items
-- Deployment topology: where the BFF and API run and how they are routed (D-08). ADR-007 proposes an AWS baseline for this.
-- Date and decision owners.
+- Final verification of the topology and cookie behavior in the deployed environment (D-08; ADR-007 proposes the AWS baseline).
+- Date of the original proposal is not recorded; acceptance date is 2026-10-19.
 
 ## Verification
 - Security tests for login, logout, session expiry (30 minutes idle, 12 hours absolute), revocation, session fixation, and CSRF-invalid requests.
