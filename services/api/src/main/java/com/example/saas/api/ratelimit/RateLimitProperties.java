@@ -29,6 +29,7 @@ public record RateLimitProperties(
 			throw new IllegalStateException("app.rate-limit.hmac-key (RATE_LIMIT_HMAC_KEY) must be set to a random value of at least "
 					+ MIN_KEY_LENGTH + " characters. Generate one with: openssl rand -base64 48");
 		}
+		com.example.saas.api.security.SecretQuality.requireNotPlaceholder("app.rate-limit.hmac-key", hmacKey);
 		if (poolSize < 1) {
 			throw new IllegalStateException("app.rate-limit.pool-size must be at least 1");
 		}

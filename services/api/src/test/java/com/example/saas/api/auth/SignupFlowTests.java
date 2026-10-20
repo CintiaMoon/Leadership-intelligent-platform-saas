@@ -175,7 +175,10 @@ class SignupFlowTests extends AuthIntegrationTest {
 		assertThat(count("SELECT count(*) FROM app_user WHERE email_normalized = ?", email)).isEqualTo(1);
 		drainOutbox();
 		long verifications = mail.sentTo(email).stream().filter(m -> m.body().contains("#token=")).count();
-		assertThat(verifications).as("one verification email for the one account").isEqualTo(1);
+		assertThat(verifications).as("the creator and each takeover send a verification email, never fewer than one")
+			.isBetween(1L, (long) threads);
+		assertThat(mail.sentTo(email)).as("nobody is told that an account exists while it is still unverified")
+			.noneMatch(m -> m.subject().equals("Someone tried to register with your email address"));
 	}
 
 	@Test

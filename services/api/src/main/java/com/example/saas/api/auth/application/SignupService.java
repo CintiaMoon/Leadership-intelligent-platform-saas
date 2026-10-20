@@ -13,6 +13,7 @@ import com.example.saas.api.common.FieldProblem;
 import com.example.saas.api.common.ValidationFailedException;
 import com.example.saas.api.ratelimit.RateLimiter;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -77,8 +78,22 @@ public class SignupService {
 			registrar.register(address.get().normalized(), address.get().original(), name.get(), hash);
 		}
 		catch (DataIntegrityViolationException lostRace) {
-			// A concurrent signup created the account between our check and insert: treat as existing.
-			registrar.notifyExisting(address.get().normalized());
+			// A concurrent signup created the account between our check and insert. It exists now, so register again:
+			// an unverified account is taken over (D-97) and a verified one gets the notice.
+			registerAgain(address.get(), name.get(), hash);
+		}
+		catch (OptimisticLockingFailureException concurrentTakeover) {
+			// Another signup replaced the same unverified account at the same moment; theirs stands and its
+			// verification email is on its way. The response stays the neutral one.
+		}
+	}
+
+	private void registerAgain(EmailAddress address, String name, String hash) {
+		try {
+			registrar.register(address.normalized(), address.original(), name, hash);
+		}
+		catch (DataIntegrityViolationException | OptimisticLockingFailureException ignored) {
+			// Lost again to a concurrent signup for the same address; nothing more to do.
 		}
 	}
 

@@ -32,10 +32,17 @@ public record CsrfProperties(
 			throw new IllegalStateException("app.security.csrf.hmac-key (CSRF_HMAC_KEY) must be set to a random value of at least "
 					+ MIN_KEY_LENGTH + " characters. Generate one with: openssl rand -base64 48");
 		}
+		SecretQuality.requireNotPlaceholder("app.security.csrf.hmac-key", hmacKey);
 		if (cookieName.startsWith("__Host-") && !cookieSecure) {
 			throw new IllegalStateException("A __Host- cookie must be Secure; rename the cookie for local HTTP development");
 		}
 		allowedOrigins = allowedOrigins.stream().map(String::trim).filter(value -> !value.isEmpty()).toList();
+		if (cookieName.startsWith("__Host-") && allowedOrigins.isEmpty()) {
+			// The BFF sends its own origin on every request; with the production cookie names an empty list would
+			// silently switch the Origin check off.
+			throw new IllegalStateException("app.security.csrf.allowed-origins (CSRF_ALLOWED_ORIGINS) must list the "
+					+ "web app's origin when the production cookie names are used");
+		}
 	}
 
 }

@@ -118,6 +118,8 @@ export function upstreamHeaders(
   if (options.json) {
     headers.set("Content-Type", "application/json");
   }
+  // The origin was already checked against the public one; the API checks it again from its own list (D-75).
+  headers.set("Origin", config.publicOrigin);
   const address = clientAddress(incoming, config.clientIpSource);
   if (address) {
     headers.set("X-Forwarded-For", address);

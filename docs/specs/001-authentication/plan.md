@@ -215,3 +215,30 @@ The user approved items 1 to 7 of the Phase 6 suggestions ("1 thru 7 approved");
 
 Still not done: the guards for placeholder BFF credentials and empty allowed origins, CSP, HSTS, CI pinning and audit, runbook rehearsals, the Argon2 values, and the infrastructure behind D-95.
 
+## 17. Argon2id benchmark on an assumed task size (2026-10-19)
+The production size is not defined, so the user asked for an average value. Assumed: **1 vCPU, 2 GiB, JVM heap 1 GiB**, emulated with `docker run --cpus=1 --memory=2g -e JAVA_TOOL_OPTIONS=-Xmx1g` (Java 21, Linux, on a Windows laptop through Docker Desktop). The numbers are indicative; repeat on the real task. Median / p95 per hash in milliseconds, hashes per second for the whole process:
+
+| memory | iter | 1 in flight | 2 in flight | 4 in flight | hashes/s at 1 |
+|---|---|---|---|---|---|
+| 19 MiB (current) | 2 | 50 / 94 | 121 / 179 | 305 / 538 | 17.5 |
+| 64 MiB | 2 | 125 / 153 | 334 / 483 | 1303 / 1601 | 7.8 |
+| 64 MiB | 3 | 184 / 232 | 487 / 565 | 1776 / 2097 | 5.2 |
+| 64 MiB | 4 | 245 / 288 | 623 / 784 | 2302 / 2584 | 4.0 |
+| 128 MiB | 2 | 285 / 358 | 868 / 1082 | 2572 / 2873 | 3.4 |
+
+Reading:
+- The current baseline takes about 50 ms here, a fifth of the 250 ms target. Time grows with memory times iterations, so the target needs roughly 64 MiB with 4 iterations (245 ms median, p95 288 ms) or 128 MiB with 2 (285 ms, p95 358 ms).
+- With one vCPU the process manages about 4 hashes per second at those settings, and requests queue linearly: two in flight already doubles the latency. Under the 2-second permit wait, three or four simultaneous logins start to return 503. The permit cap should be 2 on this size (memory is not the limit: 2 x 64 MiB is 128 MiB).
+- Capacity is the real cost of stronger hashing: roughly 240 logins, signups or resets per minute per vCPU. The per-address limits (20 logins a minute) and the 503 path protect the service but a distributed flood can still exhaust it; more vCPUs scale it almost linearly.
+
+**Recommendation for the security owner (not applied):** 64 MiB, 4 iterations, 1 lane, permit cap 2 on a 1 vCPU task; if the real task has 2 vCPUs, cap 4 and re-measure. Hashes upgrade at the next login, so the change is safe to roll out. The parameters in the code are unchanged; D-96 stays open until the values are approved and the benchmark is repeated on the real size.
+
+## 18. Phase 6 part 4: Argon2 values, guards, CSP/HSTS, CI (2026-10-19)
+- **D-96 applied:** the defaults are now 64 MiB, 4 iterations, 1 lane, 2 concurrent hashes (`PasswordHasherTest` asserts them). Existing hashes upgrade at the next login (AC-AUTH-27). Re-measure when the real task size is fixed.
+- **D-103 guards:** `SecretQuality` for the BFF credentials, CSRF key, and rate-limit key; empty `CSRF_ALLOWED_ORIGINS` refused with the `__Host-` names. The BFF forwards its origin to the API.
+- **D-102 CSP/HSTS:** nonce-based policy in `src/proxy.ts`. Finding while testing: with `cacheComponents` on, the prerendered shell's framework scripts had no nonce and Chromium blocked them (every end-to-end test failed with a Content Security Policy violation). The fix was to render every page per request and turn `cacheComponents` and `partialPrefetching` off. The auth pages are small, personal, and need no caching, so little is lost, but it is a change to the earlier Phase 5 setup. Every end-to-end test now also fails on any CSP violation the browser reports, and one test checks the nonce on every script, a fresh nonce per request, and that an injected inline event handler does not run. **Not tested:** Firefox and Safari behaviour of `strict-dynamic`, the development server (it needs `unsafe-eval`, which is allowed there), and report collection.
+- **D-104 CI:** see the register. The two new workflows (`codeql`, `dependency-review`) are untested until the pull request runs; GitHub code scanning must be enabled for the CodeQL upload to succeed.
+- **Finding from CI:** the concurrent-signup test failed on the runner (not on the laptop): a signup that lost the insert race now finds an unverified account and takes it over (D-97), so up to one verification email per racer is sent instead of exactly one. `SignupService` registers again after a lost race and treats an optimistic-lock conflict between two takeovers as "the other one stands". The test now expects between one and eight verification emails and no "account exists" notice.
+
+Still open for slice 001: the CloudFront and ALB setup (D-95), rehearsal of the runbooks, final values of D-96 on the real task size, D-87 and D-08, a manual keyboard and screen-reader review, and the closure sign-off.
+

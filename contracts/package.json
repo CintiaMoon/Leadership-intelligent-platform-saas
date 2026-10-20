@@ -1,0 +1,11 @@
+{
+  "name": "contracts",
+  "private": true,
+  "description": "Tooling for contracts/openapi.yaml, pinned by the lockfile so CI lints with exactly the reviewed version.",
+  "scripts": {
+    "lint": "redocly lint openapi.yaml"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.57.0"
+  }
+}
