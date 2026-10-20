@@ -31,17 +31,15 @@ public class VerificationTokens {
 		this.jdbc = jdbc;
 	}
 
-	/** Stores a new token and invalidates the user's other outstanding tokens of the same purpose. */
+	/** At most this many tokens of one purpose are valid for a user at once (D-98). */
+	public static final int MAX_LIVE = 3;
+
+	/**
+	 * Stores a new token. Earlier unused tokens stay valid, so a stranger who requests a link cannot cancel the
+	 * owner's pending one; but no more than {@link #MAX_LIVE} stay valid, and the oldest is invalidated first.
+	 */
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void issue(UUID userId, Purpose purpose, String tokenHash, Instant now, Duration lifetime) {
-		jdbc.sql("""
-				UPDATE verification_token SET consumed_at = :now
-				WHERE user_id = :userId AND purpose = :purpose AND consumed_at IS NULL
-				""")
-			.param("now", utc(now))
-			.param("userId", userId)
-			.param("purpose", purpose.name())
-			.update();
 		jdbc.sql("""
 				INSERT INTO verification_token (user_id, purpose, token_hash, expires_at, created_at)
 				VALUES (:userId, :purpose, :hash, :expiresAt, :now)
@@ -51,6 +49,17 @@ public class VerificationTokens {
 			.param("hash", tokenHash)
 			.param("expiresAt", utc(now.plus(lifetime)))
 			.param("now", utc(now))
+			.update();
+		jdbc.sql("""
+				UPDATE verification_token SET consumed_at = :now
+				WHERE id IN (SELECT id FROM verification_token
+				             WHERE user_id = :userId AND purpose = :purpose AND consumed_at IS NULL AND expires_at > :now
+				             ORDER BY created_at DESC, id DESC OFFSET :keep)
+				""")
+			.param("now", utc(now))
+			.param("userId", userId)
+			.param("purpose", purpose.name())
+			.param("keep", MAX_LIVE)
 			.update();
 	}
 

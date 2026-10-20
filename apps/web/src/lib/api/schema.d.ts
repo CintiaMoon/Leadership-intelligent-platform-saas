@@ -38,7 +38,11 @@ export interface paths {
          * Register an account
          * @description Always returns the same 202 response whether or not the normalized email already exists
          *     (AC-AUTH-02). A new account receives a verification email; an existing account receives an
-         *     attempted-registration email. Limit: 5 per IP per hour.
+         *     attempted-registration email. An account whose email was never verified is taken over by the
+         *     newest signup: its password and display name are replaced, its earlier verification links stop
+         *     working, and a new verification email is sent (D-97, AC-AUTH-41). The verification email carries
+         *     no display name. Limits: 5 per IP per hour, and 3 per normalized email per 24 hours; the
+         *     per-email limit is silent and returns the same 202 (D-101).
          */
         post: operations["signup"];
         delete?: never;
@@ -102,7 +106,9 @@ export interface paths {
          * @description Establishes a server-side session and rotates the session identifier. The session cookie is
          *     set by this response and is never present in a body or URL. Unknown account, wrong password,
          *     unverified email, DISABLED account, and throttled attempts all return the same 401
-         *     `INVALID_CREDENTIALS` problem (AC-AUTH-13, 19, 26, 29).
+         *     `INVALID_CREDENTIALS` problem (AC-AUTH-13, 19, 26, 29). A successful login also sets the signed
+         *     `__Host-device` known-device cookie (HttpOnly, Secure, SameSite=Lax, 90 days), which the client
+         *     sends back on later logins to be exempt from the account-wide failure ceiling (D-99).
          */
         post: operations["login"];
         delete?: never;
@@ -512,7 +518,10 @@ export interface operations {
             200: {
                 headers: {
                     "Cache-Control": components["headers"]["NoStore"];
-                    /** @description The `__Host-session` cookie (HttpOnly, Secure, SameSite=Lax, Path=/). */
+                    /**
+                     * @description The `__Host-session` cookie (HttpOnly, Secure, SameSite=Lax, Path=/) and the
+                     *     `__Host-device` known-device cookie.
+                     */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };

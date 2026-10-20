@@ -13,8 +13,11 @@ import com.example.saas.api.auth.persistence.UserAccount;
 import com.example.saas.api.auth.persistence.UserAccountRepository;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.security.ClientAddress;
+import com.example.saas.api.security.KnownDevice;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,11 +60,14 @@ class AuthController {
 
 	private final UserAccountRepository users;
 
+	private final KnownDevice knownDevices;
+
 	AuthController(SignupService signupService, VerifyEmailService verifyEmailService,
 			ResendVerificationService resendVerificationService, LoginService loginService,
 			StepUpService stepUpService, LoginRecorder recorder, SessionManager sessions,
 			UserAccountRepository users, PasswordResetRequestService passwordResetRequestService,
-			PasswordResetService passwordResetService) {
+			PasswordResetService passwordResetService, KnownDevice knownDevices) {
+		this.knownDevices = knownDevices;
 		this.passwordResetRequestService = passwordResetRequestService;
 		this.passwordResetService = passwordResetService;
 		this.signupService = signupService;
@@ -109,8 +115,10 @@ class AuthController {
 	@PostMapping("/login")
 	ResponseEntity<SessionInfoResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
 		AuthenticatedAccount account = loginService.login(request.email(), request.password(),
-				ClientAddress.of(http).limitKey());
-		return ResponseEntity.ok(sessions.establish(http, account));
+				ClientAddress.of(http).limitKey(), cookieValue(http, knownDevices.cookieName()));
+		return ResponseEntity.ok()
+			.header(HttpHeaders.SET_COOKIE, knownDevices.issueCookie(account.id()))
+			.body(sessions.establish(http, account));
 	}
 
 	@PostMapping("/logout")
@@ -132,6 +140,18 @@ class AuthController {
 		stepUpService.confirmPassword(principal.userId(), request.password(), ClientAddress.of(http).limitKey());
 		sessions.reauthenticated(http);
 		return ResponseEntity.noContent().build();
+	}
+
+	private static String cookieValue(HttpServletRequest request, String name) {
+		Cookie[] cookies = request.getCookies();
+		if (cookies != null) {
+			for (Cookie cookie : cookies) {
+				if (cookie.getName().equals(name)) {
+					return cookie.getValue();
+				}
+			}
+		}
+		return null;
 	}
 
 }

@@ -202,3 +202,16 @@ Made, with tests (all in `./mvnw verify`, 239 tests, 0 failures):
 
 Not done (still open, see section 14): X-Forwarded-For chain, pre-hijacking and display name in mail, outbox and audit retention, token-invalidation and account-throttle product decisions, the AC-AUTH-39 and login fail-closed test gaps, placeholder-credential and empty-origins guards, CSP/HSTS, CI pinning and audit.
 
+## 16. Phase 6 part 3: decisions D-95 to D-101 implemented (2026-10-19)
+The user approved items 1 to 7 of the Phase 6 suggestions ("1 thru 7 approved"); they are recorded as D-95 to D-101 and as AC-AUTH-41 to AC-AUTH-44 in the spec. This branch is stacked on the part 2 branch (PR #19), which is not merged yet.
+- **D-95 client address.** The BFF no longer forwards the browser's `X-Forwarded-For`. It sets one value from `CLIENT_IP_SOURCE`: `cloudfront` (viewer address) or `rightmost` (last entry, appended by the load balancer; also what the local and end-to-end setups use). Anything that is not an IP literal is dropped. The API refuses to start with the loopback-only `TRUSTED_PROXY_CIDRS` unless the profile is `local` or `test` (`TrustedProxyGuard`); the end-to-end API now runs with `SPRING_PROFILES_ACTIVE=local`. **Not verified:** the CloudFront and ALB configuration (prefix-list restriction, secret origin header) is infrastructure outside this repository.
+- **D-96 Argon2.** Procedure only; the parameters stay at the provisional baseline until the benchmark runs on the production task size.
+- **D-97 pre-hijacking.** `AccountRegistrar` replaces the password and display name of an unverified account on a new signup, bumps its credentials version, invalidates its verification tokens, and queues a new verification email; the response is unchanged. The verification email has no display name.
+- **D-98 tokens.** Issuing keeps earlier unused tokens and retires the oldest beyond three live ones per user and purpose. Using one still retires the rest.
+- **D-99 throttle.** Account-wide ceiling 100 per hour. A signed `__Host-device` cookie (HMAC over the account id and issue time, 90 days) is set at login; a valid one for the same account skips only the account-wide check. The BFF forwards that cookie. Step-up never uses the exemption.
+- **D-100 retention.** Delivered outbox events are scrubbed when sent; `RetentionPurge` (every 6 hours) deletes sent events after 7 days, failed events after 30, and failed-login audit events after 365 days. **Deviation from the proposal:** the payload is scrubbed instead of storing a keyed hash, because the worker needs the address to find the account.
+- **D-101 signup limit.** Documented in the spec and contract. The contract also had `429` on signup pointing at the wrong response and no `503`; both corrected.
+- **Test gaps closed:** `HashSaturationTests` (signup, login, reset confirmation under real saturation), `FailClosedLoginThrottleTests` (login and step-up with the throttle table gone or failing), and a log-hygiene test for the exception handler.
+
+Still not done: the guards for placeholder BFF credentials and empty allowed origins, CSP, HSTS, CI pinning and audit, runbook rehearsals, the Argon2 values, and the infrastructure behind D-95.
+

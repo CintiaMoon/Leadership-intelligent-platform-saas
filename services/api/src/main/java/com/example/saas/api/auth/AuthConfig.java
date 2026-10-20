@@ -9,7 +9,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.session.web.http.DefaultCookieSerializer;
 
 @Configuration
-@EnableConfigurationProperties({ AppProperties.class, PasswordHashProperties.class, SessionProperties.class })
+@EnableConfigurationProperties({ AppProperties.class, PasswordHashProperties.class, SessionProperties.class,
+		com.example.saas.api.retention.RetentionProperties.class })
 class AuthConfig {
 
 	/**

@@ -1,6 +1,7 @@
 package com.example.saas.api.auth.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
@@ -9,6 +10,7 @@ import com.example.saas.api.auth.outbox.OutboxRepository;
 import com.example.saas.api.auth.persistence.AuditLog;
 import com.example.saas.api.auth.persistence.UserAccount;
 import com.example.saas.api.auth.persistence.UserAccountRepository;
+import com.example.saas.api.auth.persistence.VerificationTokens;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +25,7 @@ class AccountRegistrar {
 	/** Result of {@link #register}. */
 	enum Outcome {
 
-		CREATED, ALREADY_EXISTS
+		CREATED, ALREADY_EXISTS, REPLACED_UNVERIFIED
 
 	}
 
@@ -33,9 +35,13 @@ class AccountRegistrar {
 
 	private final AuditLog audit;
 
+	private final VerificationTokens tokens;
+
 	private final Clock clock;
 
-	AccountRegistrar(UserAccountRepository users, OutboxRepository outbox, AuditLog audit, Clock clock) {
+	AccountRegistrar(UserAccountRepository users, OutboxRepository outbox, AuditLog audit, VerificationTokens tokens,
+			Clock clock) {
+		this.tokens = tokens;
 		this.users = users;
 		this.outbox = outbox;
 		this.audit = audit;
@@ -46,7 +52,19 @@ class AccountRegistrar {
 	Outcome register(String emailNormalized, String emailOriginal, String displayName, String passwordHash) {
 		var existing = users.findByEmailNormalized(emailNormalized);
 		if (existing.isPresent()) {
-			enqueueNotice(existing.get().getId());
+			UserAccount account = existing.get();
+			if (!account.isEmailVerified() && account.getStatus() == UserAccount.Status.ACTIVE) {
+				// Never verified, so nobody has proven they own the address: the newest signup wins (D-97).
+				Instant now = clock.instant();
+				account.replaceUnverified(displayName, passwordHash, now);
+				tokens.invalidateOutstanding(account.getId(), VerificationTokens.Purpose.EMAIL_VERIFICATION, now);
+				outbox.enqueue(AuthOutboxHandlers.VERIFICATION_EMAIL, Map.of("userId", account.getId().toString()),
+						"verify-" + UUID.randomUUID(), now);
+				audit.success("auth.user.registration_replaced", AuditLog.Actor.user, account.getId(), "user",
+						account.getId());
+				return Outcome.REPLACED_UNVERIFIED;
+			}
+			enqueueNotice(account.getId());
 			return Outcome.ALREADY_EXISTS;
 		}
 		UserAccount user = UserAccount

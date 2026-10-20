@@ -44,7 +44,7 @@ public class StepUpService {
 		String normalized = user.getEmailNormalized();
 
 		boolean withinIpLimit = rateLimiter.hit(AuthRateLimits.LOGIN_IP, clientKey).allowed();
-		if (!withinIpLimit || throttle.isBlocked(normalized, clientKey)) {
+		if (!withinIpLimit || throttle.isBlocked(normalized, clientKey, false)) {
 			throw new InvalidCredentialsException();
 		}
 		if (!hasher.matches(PasswordPolicy.normalize(password), user.getPasswordHash())) {

@@ -39,7 +39,7 @@ class LoginThrottleTest {
 	void theThresholdsAndWindowsAreTheOnesInTheSpecification() {
 		assertThat(LoginThrottle.PAIR_THRESHOLD).isEqualTo(5);
 		assertThat(LoginThrottle.PAIR_WINDOW).isEqualTo(Duration.ofMinutes(15));
-		assertThat(LoginThrottle.ACCOUNT_THRESHOLD).isEqualTo(20);
+		assertThat(LoginThrottle.ACCOUNT_THRESHOLD).isEqualTo(100);
 		assertThat(LoginThrottle.ACCOUNT_WINDOW).isEqualTo(Duration.ofHours(1));
 		assertThat(LoginThrottle.MAX_BLOCK).isEqualTo(Duration.ofMinutes(15));
 	}

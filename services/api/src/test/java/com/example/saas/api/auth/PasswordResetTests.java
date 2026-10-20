@@ -102,6 +102,22 @@ class PasswordResetTests extends AuthIntegrationTest {
 	}
 
 	@Test
+	void aStrangerRequestingAnotherLinkDoesNotCancelTheOwnersPendingOne() throws Exception {
+		String email = uniqueEmail();
+		registerVerified(email, STRONG_PASSWORD);
+		String ownersToken = resetToken(email);
+		String strangersToken = resetToken(email);
+
+		assertThat(strangersToken).isNotEqualTo(ownersToken);
+		assertThat(api.confirmReset(ownersToken, NEW_PASSWORD, freshIp()).getResponse().getStatus())
+			.as("the owner's earlier link still works (D-98)")
+			.isEqualTo(204);
+		assertThat(api.confirmReset(strangersToken, "yet another passphrase 3!", freshIp()).getResponse().getStatus())
+			.as("using one link retires the others (AC-AUTH-32)")
+			.isEqualTo(422);
+	}
+
+	@Test
 	void theLinkSetsANewPasswordAndTheOldOneStopsWorking() throws Exception {
 		String email = uniqueEmail();
 		UUID userId = registerVerified(email, STRONG_PASSWORD);

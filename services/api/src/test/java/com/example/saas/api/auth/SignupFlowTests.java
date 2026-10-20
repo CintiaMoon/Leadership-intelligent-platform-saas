@@ -83,6 +83,7 @@ class SignupFlowTests extends AuthIntegrationTest {
 		String email = uniqueEmail();
 		MvcResult first = api.signup(email, STRONG_PASSWORD, "Original Owner", freshIp());
 		drainOutbox();
+		jdbc.update("UPDATE app_user SET email_verified_at = now() WHERE email_normalized = ?", email);
 		mail.clear();
 
 		MvcResult second = api.signup(email.toUpperCase(), "another strong password 42", "Impostor", freshIp());
@@ -102,6 +103,42 @@ class SignupFlowTests extends AuthIntegrationTest {
 		assertThat(notice.to()).isEqualTo(email);
 		assertThat(notice.subject()).isEqualTo("Someone tried to register with your email address");
 		assertThat(notice.body()).doesNotContain("#token=");
+	}
+
+	@Test
+	void aLaterSignupTakesOverAnAccountThatWasNeverVerified() throws Exception {
+		String email = uniqueEmail();
+		String attackerPassword = "attacker chosen passphrase 1!";
+		String ownerPassword = "the real owner passphrase 2!";
+		MvcResult first = api.signup(email, attackerPassword, "Click This Link http://evil.example", freshIp());
+		drainOutbox();
+		String attackerToken = RecordingEmailSender.tokenIn(mail.sentTo(email).get(0));
+		mail.clear();
+
+		MvcResult second = api.signup(email, ownerPassword, "Real Owner", freshIp());
+
+		assertThat(second.getResponse().getStatus()).isEqualTo(first.getResponse().getStatus());
+		assertThat(second.getResponse().getContentAsString()).isEqualTo(first.getResponse().getContentAsString());
+		assertThat(count("SELECT count(*) FROM app_user WHERE email_normalized = ?", email)).isEqualTo(1);
+		drainOutbox();
+		assertThat(mail.sent()).hasSize(1);
+		EmailMessage verification = mail.sent().get(0);
+		assertThat(verification.subject()).isEqualTo("Verify your email address");
+		assertThat(verification.body()).as("no text chosen by the person who typed the address")
+			.doesNotContain("Real Owner")
+			.doesNotContain("evil.example");
+
+		assertThat(api.verify(attackerToken, freshIp()).getResponse().getStatus())
+			.as("the first registrant's link no longer works")
+			.isEqualTo(422);
+		assertThat(api.verify(RecordingEmailSender.tokenIn(verification), freshIp()).getResponse().getStatus())
+			.isEqualTo(204);
+		assertThat(api.login(email, attackerPassword, freshIp()).getResponse().getStatus()).isEqualTo(401);
+		assertThat(api.login(email, ownerPassword, freshIp()).getResponse().getStatus()).isEqualTo(200);
+		assertThat(jdbc.queryForObject("SELECT display_name FROM app_user WHERE email_normalized = ?", String.class,
+				email)).isEqualTo("Real Owner");
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'auth.user.registration_replaced'"))
+			.isGreaterThanOrEqualTo(1);
 	}
 
 	@Test

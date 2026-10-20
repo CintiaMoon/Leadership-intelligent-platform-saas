@@ -87,6 +87,17 @@ public class UserAccount {
 		this.credentialsVersion++;
 	}
 
+	/**
+	 * A later signup for an address that was never verified takes the account over (D-97): whoever registered first
+	 * keeps nothing, and a session or token made with the old password stops working.
+	 */
+	public void replaceUnverified(String newDisplayName, String newHash, Instant now) {
+		this.displayName = newDisplayName;
+		this.passwordHash = newHash;
+		this.updatedAt = now;
+		this.credentialsVersion++;
+	}
+
 	public long getCredentialsVersion() {
 		return credentialsVersion;
 	}

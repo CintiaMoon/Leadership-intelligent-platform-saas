@@ -40,7 +40,7 @@ public class VerificationEmails {
 	}
 
 	/**
-	 * Creates a fresh token (invalidating earlier ones) and returns the email, or empty if the account is
+	 * Creates a fresh token (earlier ones stay valid up to the cap, D-98) and returns the email, or empty if the account is
 	 * missing, already verified, or DISABLED. The raw token exists only in the returned message.
 	 */
 	public Optional<EmailMessage> prepare(UUID userId) {
@@ -50,7 +50,7 @@ public class VerificationEmails {
 				String token = TokenCodec.newToken();
 				tokens.issue(user.getId(), VerificationTokens.Purpose.EMAIL_VERIFICATION, TokenCodec.hash(token),
 						clock.instant(), TOKEN_LIFETIME);
-				return emails.verification(user.getEmailOriginal(), user.getDisplayName(), token);
+				return emails.verification(user.getEmailOriginal(), token);
 			}));
 	}
 
