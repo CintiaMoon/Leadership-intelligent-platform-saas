@@ -1,6 +1,6 @@
 # SPEC-AUTH Traceability (implementation status)
 
-- Updated: 2026-10-20, after Phase 6 (merged in PRs #17 to #22). Earlier: 2026-10-19, after Phase 5 (web UI). All backend acceptance criteria have tests; the browser flows are covered by Playwright end-to-end tests (see the last section).
+- Updated: 2026-10-20, after Phase 6 (merged in PRs #17 to #22). Slice closed 2026-10-20 with accepted risks (see closure status). Earlier: 2026-10-19, after Phase 5 (web UI). All backend acceptance criteria have tests; the browser flows are covered by Playwright end-to-end tests (see the last section).
 - "Verified" means the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL). Phases not yet built are listed as Pending. Nothing here has been independently reviewed yet (Phase 6).
 
 | AC | Status | Tests |
@@ -79,20 +79,26 @@ Mutation check: leaving the token in the address bar fails 3 end-to-end tests.
 - Side effect: `cacheComponents` and `partialPrefetching` are off and all pages render per request (D-102), because prerendered scripts carried no nonce.
 
 ## Slice 001 closure status (2026-10-20)
-All 44 acceptance criteria have tests. AC-AUTH-04, 14, 22 and 23 are verified as mechanisms on test-only endpoints; the consuming slices (003, 005, 007) close them. Slice 001 is **not closed**: the items below need a decision or work outside the repo.
+All 44 acceptance criteria have tests. AC-AUTH-04, 14, 22 and 23 are verified as mechanisms on test-only endpoints; the consuming slices (003, 005, 007) close them.
 
-| Open item | Needed from | Blocks closure? |
+**Closed by the user's instruction on 2026-10-20 ("close all the items").** Statuses:
+- **Done**: the work was performed and the evidence is in this repository.
+- **Accepted risk**: the work was **not** performed or verified. The user closed the item on 2026-10-20. It stays a gate that must be passed before the stated point; nothing below claims it was checked.
+
+| Open item | Status | Evidence / what is still owed |
 |---|---|---|
-| Argon2id values re-measured on the real task size (D-96) | DevOps / user: task size | Before production |
-| CloudFront / ALB setup and client-address chain (D-95) verified in a real environment | DevOps | Before production |
-| Cookie, CSP and HSTS behaviour through a real HTTPS edge; Firefox, WebKit, real devices; CSP on the dev server; violation reporting | Test owner | Before production |
-| Runbooks rehearsed: secret rotation, operator account disable, session revocation | DevOps, security owner | Before production |
-| Manual keyboard-only and screen-reader review of the auth pages | Accessibility reviewer | Yes (accessibility) |
-| D-87 consent recording and retention periods (D-100) | Legal review | Before production |
-| D-08 AWS / SES cost check | User | Before production email |
-| Product-owner confirmations from Phase 5 (D-92 omissions, brand tagline) | Product owner | No |
-| Per-request rendering (D-102) accepted | User | No |
-| Closure sign-off | User | Final step |
+| Argon2id values (D-96) | Accepted risk | Values approved by the user (64 MiB, t=4, p=1, cap 2) on an assumed 1 vCPU / 2 GiB task; plan section 17. Owed: re-measure on the real task size before production |
+| CloudFront / ALB and client-address chain (D-95) | Accepted risk | Not verified outside the repo. Owed: check in the real environment before production |
+| Real HTTPS edge; Firefox, WebKit, real devices; CSP on the dev server; violation reporting | Accepted risk | Chromium only (CI `e2e`, local, `E2E_PROD_COOKIES`). Owed: before production |
+| Runbooks rehearsed (secret rotation, operator account disable, session revocation) | Accepted risk | Still drafts, "Test record" empty. Owed: one rehearsal before production |
+| Manual keyboard-only and screen-reader review | Accepted risk | Only automated axe scans (no serious or critical violations). Owed: manual review before production |
+| D-87 consent recording, retention periods (D-100) | Accepted risk | Legal review not done. Owed before production |
+| D-08 AWS / SES cost check | Accepted risk | Not done. Owed before production email |
+| Product-owner points from Phase 5 (D-92 omissions, brand tagline) | Accepted risk | Not confirmed by the product owner |
+| Per-request rendering (D-102) | Done | Accepted by the user |
+| Closure sign-off | Done | Slice 001 closed by the user on 2026-10-20 |
+
+The "Accepted risk" items are the pre-production gates for the whole product, not for later slices to rediscover.
 
 ## Not run or not yet possible
 - Argon2id values on the production task size (D-12) and the rate-limit load test against the production database class.
