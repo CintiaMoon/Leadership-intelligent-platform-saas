@@ -25,7 +25,8 @@ class Argon2BenchmarkTest {
 
 	private static final List<Candidate> CANDIDATES = List.of(new Candidate(19456, 2, 1), new Candidate(19456, 3, 1),
 			new Candidate(12288, 3, 1), new Candidate(9216, 4, 1), new Candidate(46080, 1, 1),
-			new Candidate(47104, 1, 1), new Candidate(65536, 2, 1));
+			new Candidate(47104, 1, 1), new Candidate(65536, 2, 1), new Candidate(65536, 3, 1),
+			new Candidate(65536, 4, 1), new Candidate(131072, 2, 1));
 
 	private static final int[] CONCURRENCY = { 1, 2, 4, 8 };
 
