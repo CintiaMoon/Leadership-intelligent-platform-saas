@@ -100,4 +100,17 @@ class PasswordHasherTest {
 		}
 	}
 
+	@org.junit.jupiter.api.Test
+	void theProductionDefaultsAreTheValuesApprovedInD96() {
+		PasswordHashProperties defaults = new org.springframework.boot.context.properties.bind.Binder(
+				new org.springframework.boot.context.properties.source.MapConfigurationPropertySource())
+			.bindOrCreate("app.security.password-hash", PasswordHashProperties.class);
+
+		assertThat(defaults.memoryKib()).isEqualTo(64 * 1024);
+		assertThat(defaults.iterations()).isEqualTo(4);
+		assertThat(defaults.parallelism()).isEqualTo(1);
+		assertThat(defaults.maxConcurrent()).isEqualTo(2);
+		assertThat(defaults.waitTimeout()).isEqualTo(Duration.ofSeconds(2));
+	}
+
 }

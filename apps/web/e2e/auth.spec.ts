@@ -13,6 +13,35 @@ import {
   waitForMail,
 } from "./support";
 
+test("pages carry a nonce-based policy and every script has the nonce", async ({ page, cspViolations }) => {
+  const response = await page.goto("/login");
+  const policy = response?.headers()["content-security-policy"] ?? "";
+  const nonce = /'nonce-([^']+)'/.exec(policy)?.[1];
+  expect(nonce, "a nonce in the policy").toBeTruthy();
+  expect(policy).toContain("'strict-dynamic'");
+  expect(policy).not.toContain("'unsafe-inline'");
+
+  const scripts = await page.locator("script").evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLScriptElement).nonce),
+  );
+  expect(scripts.length).toBeGreaterThan(0);
+  expect(scripts.every((value) => value === nonce)).toBe(true);
+
+  // A new request gets a different nonce.
+  const second = await page.goto("/login");
+  expect(/'nonce-([^']+)'/.exec(second?.headers()["content-security-policy"] ?? "")?.[1]).not.toBe(nonce);
+
+  // Markup injected into the page cannot run script through an inline event handler, the usual XSS route.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML("beforeend", '<img src="/missing.png" onerror="window.injected = true">');
+  });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as unknown as { injected?: boolean }).injected)).toBeUndefined();
+  // The browser reported the block; that is the expected violation, so it does not fail the test.
+  await expect.poll(() => cspViolations.length).toBeGreaterThan(0);
+  cspViolations.length = 0;
+});
+
 test("signup, email verification, login, profile and logout", async ({ page, context }) => {
   const email = uniqueEmail();
   await signUp(page, email);

@@ -8,10 +8,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 /**
  * Argon2id parameters and the cap on concurrent hashing (D-12, D-85).
  *
- * <p>The defaults are the OWASP minimum (19 MiB, 2 iterations, 1 lane). They are provisional: the final
- * values come from benchmarking on the production task size (about 250 to 500 ms per hash) and need
- * security approval. Parameters are stored in each hash, so they can be raised later and are upgraded at
- * the next login.
+ * <p>The defaults (64 MiB, 4 iterations, 1 lane, 2 concurrent hashes) were approved in D-96 from a benchmark on
+ * an assumed 1 vCPU / 2 GiB task: about 245 ms per hash, 4 hashes a second. Re-measure on the real task size
+ * and set {@code app.security.password-hash.*} if it differs; with 2 vCPUs the concurrency can rise to 4.
+ * Parameters are stored in each hash, so they can be changed later and are upgraded at the next login.
  *
  * @param memoryKib memory per hash in KiB
  * @param iterations time cost
@@ -21,10 +21,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  */
 @ConfigurationProperties("app.security.password-hash")
 public record PasswordHashProperties(
-		@DefaultValue("19456") int memoryKib,
-		@DefaultValue("2") int iterations,
+		@DefaultValue("65536") int memoryKib,
+		@DefaultValue("4") int iterations,
 		@DefaultValue("1") int parallelism,
-		@DefaultValue("4") int maxConcurrent,
+		@DefaultValue("2") int maxConcurrent,
 		@DefaultValue("2s") Duration waitTimeout) {
 
 	public PasswordHashProperties {

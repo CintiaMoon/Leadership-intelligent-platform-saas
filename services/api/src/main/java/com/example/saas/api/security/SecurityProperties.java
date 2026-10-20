@@ -32,6 +32,7 @@ public record SecurityProperties(
 			throw new IllegalStateException("Each BFF credential must be at least " + MIN_CREDENTIAL_LENGTH
 					+ " characters (256 bits). Generate one with: openssl rand -base64 48");
 		}
+		bffCredentials.forEach(value -> SecretQuality.requireNotPlaceholder("A BFF credential", value));
 		trustedProxyCidrs = trustedProxyCidrs.stream().map(String::trim).filter(value -> !value.isEmpty()).toList();
 	}
 

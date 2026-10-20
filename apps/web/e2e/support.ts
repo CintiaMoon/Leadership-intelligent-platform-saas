@@ -12,11 +12,25 @@ export const NEW_PASSWORD = "another long passphrase 42?";
  * Each test acts as a different client address. The BFF forwards X-Forwarded-For as the platform edge would, and
  * the API's per-address limits would otherwise be shared by every test.
  */
-export const test = base.extend({
+export const test = base.extend<{ cspViolations: string[] }>({
   extraHTTPHeaders: async ({}, provide) => {
     const octet = () => 1 + Math.floor(Math.random() * 254);
     await provide({ "x-forwarded-for": `198.18.${octet()}.${octet()}` });
   },
+  // Every test doubles as a Content Security Policy check: Chromium reports each blocked script or style in the console.
+  cspViolations: [
+    async ({ page }, provide) => {
+      const violations: string[] = [];
+      page.on("console", (message) => {
+        if (/content security policy/i.test(message.text())) {
+          violations.push(message.text());
+        }
+      });
+      await provide(violations);
+      expect(violations, "Content Security Policy violations").toEqual([]);
+    },
+    { auto: true },
+  ],
 });
 
 export { expect };

@@ -233,3 +233,11 @@ Reading:
 
 **Recommendation for the security owner (not applied):** 64 MiB, 4 iterations, 1 lane, permit cap 2 on a 1 vCPU task; if the real task has 2 vCPUs, cap 4 and re-measure. Hashes upgrade at the next login, so the change is safe to roll out. The parameters in the code are unchanged; D-96 stays open until the values are approved and the benchmark is repeated on the real size.
 
+## 18. Phase 6 part 4: Argon2 values, guards, CSP/HSTS, CI (2026-10-19)
+- **D-96 applied:** the defaults are now 64 MiB, 4 iterations, 1 lane, 2 concurrent hashes (`PasswordHasherTest` asserts them). Existing hashes upgrade at the next login (AC-AUTH-27). Re-measure when the real task size is fixed.
+- **D-103 guards:** `SecretQuality` for the BFF credentials, CSRF key, and rate-limit key; empty `CSRF_ALLOWED_ORIGINS` refused with the `__Host-` names. The BFF forwards its origin to the API.
+- **D-102 CSP/HSTS:** nonce-based policy in `src/proxy.ts`. Finding while testing: with `cacheComponents` on, the prerendered shell's framework scripts had no nonce and Chromium blocked them (every end-to-end test failed with a Content Security Policy violation). The fix was to render every page per request and turn `cacheComponents` and `partialPrefetching` off. The auth pages are small, personal, and need no caching, so little is lost, but it is a change to the earlier Phase 5 setup. Every end-to-end test now also fails on any CSP violation the browser reports, and one test checks the nonce on every script, a fresh nonce per request, and that an injected inline event handler does not run. **Not tested:** Firefox and Safari behaviour of `strict-dynamic`, the development server (it needs `unsafe-eval`, which is allowed there), and report collection.
+- **D-104 CI:** see the register. The two new workflows (`codeql`, `dependency-review`) are untested until the pull request runs; GitHub code scanning must be enabled for the CodeQL upload to succeed.
+
+Still open for slice 001: the CloudFront and ALB setup (D-95), rehearsal of the runbooks, final values of D-96 on the real task size, D-87 and D-08, a manual keyboard and screen-reader review, and the closure sign-off.
+

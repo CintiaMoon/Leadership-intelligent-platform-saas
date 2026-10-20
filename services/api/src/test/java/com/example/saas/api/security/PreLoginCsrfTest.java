@@ -15,6 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Token validity rules of the pre-login CSRF token (D-75), with a controllable clock. */
 class PreLoginCsrfTest {
 
+	private static final List<String> ORIGINS = List.of("https://app.test.example");
+
 	private static final String KEY = "unit-test-csrf-hmac-key-0123456789abcdef";
 
 	private final AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2026-10-19T10:00:00Z"));
@@ -39,7 +41,7 @@ class PreLoginCsrfTest {
 	};
 
 	private PreLoginCsrf csrf(String key) {
-		return new PreLoginCsrf(new CsrfProperties(key, "__Host-csrf", true, Duration.ofHours(4), List.of()), clock);
+		return new PreLoginCsrf(new CsrfProperties(key, "__Host-csrf", true, Duration.ofHours(4), ORIGINS), clock);
 	}
 
 	@Test
@@ -101,11 +103,22 @@ class PreLoginCsrfTest {
 
 	@Test
 	void propertiesRejectAShortKeyAndAnInsecureHostCookie() {
-		assertThatThrownBy(() -> new CsrfProperties("short", "__Host-csrf", true, Duration.ofHours(1), List.of()))
-			.isInstanceOf(IllegalStateException.class);
-		assertThatThrownBy(() -> new CsrfProperties(KEY, "__Host-csrf", false, Duration.ofHours(1), List.of()))
-			.isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> new CsrfProperties("short", "__Host-csrf", true, Duration.ofHours(1), ORIGINS))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("hmac-key");
+		assertThatThrownBy(() -> new CsrfProperties(KEY, "__Host-csrf", false, Duration.ofHours(1), ORIGINS))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("must be Secure");
 		assertThat(new CsrfProperties(KEY, "csrf", false, Duration.ofHours(1), List.of()).cookieSecure()).isFalse();
+	}
+
+	@Test
+	void theProductionCookieNamesRequireTheWebOriginToBeListed() {
+		assertThatThrownBy(() -> new CsrfProperties(KEY, "__Host-csrf", true, Duration.ofHours(1), List.of()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("CSRF_ALLOWED_ORIGINS");
+		assertThat(new CsrfProperties(KEY, "__Host-csrf", true, Duration.ofHours(1), ORIGINS).allowedOrigins())
+			.containsExactly("https://app.test.example");
 	}
 
 }

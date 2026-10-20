@@ -15,6 +15,10 @@ const body = Inter({
   subsets: ["latin"],
 });
 
+// Every page is rendered per request so the Content Security Policy nonce from src/proxy.ts can be put on the scripts.
+// Prerendered HTML has no request to take a nonce from, and the pages are small and personal, so nothing is lost.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: { default: "Helm", template: "%s · Helm" },
   description: "Leadership intelligence",

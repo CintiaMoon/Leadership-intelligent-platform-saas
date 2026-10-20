@@ -43,7 +43,7 @@ test("upstream headers are an allowlist and carry the BFF credential", () => {
     authorization: "Bearer should-not-pass",
     "x-bff-credential": "browser-supplied-value",
     "x-forwarded-host": "evil.example",
-    origin: "https://app.example.com",
+    origin: "https://evil.example",
   });
   const headers = upstreamHeaders(incoming, config, { json: true });
   expect(headers.get("x-bff-credential")).toBe("credential-for-tests");
@@ -53,7 +53,7 @@ test("upstream headers are an allowlist and carry the BFF credential", () => {
   expect(headers.get("content-type")).toBe("application/json");
   expect(headers.has("authorization")).toBe(false);
   expect(headers.has("x-forwarded-host")).toBe(false);
-  expect(headers.has("origin")).toBe(false);
+  expect(headers.get("origin")).toBe(config.publicOrigin);
 });
 
 test("an operation that is not on the allowlist is not forwarded", async () => {
