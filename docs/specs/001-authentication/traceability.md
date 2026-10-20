@@ -1,6 +1,6 @@
 # SPEC-AUTH Traceability (implementation status)
 
-- Updated: 2026-10-19, after Phase 5 (web UI). All backend acceptance criteria have tests; the browser flows are covered by Playwright end-to-end tests (see the last section).
+- Updated: 2026-10-20, after Phase 6 (merged in PRs #17 to #22). Earlier: 2026-10-19, after Phase 5 (web UI). All backend acceptance criteria have tests; the browser flows are covered by Playwright end-to-end tests (see the last section).
 - "Verified" means the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL). Phases not yet built are listed as Pending. Nothing here has been independently reviewed yet (Phase 6).
 
 | AC | Status | Tests |
@@ -73,6 +73,26 @@ Mutation check: leaving the token in the address bar fails 3 end-to-end tests.
 
 - **Decisions D-95 to D-101** (plan section 16): AC-AUTH-41 `SignupFlowTests.aLaterSignupTakesOverAnAccountThatWasNeverVerified`, `AccountRegistrar` audit row; AC-AUTH-42 `ResendVerificationTests.atMostThreeLinksAreValidAtOnceAndTheOldestIsRetiredFirst`, `anUnverifiedAccountGetsAFreshTokenAndAnEarlierLinkStaysValid`, `PasswordResetTests.aStrangerRequestingAnotherLinkDoesNotCancelTheOwnersPendingOne`; AC-AUTH-25 and 43 `LoginTests.manyFailuresAcrossAddressesAddACappedDelayButNeverLockTheAccount` (100), `aKnownDeviceIsNotHeldOutByTheAccountWideCeilingButAStrangerIs`, `aKnownDeviceIsStillBlockedByTheAccountAndAddressLimit`; AC-AUTH-44 `RetentionTests` (mutation check: removing the payload scrub fails `aDeliveredEventKeepsNoAddress`); D-95 `bff.test.ts` (client address) and `TrustedProxyGuardTest`. AC-AUTH-39 now also through the real endpoints (`HashSaturationTests`), AC-AUTH-21 for the login throttle and step-up (`FailClosedLoginThrottleTests`).
 - Checks run for this part: `./mvnw verify` 255 tests, 0 failures (2 opt-in skipped); web lint, typecheck, 20 unit tests, build; Playwright 8/8 in both cookie modes. Not run: the CloudFront and ALB setup that D-95 depends on.
+
+- **Part 4 (PR #22)**: Argon2id 64 MiB, t=4, p=1, cap 2 (D-96, approved; `PasswordHasherTest.theProductionDefaultsAreTheValuesApprovedInD96`); startup guards (`SecretQualityTest`, `PreLoginCsrfTest`); nonce-based CSP, HSTS, Permissions-Policy, COOP (`proxy.test.ts`, e2e test "pages carry a nonce-based policy and every script has the nonce", and every e2e test fails on any CSP violation); CI supply chain (CodeQL, dependency review, `npm audit`, pinned images and linter). CI found a race in the signup takeover (D-97), fixed in `SignupService`; `SignupFlowTests.concurrentSignupsForOneAddressCreateExactlyOneAccount` now expects one account and one to eight verification emails.
+- Checks run for part 4: `./mvnw verify` 261 tests, 0 failures (2 opt-in skipped); web lint, typecheck, 22 unit tests, build, `npm audit` (0 vulnerabilities); Playwright 9/9 in both cookie modes; all CI jobs green on PR #22 (api, web, e2e, contract, secret-scan, dependency-review, CodeQL).
+- Side effect: `cacheComponents` and `partialPrefetching` are off and all pages render per request (D-102), because prerendered scripts carried no nonce.
+
+## Slice 001 closure status (2026-10-20)
+All 44 acceptance criteria have tests. AC-AUTH-04, 14, 22 and 23 are verified as mechanisms on test-only endpoints; the consuming slices (003, 005, 007) close them. Slice 001 is **not closed**: the items below need a decision or work outside the repo.
+
+| Open item | Needed from | Blocks closure? |
+|---|---|---|
+| Argon2id values re-measured on the real task size (D-96) | DevOps / user: task size | Before production |
+| CloudFront / ALB setup and client-address chain (D-95) verified in a real environment | DevOps | Before production |
+| Cookie, CSP and HSTS behaviour through a real HTTPS edge; Firefox, WebKit, real devices; CSP on the dev server; violation reporting | Test owner | Before production |
+| Runbooks rehearsed: secret rotation, operator account disable, session revocation | DevOps, security owner | Before production |
+| Manual keyboard-only and screen-reader review of the auth pages | Accessibility reviewer | Yes (accessibility) |
+| D-87 consent recording and retention periods (D-100) | Legal review | Before production |
+| D-08 AWS / SES cost check | User | Before production email |
+| Product-owner confirmations from Phase 5 (D-92 omissions, brand tagline) | Product owner | No |
+| Per-request rendering (D-102) accepted | User | No |
+| Closure sign-off | User | Final step |
 
 ## Not run or not yet possible
 - Argon2id values on the production task size (D-12) and the rate-limit load test against the production database class.
