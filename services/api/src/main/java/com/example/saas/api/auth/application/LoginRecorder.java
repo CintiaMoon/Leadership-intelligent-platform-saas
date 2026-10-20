@@ -24,11 +24,15 @@ public class LoginRecorder {
 		this.clock = clock;
 	}
 
-	/** @param upgradedHash a hash made with the current parameters to store, or null to keep the existing one */
+	/**
+	 * @param verifiedHash the stored hash the password was checked against
+	 * @param upgradedHash a hash made with the current parameters to store, or null to keep the existing one; it is
+	 * stored only if the stored hash is still {@code verifiedHash}
+	 */
 	@Transactional
-	public void succeeded(UUID userId, String upgradedHash) {
+	public void succeeded(UUID userId, String verifiedHash, String upgradedHash) {
 		if (upgradedHash != null) {
-			users.findById(userId).ifPresent(user -> user.changePasswordHash(upgradedHash, clock.instant()));
+			users.upgradePasswordHash(userId, verifiedHash, upgradedHash, clock.instant());
 		}
 		audit.success("auth.login.succeeded", AuditLog.Actor.user, userId, "user", userId);
 	}

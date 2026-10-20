@@ -9,6 +9,9 @@ public final class SessionAttributes {
 	/** Epoch milliseconds of the last login or step-up. */
 	public static final String LAST_AUTHENTICATED_AT = "auth.lastAuthenticatedAt";
 
+	/** The account's credentials version when the session was opened; a newer one ends the session. */
+	public static final String CREDENTIALS_VERSION = "auth.credentialsVersion";
+
 	private SessionAttributes() {
 	}
 

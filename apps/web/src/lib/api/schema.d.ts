@@ -466,7 +466,6 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             403: components["responses"]["CsrfRejected"];
             422: components["responses"]["TokenInvalid"];
-            429: components["responses"]["RateLimited"];
             503: components["responses"]["Unavailable"];
         };
     };
@@ -653,7 +652,6 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             403: components["responses"]["CsrfRejected"];
             422: components["responses"]["TokenInvalid"];
-            429: components["responses"]["RateLimited"];
             503: components["responses"]["Unavailable"];
         };
     };

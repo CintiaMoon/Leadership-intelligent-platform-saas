@@ -349,14 +349,14 @@ class LoginTests extends AuthIntegrationTest {
 	}
 
 	@Test
-	void concurrentFailuresAreAllCountedAndTheBlockHolds() throws Exception {
+	void aBurstOfGuessesIsStoppedAtTheThresholdNotAfterIt() throws Exception {
 		String email = uniqueEmail();
-		registerVerified(email, STRONG_PASSWORD);
+		UUID userId = registerVerified(email, STRONG_PASSWORD);
 		String ip = freshIp();
-		ExecutorService executor = Executors.newFixedThreadPool(8);
+		ExecutorService executor = Executors.newFixedThreadPool(12);
 		try {
 			List<Future<Integer>> futures = new ArrayList<>();
-			for (int i = 0; i < 8; i++) {
+			for (int i = 0; i < 12; i++) {
 				Callable<Integer> attempt = () -> api.login(email, WRONG_PASSWORD, ip).getResponse().getStatus();
 				futures.add(executor.submit(attempt));
 			}
@@ -368,6 +368,9 @@ class LoginTests extends AuthIntegrationTest {
 			executor.shutdownNow();
 		}
 
+		// Only the five guesses before the block were evaluated; the other seven were refused unevaluated and uncounted.
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'auth.login.failed' AND target_id = ?",
+				userId)).isEqualTo(5);
 		assertThat(api.login(email, STRONG_PASSWORD, ip).getResponse().getStatus()).as("blocked after the burst")
 			.isEqualTo(401);
 	}

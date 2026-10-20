@@ -54,7 +54,7 @@ class PasswordResetCommitter {
 			.filter(account -> account.getStatus() == UserAccount.Status.ACTIVE && account.isEmailVerified())
 			.orElseThrow(TokenInvalidException::new);
 
-		user.changePasswordHash(newPasswordHash, now);
+		user.resetPassword(newPasswordHash, now);
 		tokens.invalidateOutstanding(userId, VerificationTokens.Purpose.PASSWORD_RESET, now);
 		outbox.enqueue(AuthOutboxHandlers.PASSWORD_CHANGED_NOTICE, Map.of("userId", userId.toString()),
 				"password-changed-" + UUID.randomUUID(), now);
