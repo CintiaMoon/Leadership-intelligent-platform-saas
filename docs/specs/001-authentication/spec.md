@@ -1,7 +1,7 @@
 # Authentication Specification
 
 - ID: SPEC-AUTH
-- Status: Approved
+- Status: Approved. Implementation closed 2026-10-20 by the user, with accepted risks listed in `traceability.md`
 - Re-approved on 2026-10-17, including the later edits that day (password reset, account status, email normalization, hashing parameters). Approver: product owner.
 - Amended on 2026-10-19 with the plan-derived decisions D-75 to D-91 and AC-AUTH-36 to AC-AUTH-40, approved by the user together with `plan.md`. No earlier decision or acceptance criterion was changed. Amended again on 2026-10-19 (Phase 6) with D-95 to D-101: AC-AUTH-25 now reads 100 instead of 20, and AC-AUTH-41 to AC-AUTH-44 were added.
 - Requirements: AUTH-001 through AUTH-010
