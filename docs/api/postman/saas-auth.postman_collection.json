@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SaaS Platform API (SPEC-AUTH)",
-    "description": "Generated from contracts/openapi.yaml v0.1.0. Calls the API directly as the BFF would: it needs the X-BFF-Credential and an allowed Origin. Do not store the real credential in the collection; set it in a local environment. Cookie names depend on the profile: the `__Host-` names need HTTPS, so use the local overrides in apps/web/.env.example over plain HTTP.\n\nOrder: Get CSRF token, Sign up, Verify email, Log in, Get CSRF token (session-bound), Get session, ... Log out.",
+    "description": "Generated from contracts/openapi.yaml v0.1.0. Two folders. 'API direct' calls the API as the BFF would: it needs the X-BFF-Credential and an allowed Origin. Do not store the real credential in the collection; set it in a local environment. Cookie names depend on the profile: the `__Host-` names need HTTPS, so use the local overrides in apps/web/.env.example over plain HTTP.\n\n'BFF' calls the web app routes the browser uses and needs no credential. Order: Get CSRF token, Sign up, Verify email, Log in, Get CSRF token (session-bound), Get session, ... Log out.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -45,11 +45,20 @@
     {
       "key": "csrfToken",
       "value": ""
+    },
+    {
+      "key": "webUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "webOrigin",
+      "value": "http://localhost:3000",
+      "description": "Must equal PUBLIC_BASE_URL of the web app, or state-changing requests get 403."
     }
   ],
   "item": [
     {
-      "name": "Authentication",
+      "name": "API direct (needs the BFF credential)",
       "item": [
         {
           "name": "Get CSRF token",
@@ -506,6 +515,422 @@
               ]
             },
             "description": "Token from the reset email (after the # in the link). Ends every session of the account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "BFF (what the browser calls)",
+      "description": "Routes under /api/auth in the Next.js app. Step-up is not exposed by the BFF, so it has no request here. Any other path returns 404.",
+      "item": [
+        {
+          "name": "Get CSRF token (pre-login)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/csrf/pre-login",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "csrf",
+                "pre-login"
+              ]
+            },
+            "description": "Pre-login token: the BFF drops the session cookie before asking the API. Stores csrfToken."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken',j.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/signup",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"displayName\": \"{{displayName}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202',()=>pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/verify-email",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 or 200',()=>pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resend verification email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/verify-email/resend",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email",
+                "resend"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Log in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/login",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('login ok',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get CSRF token (session-bound)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/csrf",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "csrf"
+              ]
+            },
+            "description": "After login. Stores csrfToken."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken',j.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/session",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "session"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For."
+          }
+        },
+        {
+          "name": "Log out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/logout",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For."
+          }
+        },
+        {
+          "name": "Request password reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/password-reset/request",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password-reset",
+                "request"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Confirm password reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{webOrigin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin",
+                "disabled": true,
+                "description": "Optional; the BFF accepts only same-origin when present."
+              }
+            ],
+            "url": {
+              "raw": "{{webUrl}}/api/auth/password-reset/confirm",
+              "host": [
+                "{{webUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password-reset",
+                "confirm"
+              ]
+            },
+            "description": "Same as the API request, but through the BFF: no credential header; the BFF adds it, and sets one X-Forwarded-For.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
