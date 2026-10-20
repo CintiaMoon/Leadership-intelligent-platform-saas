@@ -21,8 +21,8 @@ const DB_PASSWORD = process.env.E2E_DB_PASSWORD ?? "e2e-local-only";
 // localhost, so the whole suite then proves the production cookie settings work end to end.
 const PROD_COOKIES = process.env.E2E_PROD_COOKIES === "true";
 // Named explicitly because a developer's .env (which Next.js loads) may carry the plain local names.
-const COOKIES = PROD_COOKIES ? { CSRF_COOKIE_NAME: "__Host-csrf", SESSION_COOKIE_NAME: "__Host-session" } : { CSRF_COOKIE_NAME: "csrf", SESSION_COOKIE_NAME: "session" };
-const COOKIE_SECURITY = PROD_COOKIES ? { CSRF_COOKIE_SECURE: "true", SESSION_COOKIE_SECURE: "true" } : { CSRF_COOKIE_SECURE: "false", SESSION_COOKIE_SECURE: "false" };
+const COOKIES = PROD_COOKIES ? { CSRF_COOKIE_NAME: "__Host-csrf", SESSION_COOKIE_NAME: "__Host-session", DEVICE_COOKIE_NAME: "__Host-device" } : { CSRF_COOKIE_NAME: "csrf", SESSION_COOKIE_NAME: "session", DEVICE_COOKIE_NAME: "device" };
+const COOKIE_SECURITY = PROD_COOKIES ? { CSRF_COOKIE_SECURE: "true", SESSION_COOKIE_SECURE: "true", DEVICE_COOKIE_SECURE: "true" } : { CSRF_COOKIE_SECURE: "false", SESSION_COOKIE_SECURE: "false", DEVICE_COOKIE_SECURE: "false" };
 
 export default defineConfig({
   testDir: "./e2e",
@@ -44,6 +44,7 @@ export default defineConfig({
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       env: {
+        SPRING_PROFILES_ACTIVE: "local",
         SERVER_PORT: String(API_PORT),
         DB_URL: `jdbc:postgresql://localhost:${DB_PORT}/saas_e2e`,
         DB_USERNAME: "saas",

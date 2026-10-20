@@ -3,7 +3,7 @@
 - ID: SPEC-AUTH
 - Status: Approved
 - Re-approved on 2026-10-17, including the later edits that day (password reset, account status, email normalization, hashing parameters). Approver: product owner.
-- Amended on 2026-10-19 with the plan-derived decisions D-75 to D-91 and AC-AUTH-36 to AC-AUTH-40, approved by the user together with `plan.md`. No earlier decision or acceptance criterion was changed.
+- Amended on 2026-10-19 with the plan-derived decisions D-75 to D-91 and AC-AUTH-36 to AC-AUTH-40, approved by the user together with `plan.md`. No earlier decision or acceptance criterion was changed. Amended again on 2026-10-19 (Phase 6) with D-95 to D-101: AC-AUTH-25 now reads 100 instead of 20, and AC-AUTH-41 to AC-AUTH-44 were added.
 - Requirements: AUTH-001 through AUTH-010
 
 ## Objective
@@ -99,7 +99,7 @@ Exact paths, DTOs, response codes, and CSRF headers must be approved in OpenAPI.
 - AC-AUTH-22: Session activity or renewal does not refresh the last-authentication time; only a login or step-up does.
 - AC-AUTH-23: A user's session identifier is rotated after a change to their own role or membership.
 - AC-AUTH-24: Authentication responses carry `Cache-Control: no-store`.
-- AC-AUTH-25: More than 20 failed logins for one account within an hour add a capped delay but never lock the account.
+- AC-AUTH-25: More than 100 failed logins for one account within an hour add a capped delay but never lock the account (amended from 20 by D-99).
 - AC-AUTH-26: A throttled login response is indistinguishable from a wrong-password failure.
 - AC-AUTH-27: Password hashes record their Argon2id parameters, and a successful login with a hash made under older parameters re-hashes the password with the current ones.
 - AC-AUTH-28: The number of concurrent password-hash operations is capped at a configured limit; excess requests are rejected or queued without exhausting memory.
@@ -115,6 +115,10 @@ Exact paths, DTOs, response codes, and CSRF headers must be approved in OpenAPI.
 - AC-AUTH-38: Passwords longer than 128 code points are rejected, and a password is Unicode NFKC-normalized before the policy check and hashing, so equivalent forms authenticate the same.
 - AC-AUTH-39: When no password-hash permit is available within the wait limit, the request is rejected with 503 and `Retry-After` and memory use stays bounded.
 - AC-AUTH-40: Signup requires a `displayName` of 1 to 100 characters after trimming.
+- AC-AUTH-41: A signup for an address whose account is still unverified replaces that account's password and display name, invalidates its outstanding verification tokens, and sends a new verification email; the response is the same neutral response (D-97). The verification email does not contain the display name.
+- AC-AUTH-42: Issuing a verification or reset token does not invalidate the user's earlier unused tokens of the same purpose until they expire or are used, but at most 3 are valid at once; the oldest is invalidated when a fourth is issued (D-98).
+- AC-AUTH-43: A client that presents a valid signed known-device cookie for an account is not subject to that account's account-wide failure ceiling; it remains subject to the per-(account, address) block and the per-address limits (D-99).
+- AC-AUTH-44: Outbox records are scrubbed of the email address when sent, and deleted after 7 days (sent) or 30 days (failed); failed-login audit events are deleted after 12 months (D-100).
 
 ## Traceability
 | Requirement | Acceptance criteria |
@@ -130,7 +134,7 @@ Exact paths, DTOs, response codes, and CSRF headers must be approved in OpenAPI.
 | AUTH-009 | AC-AUTH-08 (lockout), AC-AUTH-30, AC-AUTH-31, AC-AUTH-32, AC-AUTH-33, AC-AUTH-34, AC-AUTH-35 (recovery) |
 | AUTH-010 | AC-AUTH-02, AC-AUTH-13, AC-AUTH-20, AC-AUTH-26 |
 | NFR-SEC-003 (supporting) | AC-AUTH-09, AC-AUTH-10, AC-AUTH-36 |
-| Plan-derived (supporting) | AC-AUTH-37, AC-AUTH-38, AC-AUTH-39, AC-AUTH-40 |
+| Plan-derived (supporting) | AC-AUTH-37, AC-AUTH-38, AC-AUTH-39, AC-AUTH-40, AC-AUTH-41, AC-AUTH-42, AC-AUTH-43, AC-AUTH-44 |
 | Recent authentication (supporting) | AC-AUTH-14, AC-AUTH-22 |
 | Response caching (supporting) | AC-AUTH-24 |
 

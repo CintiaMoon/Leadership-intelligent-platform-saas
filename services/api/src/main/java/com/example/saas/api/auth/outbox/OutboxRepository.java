@@ -79,9 +79,11 @@ public class OutboxRepository {
 			.list();
 	}
 
+	/** Marks the event delivered and scrubs its payload, which can hold an email address (D-100). */
 	public void markSent(UUID id, Instant now) {
 		jdbc.sql("""
-				UPDATE outbox_event SET status = 'SENT', completed_at = :now, locked_until = NULL, last_error = NULL
+				UPDATE outbox_event SET status = 'SENT', completed_at = :now, locked_until = NULL, last_error = NULL,
+				    payload = '{}'::jsonb
 				WHERE id = :id AND status = 'IN_FLIGHT'
 				""")
 			.param("now", utc(now))

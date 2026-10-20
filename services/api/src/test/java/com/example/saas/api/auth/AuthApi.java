@@ -75,6 +75,20 @@ public final class AuthApi {
 		return postJson("/api/v1/auth/login", json("email", email, "password", password), ip);
 	}
 
+	public static final String DEVICE_COOKIE = "__Host-device";
+
+	/** A login that also presents a known-device cookie, as the BFF forwards it. */
+	public MvcResult login(String email, String password, String ip, Cookie device) throws Exception {
+		Csrf csrf = csrf(ip);
+		return mvc.perform(request("/api/v1/auth/login", json("email", email, "password", password), ip, csrf)
+			.cookie(device)).andReturn();
+	}
+
+	/** The known-device cookie set by a response, or null. */
+	public static Cookie deviceCookie(MvcResult result) {
+		return result.getResponse().getCookie(DEVICE_COOKIE);
+	}
+
 	/** The session cookie set by a response, or null. */
 	public static Cookie sessionCookie(MvcResult result) {
 		return result.getResponse().getCookie(SESSION_COOKIE);

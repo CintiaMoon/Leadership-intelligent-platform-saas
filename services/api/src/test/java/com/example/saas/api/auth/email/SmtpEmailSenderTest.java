@@ -34,16 +34,18 @@ class SmtpEmailSenderTest {
 		SmtpEmailSender sender = sender("127.0.0.1", greenMail.getSmtp().getPort());
 		AuthEmails emails = new AuthEmails(properties());
 
-		sender.send(emails.verification("jose@example.com", "José", "TOKENVALUE"));
+		sender.send(emails.verification("jose@example.com", "TOKENVALUE"));
+		sender.send(emails.passwordChanged("jose@example.com", "José"));
 
 		MimeMessage[] received = greenMail.getReceivedMessages();
-		assertThat(received).hasSize(1);
+		assertThat(received).hasSize(2);
+		assertThat(received[1].getContent().toString()).as("non-ASCII text survives delivery").contains("Hello José");
 		assertThat(received[0].getSubject()).isEqualTo("Verify your email address");
 		assertThat(received[0].getFrom()[0].toString()).isEqualTo("no-reply@liptech.io");
 		assertThat(received[0].getAllRecipients()[0].toString()).isEqualTo("jose@example.com");
 		String body = received[0].getContent().toString();
 		assertThat(received[0].getContentType()).startsWith("text/plain");
-		assertThat(body).contains("Hello José").contains("https://app.test.example/verify-email#token=TOKENVALUE");
+		assertThat(body).contains("https://app.test.example/verify-email#token=TOKENVALUE");
 	}
 
 	@Test
@@ -65,7 +67,7 @@ class SmtpEmailSenderTest {
 	void linksCarryTheTokenInTheFragmentOnly() {
 		AuthEmails emails = new AuthEmails(properties());
 
-		String body = emails.verification("a@example.com", "A", "TOK").body();
+		String body = emails.verification("a@example.com", "TOK").body();
 
 		assertThat(body).contains("#token=TOK").doesNotContain("?token=").doesNotContain("/TOK");
 	}

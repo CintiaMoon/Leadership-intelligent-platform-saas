@@ -4,6 +4,14 @@
  * API's cookies and a fixed set of response headers back, and never logs a body, cookie or token. The session lives
  * in the API; there is no second session store here.
  */
+import { isIP } from "node:net";
+
+/**
+ * Where the client address comes from (D-95). `cloudfront`: the viewer address CloudFront adds, trusted because the
+ * load balancer only accepts traffic from CloudFront. `rightmost`: the last entry of `X-Forwarded-For`, which the
+ * load balancer (or, locally, the test) appended itself. The browser's own header is never forwarded as received.
+ */
+export type ClientIpSource = "cloudfront" | "rightmost";
 
 export interface BffConfig {
   apiBaseUrl: string;
@@ -11,6 +19,8 @@ export interface BffConfig {
   publicOrigin: string;
   csrfCookie: string;
   sessionCookie: string;
+  deviceCookie: string;
+  clientIpSource: ClientIpSource;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
@@ -18,12 +28,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
   if (!credential) {
     throw new Error("BFF_CREDENTIAL is not set");
   }
+  const clientIpSource = env.CLIENT_IP_SOURCE ?? "rightmost";
+  if (clientIpSource !== "cloudfront" && clientIpSource !== "rightmost") {
+    throw new Error("CLIENT_IP_SOURCE must be cloudfront or rightmost");
+  }
   return {
     apiBaseUrl: (env.API_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, ""),
     credential,
     publicOrigin: new URL(env.PUBLIC_BASE_URL ?? "http://localhost:3000").origin,
     csrfCookie: env.CSRF_COOKIE_NAME ?? "__Host-csrf",
     sessionCookie: env.SESSION_COOKIE_NAME ?? "__Host-session",
+    deviceCookie: env.DEVICE_COOKIE_NAME ?? "__Host-device",
+    clientIpSource,
   };
 }
 
@@ -75,6 +91,20 @@ export function pickCookies(header: string | null, names: string[]): string {
     .join("; ");
 }
 
+/** The client address the edge vouches for, or null if there is none or it is not an IP address (D-95). */
+export function clientAddress(incoming: Headers, source: ClientIpSource): string | null {
+  let candidate: string | undefined;
+  if (source === "cloudfront") {
+    // "203.0.113.7:41234" or "[2001:db8::7]:41234"
+    const viewer = incoming.get("cloudfront-viewer-address")?.trim();
+    const match = viewer?.match(/^\[(.+)\]:\d+$/) ?? viewer?.match(/^([^:]+):\d+$/);
+    candidate = match?.[1];
+  } else {
+    candidate = incoming.get("x-forwarded-for")?.split(",").pop()?.trim();
+  }
+  return candidate && isIP(candidate) ? candidate : null;
+}
+
 /** The headers sent to the API: a fixed allowlist, never a copy of the browser's headers. */
 export function upstreamHeaders(
   incoming: Headers,
@@ -88,9 +118,9 @@ export function upstreamHeaders(
   if (options.json) {
     headers.set("Content-Type", "application/json");
   }
-  const forwardedFor = incoming.get("x-forwarded-for");
-  if (forwardedFor) {
-    headers.set("X-Forwarded-For", forwardedFor);
+  const address = clientAddress(incoming, config.clientIpSource);
+  if (address) {
+    headers.set("X-Forwarded-For", address);
   }
   const csrf = incoming.get("x-csrf-token");
   if (csrf) {
@@ -98,7 +128,9 @@ export function upstreamHeaders(
   }
   const cookie = pickCookies(
     incoming.get("cookie"),
-    options.session === false ? [config.csrfCookie] : [config.csrfCookie, config.sessionCookie],
+    options.session === false
+      ? [config.csrfCookie, config.deviceCookie]
+      : [config.csrfCookie, config.sessionCookie, config.deviceCookie],
   );
   if (cookie) {
     headers.set("Cookie", cookie);

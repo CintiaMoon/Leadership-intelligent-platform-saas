@@ -14,6 +14,7 @@ import com.example.saas.api.common.FieldProblem;
 import com.example.saas.api.common.ValidationFailedException;
 import com.example.saas.api.ratelimit.LoginThrottle;
 import com.example.saas.api.ratelimit.RateLimiter;
+import com.example.saas.api.security.KnownDevice;
 import org.springframework.stereotype.Service;
 
 /**
@@ -37,15 +38,18 @@ public class LoginService {
 
 	private final LoginRecorder recorder;
 
+	private final KnownDevice knownDevices;
+
 	private final ReentrantLock[] gates = Stream.generate(ReentrantLock::new).limit(256).toArray(ReentrantLock[]::new);
 
 	LoginService(RateLimiter rateLimiter, LoginThrottle throttle, UserAccountRepository users,
-			PasswordHasher hasher, LoginRecorder recorder) {
+			PasswordHasher hasher, LoginRecorder recorder, KnownDevice knownDevices) {
 		this.rateLimiter = rateLimiter;
 		this.throttle = throttle;
 		this.users = users;
 		this.hasher = hasher;
 		this.recorder = recorder;
+		this.knownDevices = knownDevices;
 	}
 
 	/**
@@ -55,7 +59,7 @@ public class LoginService {
 	 * @throws com.example.saas.api.auth.domain.PasswordHashingBusyException no hashing capacity (503)
 	 * @throws com.example.saas.api.ratelimit.RateLimitStoreUnavailableException counters unavailable: fail closed (503)
 	 */
-	public AuthenticatedAccount login(String email, String password, String clientKey) {
+	public AuthenticatedAccount login(String email, String password, String clientKey, String deviceCookie) {
 		EmailAddress address = EmailAddress.parse(email)
 			.orElseThrow(() -> new ValidationFailedException(List.of(new FieldProblem("email", "INVALID_EMAIL"))));
 		if (password == null || password.isEmpty()) {
@@ -73,7 +77,7 @@ public class LoginService {
 		ReentrantLock gate = gateFor(normalized, clientKey);
 		gate.lock();
 		try {
-			return evaluate(normalized, PasswordPolicy.normalize(password), clientKey);
+			return evaluate(normalized, PasswordPolicy.normalize(password), clientKey, deviceCookie);
 		}
 		finally {
 			gate.unlock();
@@ -84,12 +88,13 @@ public class LoginService {
 		return gates[Math.floorMod((normalizedEmail + "|" + clientKey).hashCode(), gates.length)];
 	}
 
-	private AuthenticatedAccount evaluate(String normalized, String candidate, String clientKey) {
-		if (throttle.isBlocked(normalized, clientKey)) {
+	private AuthenticatedAccount evaluate(String normalized, String candidate, String clientKey, String deviceCookie) {
+		Optional<UserAccount> found = users.findByEmailNormalized(normalized);
+		boolean knownDevice = found.map(user -> knownDevices.isKnown(deviceCookie, user.getId())).orElse(false);
+		if (throttle.isBlocked(normalized, clientKey, knownDevice)) {
 			throw new InvalidCredentialsException();
 		}
 
-		Optional<UserAccount> found = users.findByEmailNormalized(normalized);
 		boolean passwordMatches;
 		if (found.isPresent()) {
 			passwordMatches = hasher.matches(candidate, found.get().getPasswordHash());

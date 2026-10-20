@@ -66,7 +66,10 @@ class LoginTests extends AuthIntegrationTest {
 
 		Cookie cookie = sessionCookie(result);
 		assertThat(cookie).isNotNull();
-		String setCookie = result.getResponse().getHeader("Set-Cookie");
+		String setCookie = result.getResponse().getHeaders("Set-Cookie").stream()
+			.filter(header -> header.startsWith("__Host-session="))
+			.findFirst()
+			.orElseThrow();
 		assertThat(setCookie).startsWith("__Host-session=")
 			.contains("HttpOnly")
 			.contains("Secure")
@@ -306,18 +309,63 @@ class LoginTests extends AuthIntegrationTest {
 	void manyFailuresAcrossAddressesAddACappedDelayButNeverLockTheAccount() throws Exception {
 		String email = uniqueEmail();
 		registerVerified(email, STRONG_PASSWORD);
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < 100; i++) {
 			api.login(email, WRONG_PASSWORD, freshIp());
 		}
 
 		assertThat(api.login(email, STRONG_PASSWORD, freshIp()).getResponse().getStatus())
-			.as("20 failures in the hour: delayed")
+			.as("100 failures in the hour: delayed")
 			.isEqualTo(401);
 
 		ageThrottle(Duration.ofSeconds(61));
 		assertThat(api.login(email, STRONG_PASSWORD, freshIp()).getResponse().getStatus())
 			.as("the delay ends by itself")
 			.isEqualTo(200);
+	}
+
+	@Test
+	void aKnownDeviceIsNotHeldOutByTheAccountWideCeilingButAStrangerIs() throws Exception {
+		String email = uniqueEmail();
+		registerVerified(email, STRONG_PASSWORD);
+		String other = uniqueEmail();
+		registerVerified(other, STRONG_PASSWORD);
+		MvcResult first = api.login(email, STRONG_PASSWORD, freshIp());
+		jakarta.servlet.http.Cookie device = AuthApi.deviceCookie(first);
+		assertThat(device).as("a successful login marks the browser").isNotNull();
+		assertThat(first.getResponse().getHeaders("Set-Cookie").stream().filter(h -> h.startsWith("__Host-device=")).findFirst().orElseThrow())
+			.contains("Max-Age=7776000")
+			.contains("HttpOnly")
+			.contains("Secure")
+			.contains("SameSite=Lax");
+		jakarta.servlet.http.Cookie otherDevice = AuthApi.deviceCookie(api.login(other, STRONG_PASSWORD, freshIp()));
+
+		for (int i = 0; i < 100; i++) {
+			api.login(email, WRONG_PASSWORD, freshIp());
+		}
+
+		assertThat(api.login(email, STRONG_PASSWORD, freshIp()).getResponse().getStatus()).as("a stranger")
+			.isEqualTo(401);
+		assertThat(api.login(email, STRONG_PASSWORD, freshIp(), otherDevice).getResponse().getStatus())
+			.as("a cookie made for another account proves nothing")
+			.isEqualTo(401);
+		assertThat(api.login(email, STRONG_PASSWORD, freshIp(), new jakarta.servlet.http.Cookie(AuthApi.DEVICE_COOKIE,
+				device.getValue() + "x")).getResponse().getStatus()).as("a tampered cookie").isEqualTo(401);
+		assertThat(api.login(email, STRONG_PASSWORD, freshIp(), device).getResponse().getStatus())
+			.as("the account's own known browser")
+			.isEqualTo(200);
+	}
+
+	@Test
+	void aKnownDeviceIsStillBlockedByTheAccountAndAddressLimit() throws Exception {
+		String email = uniqueEmail();
+		registerVerified(email, STRONG_PASSWORD);
+		String ip = freshIp();
+		jakarta.servlet.http.Cookie device = AuthApi.deviceCookie(api.login(email, STRONG_PASSWORD, freshIp()));
+		for (int i = 0; i < 5; i++) {
+			api.login(email, WRONG_PASSWORD, ip);
+		}
+
+		assertThat(api.login(email, STRONG_PASSWORD, ip, device).getResponse().getStatus()).isEqualTo(401);
 	}
 
 	@Test
@@ -328,8 +376,8 @@ class LoginTests extends AuthIntegrationTest {
 			api.login(unknown, WRONG_PASSWORD, ip);
 		}
 
-		assertThat(throttle.isBlocked(unknown, ip)).as("blocked, although no such account exists").isTrue();
-		assertThat(throttle.isBlocked(unknown, freshIp())).as("another address is not blocked").isFalse();
+		assertThat(throttle.isBlocked(unknown, ip, false)).as("blocked, although no such account exists").isTrue();
+		assertThat(throttle.isBlocked(unknown, freshIp(), false)).as("another address is not blocked").isFalse();
 	}
 
 	@Test

@@ -25,7 +25,7 @@ class ResendVerificationTests extends AuthIntegrationTest {
 	}
 
 	@Test
-	void anUnverifiedAccountGetsAFreshTokenAndTheOldOneStopsWorking() throws Exception {
+	void anUnverifiedAccountGetsAFreshTokenAndAnEarlierLinkStaysValid() throws Exception {
 		String email = uniqueEmail();
 		api.signup(email, STRONG_PASSWORD, "Resend Subject", freshIp());
 		drainOutbox();
@@ -40,8 +40,33 @@ class ResendVerificationTests extends AuthIntegrationTest {
 		EmailMessage resent = mail.sentTo(email).get(0);
 		String secondToken = RecordingEmailSender.tokenIn(resent);
 		assertThat(secondToken).isNotEqualTo(firstToken);
-		assertThat(api.verify(firstToken, freshIp()).getResponse().getStatus()).as("old token").isEqualTo(422);
-		assertThat(api.verify(secondToken, freshIp()).getResponse().getStatus()).as("new token").isEqualTo(204);
+		assertThat(api.verify(firstToken, freshIp()).getResponse().getStatus())
+			.as("a stranger asking for another link cannot cancel the owner's pending one (D-98)")
+			.isEqualTo(204);
+		assertThat(api.verify(secondToken, freshIp()).getResponse().getStatus()).as("used up by the first").isEqualTo(422);
+	}
+
+	@Test
+	void atMostThreeLinksAreValidAtOnceAndTheOldestIsRetiredFirst() throws Exception {
+		String email = uniqueEmail();
+		api.signup(email, STRONG_PASSWORD, "Cap Subject", freshIp());
+		drainOutbox();
+		java.util.List<String> tokens = new java.util.ArrayList<>();
+		tokens.add(RecordingEmailSender.tokenIn(mail.sentTo(email).get(0)));
+		for (int i = 0; i < 3; i++) {
+			mail.clear();
+			// Each token gets its own creation instant so "oldest" is well defined.
+			jdbc.update("UPDATE verification_token SET created_at = created_at - interval '1 minute', "
+					+ "expires_at = expires_at - interval '1 minute'");
+			assertThat(api.resend(email, freshIp()).getResponse().getStatus()).isEqualTo(202);
+			drainOutbox();
+			tokens.add(RecordingEmailSender.tokenIn(mail.sentTo(email).get(0)));
+		}
+
+		assertThat(api.verify(tokens.get(0), freshIp()).getResponse().getStatus()).as("the fourth issue retired the first")
+			.isEqualTo(422);
+		assertThat(api.verify(tokens.get(1), freshIp()).getResponse().getStatus()).as("second is still valid")
+			.isEqualTo(204);
 	}
 
 	@Test

@@ -16,16 +16,20 @@ public class AuthEmails {
 		this.properties = properties;
 	}
 
-	public EmailMessage verification(String to, String displayName, String token) {
+	/**
+	 * Goes to an address nobody has proven they own, so it carries no text chosen by whoever typed that address
+	 * into the signup form (D-97): no display name.
+	 */
+	public EmailMessage verification(String to, String token) {
 		return new EmailMessage(to, "Verify your email address", """
-				Hello %s,
+				Hello,
 
-				Confirm your email address by opening this link within 24 hours:
+				Someone used this address to create an account. Confirm your email address by opening this link within 24 hours:
 
 				%s/verify-email#token=%s
 
 				If you did not create an account, you can ignore this message.
-				""".formatted(displayName, properties.publicBaseUrl(), token));
+				""".formatted(properties.publicBaseUrl(), token));
 	}
 
 	public EmailMessage passwordReset(String to, String displayName, String token) {

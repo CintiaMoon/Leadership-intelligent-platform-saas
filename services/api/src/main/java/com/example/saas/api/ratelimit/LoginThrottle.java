@@ -27,7 +27,7 @@ public final class LoginThrottle {
 
 	static final Duration PAIR_WINDOW = Duration.ofMinutes(15);
 
-	static final int ACCOUNT_THRESHOLD = 20;
+	static final int ACCOUNT_THRESHOLD = 100;
 
 	static final Duration ACCOUNT_WINDOW = Duration.ofHours(1);
 
@@ -63,8 +63,13 @@ public final class LoginThrottle {
 		this.clock = clock;
 	}
 
-	/** True if an attempt for this account from this address must be refused right now. */
-	public boolean isBlocked(String normalizedEmail, String clientKey) {
+	/**
+	 * True if an attempt for this account from this address must be refused right now.
+	 *
+	 * @param knownDevice the client holds a valid known-device cookie for this account (D-99): the account-wide
+	 *        ceiling is then not applied, but the account-and-address block always is
+	 */
+	public boolean isBlocked(String normalizedEmail, String clientKey, boolean knownDevice) {
 		String pairKey = pairKey(normalizedEmail, clientKey);
 		String accountKey = accountKey(normalizedEmail);
 		Map<String, Row> rows = new HashMap<>();
@@ -82,7 +87,8 @@ public final class LoginThrottle {
 			throw new RateLimitStoreUnavailableException(ex);
 		}
 		Instant now = clock.instant();
-		return blocked(rows.get(pairKey), PAIR_THRESHOLD, now) || blocked(rows.get(accountKey), ACCOUNT_THRESHOLD, now);
+		return blocked(rows.get(pairKey), PAIR_THRESHOLD, now)
+				|| (!knownDevice && blocked(rows.get(accountKey), ACCOUNT_THRESHOLD, now));
 	}
 
 	/** Counts one failed attempt against both the pair and the account. Called for unknown accounts too. */

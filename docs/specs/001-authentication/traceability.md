@@ -71,6 +71,9 @@ Mutation check: leaving the token in the address bar fails 3 end-to-end tests.
 
 - **Code fixes from the reviews** (plan section 15): `EncodedPathTests`, `CredentialsVersionTests`, and the strengthened burst test in `LoginTests` (AC-AUTH-18) were added. Mutation check: removing the per-pair lock makes the burst test see 12 counted failures instead of 5.
 
+- **Decisions D-95 to D-101** (plan section 16): AC-AUTH-41 `SignupFlowTests.aLaterSignupTakesOverAnAccountThatWasNeverVerified`, `AccountRegistrar` audit row; AC-AUTH-42 `ResendVerificationTests.atMostThreeLinksAreValidAtOnceAndTheOldestIsRetiredFirst`, `anUnverifiedAccountGetsAFreshTokenAndAnEarlierLinkStaysValid`, `PasswordResetTests.aStrangerRequestingAnotherLinkDoesNotCancelTheOwnersPendingOne`; AC-AUTH-25 and 43 `LoginTests.manyFailuresAcrossAddressesAddACappedDelayButNeverLockTheAccount` (100), `aKnownDeviceIsNotHeldOutByTheAccountWideCeilingButAStrangerIs`, `aKnownDeviceIsStillBlockedByTheAccountAndAddressLimit`; AC-AUTH-44 `RetentionTests` (mutation check: removing the payload scrub fails `aDeliveredEventKeepsNoAddress`); D-95 `bff.test.ts` (client address) and `TrustedProxyGuardTest`. AC-AUTH-39 now also through the real endpoints (`HashSaturationTests`), AC-AUTH-21 for the login throttle and step-up (`FailClosedLoginThrottleTests`).
+- Checks run for this part: `./mvnw verify` 255 tests, 0 failures (2 opt-in skipped); web lint, typecheck, 20 unit tests, build; Playwright 8/8 in both cookie modes. Not run: the CloudFront and ALB setup that D-95 depends on.
+
 ## Not run or not yet possible
 - Argon2id values on the production task size (D-12) and the rate-limit load test against the production database class.
 - The cookie and client-address checks through a real HTTPS edge (ADR-001).

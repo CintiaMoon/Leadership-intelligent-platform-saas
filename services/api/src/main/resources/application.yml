@@ -70,6 +70,10 @@ app:
       allowed-origins: ${CSRF_ALLOWED_ORIGINS:}
       cookie-name: ${CSRF_COOKIE_NAME:__Host-csrf}
       cookie-secure: ${CSRF_COOKIE_SECURE:true}
+    device:
+      # Known-device cookie (D-99); same development override as the other cookies.
+      cookie-name: ${DEVICE_COOKIE_NAME:__Host-device}
+      cookie-secure: ${DEVICE_COOKIE_SECURE:true}
     # Shared secrets that authenticate the BFF (ADR-001, D-50): comma-separated, at most two (current and
     # previous during rotation), each at least 43 characters. No default: unset rejects every /api request.
     bff-credentials: ${BFF_CREDENTIALS:}

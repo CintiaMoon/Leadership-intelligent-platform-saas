@@ -6,6 +6,7 @@ import com.example.saas.api.auth.persistence.UserAccountRepository;
 import com.example.saas.api.common.ProblemResponseWriter;
 import com.example.saas.api.security.BffTrustFilter;
 import com.example.saas.api.security.CsrfProperties;
+import com.example.saas.api.security.DeviceProperties;
 import com.example.saas.api.security.PreLoginCsrf;
 import com.example.saas.api.security.PreLoginCsrfFilter;
 import com.example.saas.api.security.ProblemSecurityHandlers;
@@ -32,7 +33,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  * session exists, and Spring Security's session-bound token for everything else.
  */
 @Configuration
-@EnableConfigurationProperties({ SecurityProperties.class, CsrfProperties.class })
+@EnableConfigurationProperties({ SecurityProperties.class, CsrfProperties.class, DeviceProperties.class })
 class SecurityConfig {
 
 	@Bean

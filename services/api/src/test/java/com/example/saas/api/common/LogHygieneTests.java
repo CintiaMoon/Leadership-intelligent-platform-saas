@@ -128,6 +128,20 @@ class LogHygieneTests {
 	}
 
 	@Test
+	void anUnhandledExceptionIsLoggedByTypeOnlyNeverWithItsMessageOrStackTrace() throws Exception {
+		mockMvc.perform(get("/api/v1/test/boom").header("X-BFF-Credential", BFF_CREDENTIAL));
+
+		List<ILoggingEvent> unhandled = appender.list.stream()
+			.filter(event -> event.getFormattedMessage().startsWith("Unhandled exception of type"))
+			.toList();
+		assertThat(unhandled).hasSize(1);
+		ILoggingEvent event = unhandled.get(0);
+		assertThat(event.getFormattedMessage()).contains("java.lang.IllegalStateException")
+			.doesNotContain("internal-detail-that-must-not-leak");
+		assertThat(event.getThrowableProxy()).as("no throwable, whose message may quote row data").isNull();
+	}
+
+	@Test
 	void theWholeSignupAndVerificationJourneyNeverLogsPasswordsTokensOrCsrfValues() throws Exception {
 		AuthApi api = new AuthApi(mockMvc);
 		String email = AuthApi.uniqueEmail();
