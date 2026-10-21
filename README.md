@@ -20,7 +20,7 @@ This repository is a starter documentation and Claude Code workflow bundle for b
 - `CLAUDE.md`: global implementation rules for Claude Code
 - `docs/product/`: product vision and glossary
 - `docs/requirements/`: functional and non-functional requirements
-- `docs/architecture/`: architecture, invariants, threat model, data model, and ADRs
+- `docs/architecture/`: architecture, invariants, threat model, data model, and ADRs; the signup and email flow is in `signup-flow.md`
 - `docs/specs/`: feature-level specifications and acceptance criteria
 - `docs/api/`: API contract guidance
 - `docs/runbooks/`: repeatable feature workflow
