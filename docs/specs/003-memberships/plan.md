@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-MEM (slice 003)
 
-- Status: **Proposed 2026-10-21.** Nothing in this plan is implemented. Items Q-01 to Q-18 are proposals; each becomes a decision (D-123 onward, Q-NN maps to D-(122+NN)) in the register when approved. Approval of the plan and the phase order is needed before Phase 0 starts.
+- Status: **Approved 2026-10-21** (user: "Approve Q-01 to Q-18", the phase order approved, the D-121 window of 1 hour confirmed). Q-NN is recorded as D-(122+NN) in the register (D-123 to D-140). Phase 0 is this change; nothing else is implemented.
 - Spec: `docs/specs/003-memberships/spec.md` (SPEC-MEM, Approved 2026-10-17)
 - Related: SPEC-TEN (`docs/specs/002-tenants/spec.md`, the permission matrix), SPEC-AUTH (AC-AUTH-14, 22, 23), `docs/architecture/invariants.md`, `data-model.md`, `audit-events.md`, ADR-005; decisions D-18, D-20, D-21, D-22, D-23, D-43, D-54, D-89, D-108 to D-121
 - Date: 2026-10-21. Written from the spec, the register and the slice 001 and 002 code; no code was changed.
@@ -100,7 +100,9 @@ Record the slice 002 closure (accepted risks, unrun checks); record Q-01 to Q-18
 ## 8. Checks that will be run per phase
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint, the API-type drift check in `apps/web` when the contract changes, and the CI jobs `api`, `contract`, `web`, `e2e`, CodeQL and dependency review. Migration `V12` is validated on an empty database and on one that already holds V1 to V11 rows. Checks not run are listed in the traceability file.
 
-## 9. Approval needed
+## 9. Approval (done 2026-10-21)
 1. Q-01 to Q-18, in whole or with changes. The ones most worth a deliberate look: Q-03 (the company-row lock), Q-04 and Q-05 (role rules and recent authentication), Q-07 (new columns), Q-10 (what the member list shows), Q-12 and Q-13 (what is deferred or handled by a runbook).
 2. The phase order.
 3. The D-121 window: confirm 1 hour or set another value.
+
+Answers recorded 2026-10-21: all of Q-01 to Q-18 approved without change; the phase order approved; the D-121 audit window confirmed at 1 hour.

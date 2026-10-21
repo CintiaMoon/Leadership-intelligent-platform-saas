@@ -1,6 +1,6 @@
 # SPEC-TEN Traceability (implementation status)
 
-- Updated: 2026-10-21, after the D-121 and D-122 follow-up. Verified: AC-TEN-01, 02, 03, 04, 05, 07, 09, 10 (every cell over HTTP), 11, 13, 15. AC-TEN-08 is verified as a mechanism and closed in slice 003. AC-TEN-06, 12, 14 belong to later slices. D-121 and D-122 are approved and implemented.
+- Updated: 2026-10-21, after the D-121 and D-122 follow-up. Verified: AC-TEN-01, 02, 03, 04, 05, 07, 09, 10 (every cell over HTTP), 11, 13, 15. AC-TEN-08 is verified as a mechanism and closed in slice 003. AC-TEN-06, 12, 14 belong to later slices. D-121 and D-122 are approved and implemented. Slice closed with accepted risks (see the closure status at the end).
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-105 to D-120.
 
@@ -70,3 +70,20 @@ Two read-only agents reviewed the merged slice: a security engineer and a code r
 
 ## D-121 and D-122 follow-up (2026-10-21)
 `./mvnw verify` ran 331 tests with 0 failures and 2 skipped; `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts` (description text only); `npm run typecheck` in `apps/web` printed no errors. Mutation check: bypassing the denial throttle makes the repeated-denial test fail (6 rows instead of 1). Not run: frontend unit tests, lint and build, Playwright E2E, CI jobs.
+
+## Slice 002 closure status (2026-10-21)
+Recorded in Phase 0 of the slice 003 plan, which the user approved on 2026-10-21. The user has not separately signed off the accepted-risk list below; confirm it when reviewing the Phase 0 pull request.
+
+All acceptance criteria that belong to this slice have tests. AC-TEN-06 is owned by AC-MEM-03 (slice 003); AC-TEN-12 and 14 need plans and export (slice 006); AC-TEN-08 is closed for memberships in slice 003 (D-136) and for invitations in slice 004.
+
+| Open item | Status | Evidence / what is still owed |
+|---|---|---|
+| D-121 audit window | Done | 1 hour, confirmed by the user on 2026-10-21 |
+| D-122 name characters | Done | Approved and implemented; legitimate joiners (U+200C, emoji ZWJ sequences) are rejected, accepted with the decision |
+| Both independent reviews (security, code) | Done | Findings and dispositions are in the Phase 5 section |
+| Decisions marked as security decisions (D-108, D-112, D-115, D-121) | Accepted risk | Approved by the user in a general approval, not by a separately named security owner |
+| Migration V11 on a database that already holds V10 data | Accepted risk | Tested only on empty databases (Testcontainers). Owed: before the first deployment that has data |
+| Frontend unit tests, lint and build, Playwright for slice 002 | Accepted risk | Not run for the last three pull requests; the slice has no UI. CI results of the merged pull requests were not read by the assistant |
+| Server-wide request body size limit | Accepted risk | Not configured; the name is capped in code. Owed: a platform decision |
+| Two database connections per denied request | Accepted risk | Denial audit runs in its own transaction; pool headroom is not measured. Owed: with the load test |
+| Test-only routes in the test source tree | Done | Replaced by real endpoints as slices 003 to 007 land |
