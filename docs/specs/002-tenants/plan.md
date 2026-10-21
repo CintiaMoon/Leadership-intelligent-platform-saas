@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-TEN (slice 002)
 
-- Status: **Proposed, partly answered 2026-10-21.** The user answered Q-04, Q-08, Q-14 and Q-15 (see section 10). The D-18 sign-off, Q-16 and approval of the rest of the plan and the phase order are still outstanding. Nothing in this plan is implemented. Items Q-01 to Q-16 are proposals; each becomes a decision (D-105 onward) in the register when approved.
+- Status: **Proposed, partly answered 2026-10-21.** The user answered Q-04, Q-08, Q-14 and Q-15 (see section 10). The D-18 sign-off is recorded (section 10). Q-16 and approval of the rest of the plan and the phase order are still outstanding. Nothing in this plan is implemented. Items Q-01 to Q-16 are proposals; each becomes a decision (D-105 onward) in the register when approved.
 - Spec: `docs/specs/002-tenants/spec.md` (SPEC-TEN, Approved 2026-10-17)
 - Related: `docs/architecture/invariants.md`, `data-model.md`, `threat-model.md`, ADR-001, ADR-004, ADR-005; decisions D-03, D-17, D-18, D-19, D-20, D-23, D-43, D-47, D-49, D-54, D-56, D-89
 - Date: 2026-10-21. Written from the spec, the register, and the Slice 001 code; no code was changed.
@@ -8,7 +8,7 @@
 ## 1. Readiness check (CLAUDE.md workflow step 1)
 | Item | State | Action |
 |---|---|---|
-| D-18 (permission matrix) | **Blocks 002.** Status is "Proposed": product-owner sign-off recorded 2026-10-17, security-owner sign-off not recorded | The register lists D-18 as blocking 002 to 005. Record the security-owner sign-off (or change the matrix) before Phase 1 starts. Phase 0 is docs only and can proceed |
+| D-18 (permission matrix) | Blocked 002 until 2026-10-21. Product-owner sign-off 2026-10-17; **security-owner sign-off recorded 2026-10-21** | Cleared. The matrix is signed off as it stands in the spec |
 | D-03, D-17, D-19, D-20, D-23, D-43, D-47, D-49, D-56 | Decided | None |
 | D-54 (Owner account disabled) | Decided; the flagged state is built in slice 003 | 002 must not forbid it: the Owner membership may be SUSPENDED while the company is flagged (Q-07) |
 | D-89 (consumers of verified-only, recent-auth, rotation) | Decided | 002 is the first consumer of "verified-only" (company creation) |
@@ -90,8 +90,8 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint, the API-type drift check in `apps/web` (only if the contract changes), and the CI jobs `api`, `contract`, `web`, `e2e`, CodeQL and dependency review. Migrations are validated on an empty database. Checks not run are listed in the traceability file.
 
 ## 9. Approval needed
-1. Security-owner sign-off of D-18 (blocks Phase 1).
-2. Q-01 to Q-16, in whole or with changes. The ones that need a human answer rather than a yes: **Q-04** (404 versus 403), **Q-08** (database trigger), **Q-14** (mechanism now or defer), **Q-15** (cap on companies), **Q-16** (no UI in this slice).
+1. ~~Security-owner sign-off of D-18~~ Done 2026-10-21.
+2. Q-01 to Q-16, in whole or with changes. Answered: Q-04, Q-08, Q-14, Q-15. Open: **Q-16** (no UI in this slice) and the remaining proposals.
 3. The phase order.
 
 ## 10. Answers recorded (2026-10-21, from the user)
@@ -102,4 +102,6 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 | Q-14 | Test AC-TEN-08 as a mechanism now (test-only table in a test Flyway location); close it in slice 003 |
 | Q-15 | No cap on the number of companies per user; only the creation rate limits apply |
 
-Still outstanding: the security-owner sign-off of D-18, Q-16 (no UI in this slice), the other proposals (Q-01 to Q-03, Q-05 to Q-07, Q-09 to Q-13), and the phase order.
+| D-18 | Signed off by the user on 2026-10-21 (instruction "sign it off"), on the matrix in `spec.md` unchanged. Recorded in the register |
+
+Still outstanding: Q-16 (no UI in this slice), the other proposals (Q-01 to Q-03, Q-05 to Q-07, Q-09 to Q-13), and the phase order.
