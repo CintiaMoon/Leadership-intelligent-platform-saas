@@ -49,7 +49,7 @@ public class CompanyAuthorizationService {
 				MembershipStatus.ACTIVE);
 		Optional<Company> company = membership.flatMap(m -> companies.findById(m.getCompanyId()));
 		if (company.isEmpty()) {
-			// Not audited: a flood of probes for other tenants would drown the trail (D-111).
+			// Not audited: a flood of probes for other tenants would drown the trail (D-115).
 			throw new CompanyNotFoundException();
 		}
 		Role role = membership.get().getRole();

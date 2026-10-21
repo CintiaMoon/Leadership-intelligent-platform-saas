@@ -3,23 +3,28 @@ package com.example.saas.api.tenant;
 import java.util.Map;
 import java.util.UUID;
 
+import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.tenant.application.AuthorizedCompany;
+import com.example.saas.api.tenant.application.CompanyAuthorizationService;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.domain.Permission;
+import com.example.saas.api.tenant.domain.Role;
 import com.example.saas.api.tenant.testrecords.TestNote;
 import com.example.saas.api.tenant.testrecords.TestNoteRepository;
 import com.example.saas.api.tenant.testrecords.TestRecord;
 import com.example.saas.api.tenant.testrecords.TestRecordRepository;
 import com.example.saas.api.tenant.web.Authorized;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Test-only routes (D-113): one per matrix permission, so every Permission x Role cell is exercised over HTTP, plus two
+ * Test-only routes (D-116): one per matrix permission, so every Permission x Role cell is exercised over HTTP, plus two
  * routes that touch tenant-owned records. Real endpoints replace them as slices 003 to 007 land. Spring Security's
  * production chain denies these paths; only {@link TenantTestEndpointsConfiguration} opens them. A route names its
  * permission only through {@link Authorized}.
@@ -31,9 +36,13 @@ class PermissionRoutesController {
 
 	private final TestNoteRepository notes;
 
-	PermissionRoutesController(TestRecordRepository records, TestNoteRepository notes) {
+	private final CompanyAuthorizationService authorization;
+
+	PermissionRoutesController(TestRecordRepository records, TestNoteRepository notes,
+			CompanyAuthorizationService authorization) {
 		this.records = records;
 		this.notes = notes;
+		this.authorization = authorization;
 	}
 
 	@GetMapping("/api/v1/companies/{companyId}/test/view-company-details")
@@ -158,6 +167,17 @@ class PermissionRoutesController {
 		TestRecord record = records.findByCompanyIdAndId(company.companyId(), recordId)
 			.orElseThrow(CompanyNotFoundException::new);
 		return Map.of("name", record.getName());
+	}
+
+	/**
+	 * A permission that depends on the role of the membership being acted on ("Agent/Viewer only"). The service is called
+	 * with the target role, as the membership slice will do inside its own transaction.
+	 */
+	@GetMapping("/api/v1/companies/{companyId}/test/targeted/{permission}")
+	Map<String, String> targeted(@PathVariable UUID companyId, @PathVariable Permission permission,
+			@RequestParam Role targetRole, @AuthenticationPrincipal AuthenticatedUser principal) {
+		AuthorizedCompany company = authorization.require(principal.userId(), companyId, permission, targetRole);
+		return Map.of("role", company.role().name());
 	}
 
 	record NoteRequest(UUID recordId, String body) {

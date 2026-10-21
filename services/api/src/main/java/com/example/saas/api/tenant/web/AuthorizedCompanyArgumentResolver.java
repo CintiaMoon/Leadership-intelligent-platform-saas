@@ -2,6 +2,7 @@ package com.example.saas.api.tenant.web;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.tenant.application.AuthorizedCompany;
@@ -23,6 +24,10 @@ import org.springframework.web.servlet.HandlerMapping;
 class AuthorizedCompanyArgumentResolver implements HandlerMethodArgumentResolver {
 
 	static final String PATH_VARIABLE = "companyId";
+
+	/** The canonical 36-character form only; UUID.fromString also accepts shortened forms such as 1-1-1-1-1. */
+	private static final Pattern CANONICAL_UUID = Pattern
+		.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
 	private final CompanyAuthorizationService authorization;
 
@@ -53,7 +58,7 @@ class AuthorizedCompanyArgumentResolver implements HandlerMethodArgumentResolver
 
 	private static UUID parseCompanyId(Map<String, String> variables) {
 		String raw = variables == null ? null : variables.get(PATH_VARIABLE);
-		if (raw == null) {
+		if (raw == null || !CANONICAL_UUID.matcher(raw).matches()) {
 			throw new CompanyNotFoundException();
 		}
 		try {

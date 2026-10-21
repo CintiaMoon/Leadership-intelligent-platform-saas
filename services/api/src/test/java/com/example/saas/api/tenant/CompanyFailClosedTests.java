@@ -26,7 +26,7 @@ import static com.example.saas.api.auth.AuthApi.json;
 import static com.example.saas.api.auth.AuthApi.sessionCookie;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Company creation fails closed when the counter store is unavailable (D-107, ADR-004). */
+/** Company creation fails closed when the counter store is unavailable (D-113, ADR-004). */
 @Import(CompanyFailClosedTests.SwitchableStore.class)
 class CompanyFailClosedTests extends AuthIntegrationTest {
 

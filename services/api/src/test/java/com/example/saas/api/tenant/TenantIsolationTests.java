@@ -111,6 +111,55 @@ class TenantIsolationTests extends AuthIntegrationTest {
 		}
 	}
 
+	private int targeted(Member caller, UUID companyId, Permission permission, Role target) throws Exception {
+		return api.get("/api/v1/companies/" + companyId + "/test/targeted/" + permission.name() + "?targetRole=" + target,
+				caller.cookie(), freshIp()).getResponse().getStatus();
+	}
+
+	/** Literal expectations, written from the spec's "Agent/Viewer only" wording, not derived from the policy. */
+	@Test
+	void anAdminActsOnAgentsAndViewersOnlyAndTheOwnerOnAnyoneOverHttp() throws Exception {
+		Team team = team();
+		Member owner = team.byRole().get(Role.OWNER);
+		Member admin = team.byRole().get(Role.ADMIN);
+		for (Permission permission : new Permission[] { Permission.CHANGE_MEMBER_ROLE,
+				Permission.SUSPEND_OR_REMOVE_MEMBERS, Permission.REACTIVATE_MEMBERS }) {
+			assertThat(targeted(admin, team.companyId(), permission, Role.AGENT)).as("%s Agent", permission).isEqualTo(200);
+			assertThat(targeted(admin, team.companyId(), permission, Role.VIEWER)).as("%s Viewer", permission).isEqualTo(200);
+			assertThat(targeted(admin, team.companyId(), permission, Role.ADMIN)).as("%s Admin", permission).isEqualTo(403);
+			assertThat(targeted(admin, team.companyId(), permission, Role.OWNER)).as("%s Owner", permission).isEqualTo(403);
+			for (Role target : Role.values()) {
+				assertThat(targeted(owner, team.companyId(), permission, target)).as("Owner %s %s", permission, target)
+					.isEqualTo(200);
+				assertThat(targeted(team.byRole().get(Role.AGENT), team.companyId(), permission, target))
+					.as("Agent %s %s", permission, target)
+					.isEqualTo(403);
+				assertThat(targeted(team.byRole().get(Role.VIEWER), team.companyId(), permission, target))
+					.as("Viewer %s %s", permission, target)
+					.isEqualTo(403);
+			}
+		}
+		// An Admin never assigns or revokes the Admin role, whatever the target.
+		assertThat(targeted(admin, team.companyId(), Permission.ASSIGN_OR_REVOKE_ADMIN, Role.AGENT)).isEqualTo(403);
+	}
+
+	@Test
+	void aNonCanonicalUuidFormNeverReachesACompany() throws Exception {
+		Member owner = member();
+		UUID companyId = UUID.fromString("0000000a-0000-0000-0000-00000000000a");
+		tx.executeWithoutResult(s -> {
+			jdbc.update("INSERT INTO company (id, name, created_at, updated_at) VALUES (?, 'Short', now(), now())",
+					companyId);
+			join(companyId, owner, "OWNER", "ACTIVE");
+		});
+
+		assertThat(get(owner, companyId, route(Permission.VIEW_COMPANY_DETAILS))).isEqualTo(200);
+		// UUID.fromString would read "a-0-0-0-a" as the same company; the path must be the canonical form.
+		MvcResult shortForm = api.get("/api/v1/companies/a-0-0-0-a/test/" + route(Permission.VIEW_COMPANY_DETAILS),
+				owner.cookie(), freshIp());
+		assertThat(shortForm.getResponse().getStatus()).isEqualTo(404);
+	}
+
 	@Test
 	void whilePendingDeletionOnlyTheOwnerReadsAndNobodyWritesExceptTheCancellation() throws Exception {
 		Team team = team();

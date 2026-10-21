@@ -4,7 +4,7 @@ import java.time.Duration;
 
 import com.example.saas.api.ratelimit.RateLimitPolicy;
 
-/** Company-creation limits (SPEC-TEN, D-107): per client address and per account. */
+/** Company-creation limits (SPEC-TEN, D-113): per client address and per account. */
 public final class CompanyRateLimits {
 
 	/** 5 creation attempts per client address per hour (AC-TEN-13). */

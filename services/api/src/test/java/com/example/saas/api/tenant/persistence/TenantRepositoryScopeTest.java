@@ -51,6 +51,9 @@ class TenantRepositoryScopeTest {
 		assertThat(isScoped(Sample.class.getMethod("findByCompanyIdAndName", java.util.UUID.class, String.class)))
 			.isTrue();
 		assertThat(isScoped(Sample.class.getMethod("anyMethod", String.class))).isFalse();
+		assertThat(isScoped(Sample.class.getMethod("findByUserIdOrCompanyId", java.util.UUID.class, java.util.UUID.class)))
+			.isFalse();
+		assertThat(isScoped(Sample.class.getMethod("findByCompanyIdNot", java.util.UUID.class))).isTrue();
 	}
 
 	@SuppressWarnings("unused")
@@ -62,6 +65,10 @@ class TenantRepositoryScopeTest {
 
 		Object anyMethod(@Param("name") String name);
 
+		Object findByUserIdOrCompanyId(java.util.UUID userId, java.util.UUID companyId);
+
+		Object findByCompanyIdNot(java.util.UUID companyId);
+
 	}
 
 	private static boolean isScoped(Method method) {
@@ -71,10 +78,13 @@ class TenantRepositoryScopeTest {
 		if (method.getName().equals("save") || method.getName().equals("saveAll")) {
 			return true;
 		}
-		boolean derivedByCompany = method.getName().contains("CompanyId");
-		boolean namedParameter = Arrays.stream(method.getParameters()).anyMatch(p -> p.getName().equals("companyId")
-				|| (p.isAnnotationPresent(Param.class) && p.getAnnotation(Param.class).value().equals("companyId")));
-		return derivedByCompany || namedParameter;
+		// A derived query is scoped only if it filters on the company first; "ByUserIdOrCompanyId" is not.
+		boolean derivedByCompany = method.getName().matches("(find|exists|count|delete)(All)?ByCompanyId(And[A-Z].*)?");
+		boolean firstParameterIsCompany = method.getParameterCount() > 0
+				&& (method.getParameters()[0].getName().equals("companyId") || (method.getParameters()[0]
+					.isAnnotationPresent(Param.class)
+					&& method.getParameters()[0].getAnnotation(Param.class).value().equals("companyId")));
+		return derivedByCompany || firstParameterIsCompany;
 	}
 
 	private static List<Class<?>> repositories() throws ClassNotFoundException {

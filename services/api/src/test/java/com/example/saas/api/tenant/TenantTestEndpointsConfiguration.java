@@ -22,7 +22,7 @@ import org.springframework.security.web.csrf.CsrfFilter;
 
 /**
  * The security chain that mirrors the production filters for the test-only tenant routes in
- * {@link PermissionRoutesController} (D-113).
+ * {@link PermissionRoutesController} (D-116).
  */
 @TestConfiguration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SessionProperties.class)
