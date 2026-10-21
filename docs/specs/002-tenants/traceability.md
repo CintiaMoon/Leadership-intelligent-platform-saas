@@ -1,6 +1,6 @@
 # SPEC-TEN Traceability (implementation status)
 
-- Updated: 2026-10-21, after the D-121 and D-122 follow-up. Verified: AC-TEN-01, 02, 03, 04, 05, 07, 09, 10 (every cell over HTTP), 11, 13, 15. AC-TEN-08 is verified as a mechanism and closed in slice 003. AC-TEN-06, 12, 14 belong to later slices. D-121 and D-122 are approved and implemented. Slice closed with accepted risks (see the closure status at the end).
+- Updated: 2026-10-21, after the D-121 and D-122 follow-up. Verified: AC-TEN-01, 02, 03, 04, 05, 07, 09, 10 (every cell over HTTP), 11, 13, 15. AC-TEN-08 is verified as a mechanism and closed in slice 003. AC-TEN-06, 12, 14 belong to later slices. D-121 and D-122 are approved and implemented. Slice closed with accepted risks, signed off by the user on 2026-10-21 (see the closure status at the end).
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-105 to D-120.
 
@@ -72,7 +72,7 @@ Two read-only agents reviewed the merged slice: a security engineer and a code r
 `./mvnw verify` ran 331 tests with 0 failures and 2 skipped; `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts` (description text only); `npm run typecheck` in `apps/web` printed no errors. Mutation check: bypassing the denial throttle makes the repeated-denial test fail (6 rows instead of 1). Not run: frontend unit tests, lint and build, Playwright E2E, CI jobs.
 
 ## Slice 002 closure status (2026-10-21)
-Recorded in Phase 0 of the slice 003 plan, which the user approved on 2026-10-21. The user has not separately signed off the accepted-risk list below; confirm it when reviewing the Phase 0 pull request.
+Recorded in Phase 0 of the slice 003 plan. **The user signed off the accepted-risk list below on 2026-10-21** ("signed off the accepted-risk of the slice 002"). Each accepted risk stays a gate for the point stated in its row; nothing here claims it was checked.
 
 All acceptance criteria that belong to this slice have tests. AC-TEN-06 is owned by AC-MEM-03 (slice 003); AC-TEN-12 and 14 need plans and export (slice 006); AC-TEN-08 is closed for memberships in slice 003 (D-136) and for invitations in slice 004.
 
@@ -87,3 +87,4 @@ All acceptance criteria that belong to this slice have tests. AC-TEN-06 is owned
 | Server-wide request body size limit | Accepted risk | Not configured; the name is capped in code. Owed: a platform decision |
 | Two database connections per denied request | Accepted risk | Denial audit runs in its own transaction; pool headroom is not measured. Owed: with the load test |
 | Test-only routes in the test source tree | Done | Replaced by real endpoints as slices 003 to 007 land |
+| Closure sign-off | Done | Slice 002 closed by the user on 2026-10-21 |
