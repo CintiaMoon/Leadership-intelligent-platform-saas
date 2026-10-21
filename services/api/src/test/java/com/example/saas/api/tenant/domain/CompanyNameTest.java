@@ -28,4 +28,24 @@ class CompanyNameTest {
 		assertThat(CompanyName.normalize("😀".repeat(101))).isEmpty();
 	}
 
+	@Test
+	void rejectsFormatSeparatorSurrogateAndPrivateUseCharacters() {
+		assertThat(CompanyName.normalize("Acme\u202Eevil")).as("bidi override").isEmpty();
+		assertThat(CompanyName.normalize("Ac\u200Bme")).as("zero-width space").isEmpty();
+		assertThat(CompanyName.normalize("Ac\u2028me")).as("line separator").isEmpty();
+		assertThat(CompanyName.normalize("Ac\u2029me")).as("paragraph separator").isEmpty();
+		assertThat(CompanyName.normalize("Ac\uE000me")).as("private use").isEmpty();
+		assertThat(CompanyName.normalize("Ac\uD800me")).as("lone surrogate").isEmpty();
+		assertThat(CompanyName.normalize("\u200B")).as("only a zero-width character").isEmpty();
+		assertThat(CompanyName.normalize("\u200B\u200B\u200B")).isEmpty();
+	}
+
+	@Test
+	void stillAcceptsOrdinaryInternationalNames() {
+		assertThat(CompanyName.normalize("Caf\u00E9 \u00DCn\u00EF")).isPresent();
+		assertThat(CompanyName.normalize("\u682A\u5F0F\u4F1A\u793E Example")).isPresent();
+		assertThat(CompanyName.normalize("O'Brien & Sons, Ltd.")).isPresent();
+		assertThat(CompanyName.normalize("\uD83D\uDE00 Smile")).as("emoji without a joiner").isPresent();
+	}
+
 }

@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-TEN (slice 002)
 
-- Status: **Approved 2026-10-21** (user: "approve all"): Q-01 to Q-16 and the phase order; recorded as D-105 to D-120. Phases 0 to 4 are merged. Phase 5 (independent reviews and fixes) is done on its branch; closure waits on D-121 and D-122 (see `traceability.md`).
+- Status: **Approved 2026-10-21** (user: "approve all"): Q-01 to Q-16 and the phase order; recorded as D-105 to D-120. Phases 0 to 4 are merged. Phase 5 (independent reviews and fixes) is done on its branch; D-121 and D-122 were approved and implemented on 2026-10-21 (see `traceability.md`).
 - Spec: `docs/specs/002-tenants/spec.md` (SPEC-TEN, Approved 2026-10-17)
 - Related: `docs/architecture/invariants.md`, `data-model.md`, `threat-model.md`, ADR-001, ADR-004, ADR-005; decisions D-03, D-17, D-18, D-19, D-20, D-23, D-43, D-47, D-49, D-54, D-56, D-89
 - Date: 2026-10-21. Written from the spec, the register, and the Slice 001 code; no code was changed.

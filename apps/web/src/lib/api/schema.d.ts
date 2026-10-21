@@ -316,8 +316,9 @@ export interface components {
         CompanyStatus: "ACTIVE" | "PENDING_DELETION";
         CreateCompanyRequest: {
             /**
-             * @description 1 to 100 Unicode code points after NFKC normalization and trimming, with no control characters
-             *     (D-105). The wire limit only caps request size. Names are not unique.
+             * @description 1 to 100 Unicode code points after NFKC normalization and trimming. Control, format (bidi overrides,
+             *     zero-width characters), line and paragraph separator, surrogate and private-use characters are
+             *     rejected (D-105, D-122). The wire limit only caps request size. Names are not unique.
              */
             name: string;
         };

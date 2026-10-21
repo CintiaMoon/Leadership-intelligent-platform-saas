@@ -17,4 +17,11 @@ public final class CompanyRateLimits {
 	private CompanyRateLimits() {
 	}
 
+	/**
+	 * One denied-permission audit row per user, company and permission per window (D-121). Later denials in the window
+	 * are still refused with 403 but not written, so a member repeating a forbidden request cannot flood the trail. The
+	 * window is a proposal; the security owner has not set it.
+	 */
+	public static final RateLimitPolicy DENIAL_AUDIT = new RateLimitPolicy("tenant-denial-audit", 1, Duration.ofHours(1));
+
 }

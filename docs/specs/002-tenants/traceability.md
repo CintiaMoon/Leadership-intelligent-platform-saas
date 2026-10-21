@@ -1,6 +1,6 @@
 # SPEC-TEN Traceability (implementation status)
 
-- Updated: 2026-10-21, after Phase 5 (reviews and fixes). Verified: AC-TEN-01, 02, 03, 04, 05, 07, 09, 10 (every cell over HTTP), 11, 13, 15. AC-TEN-08 is verified as a mechanism and closed in slice 003. AC-TEN-06, 12, 14 belong to later slices. Closure waits on the two Open decisions below (D-121, D-122) and the approval of this report.
+- Updated: 2026-10-21, after the D-121 and D-122 follow-up. Verified: AC-TEN-01, 02, 03, 04, 05, 07, 09, 10 (every cell over HTTP), 11, 13, 15. AC-TEN-08 is verified as a mechanism and closed in slice 003. AC-TEN-06, 12, 14 belong to later slices. D-121 and D-122 are approved and implemented.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-105 to D-120.
 
@@ -23,7 +23,7 @@
 | AC-TEN-15 | Verified | Phase 3 | `CompanyApiTests.theEleventhAttemptByOneAccountWithinADayIsThrottled` |
 
 ## Checks not run
-Phase 5: `./mvnw verify` ran (326 tests, 0 failures, 2 skipped); `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts` (description text only); `npm run typecheck` in `apps/web` printed no errors. Mutation checks: removing the per-account rate-limit hit fails the daily-limit test; letting an Admin act on an Admin fails the targeted-role test; removing the canonical-UUID check fails `aNonCanonicalUuidFormNeverReachesACompany`. Not run: frontend unit tests, lint and build, Playwright E2E, CI jobs, migration V11 on a database that already holds V10 data (the tests apply V1 to V11 to an empty database). No BFF route or UI exists for these endpoints (D-120).
+Phase 5 (before the D-121 and D-122 follow-up): `./mvnw verify` ran (326 tests, 0 failures, 2 skipped); `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts` (description text only); `npm run typecheck` in `apps/web` printed no errors. Mutation checks: removing the per-account rate-limit hit fails the daily-limit test; letting an Admin act on an Admin fails the targeted-role test; removing the canonical-UUID check fails `aNonCanonicalUuidFormNeverReachesACompany`. Not run: frontend unit tests, lint and build, Playwright E2E, CI jobs, migration V11 on a database that already holds V10 data (the tests apply V1 to V11 to an empty database). No BFF route or UI exists for these endpoints (D-120).
 
 ## Phase 2 evidence (not tied to one AC)
 - 404 vs 403 (D-108), role loaded per request, suspension isolated per company, pending-deletion reads: `CompanyAuthorizationTests` (9; contributes to AC-TEN-03, 04, 09, which stay Pending until Phase 4).
@@ -55,8 +55,8 @@ Two read-only agents reviewed the merged slice: a security engineer and a code r
 | Stale decision IDs in comments and tests | Code L2 | Fixed, except the comment in the already-applied `V10` (changing it would change its Flyway checksum) |
 | D-114 said "reuse the D-89 manager" but the code relies on the session filter | Code L3 | Fixed in the register (the code was right) |
 | Scope test accepted any method name containing "CompanyId" | Code L5 | Fixed: stricter pattern, with negative examples |
-| Denial audit can be amplified by a member repeating a forbidden request | Security 1, Code L4 | **Open: D-121, blocks slice 003.** No live route denies a role today |
-| Company names accept bidi, zero-width and other format characters | Security 3, Code L1 | **Open: D-122.** Amends D-105, needs approval |
+| Denial audit can be amplified by a member repeating a forbidden request | Security 1, Code L4 | Fixed after approval of D-121: one audit row per user, company and permission per window; `CompanyAuthorizationTests.repeatedDenialsWriteOneAuditRowPerPermissionPerWindowButAreAllRefused` (6 repeats give 1 row; mutation check: bypassing the throttle gives 6), `theSameDenialByAnotherUserOrInAnotherCompanyIsAuditedSeparately`, `CompanyFailClosedTests` (store down: still 403, row still written). The 1-hour window is a proposal |
+| Company names accept bidi, zero-width and other format characters | Security 3, Code L1 | Fixed after approval of D-122: `CompanyNameTest`, `CompanyApiTests.invalidNamesAreRejectedWithAFieldErrorAndNothingIsCreated` |
 | AC-TEN-02 is guaranteed by the Owner trigger, not by `@Transactional` | Code L6 | Accepted and documented (AC-TEN-02 row) |
 | Authorization and the mutation are not one transaction (TOCTOU) | Security 7, Code Info | Carried forward, see below |
 | `EXPORT_DATA` is treated as a read while a deletion is pending | Code Info | Carried forward to slice 006 |
@@ -67,3 +67,6 @@ Two read-only agents reviewed the merged slice: a security engineer and a code r
 - Slice 006: confirm whether export is allowed to an Owner during pending deletion.
 - Platform: a server-wide request body size limit (Tomcat/Jackson) is not configured.
 - The company list is not paginated and `updated_at` is never maintained; both are fine for this slice.
+
+## D-121 and D-122 follow-up (2026-10-21)
+`./mvnw verify` ran 331 tests with 0 failures and 2 skipped; `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts` (description text only); `npm run typecheck` in `apps/web` printed no errors. Mutation check: bypassing the denial throttle makes the repeated-denial test fail (6 rows instead of 1). Not run: frontend unit tests, lint and build, Playwright E2E, CI jobs.
