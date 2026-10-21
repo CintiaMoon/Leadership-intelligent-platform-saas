@@ -44,13 +44,22 @@ public class AuditLog {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void record(String eventType, Actor actorType, UUID actorId, String targetType, UUID targetId,
 			String outcome, String reasonCode) {
+		recordForCompany(eventType, actorType, actorId, targetType, targetId, null, outcome, reasonCode);
+	}
+
+	/** Like {@link #record} for an event that belongs to one company (null for global events). */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void recordForCompany(String eventType, Actor actorType, UUID actorId, String targetType, UUID targetId,
+			UUID companyId, String outcome, String reasonCode) {
 		jdbc.sql("""
-				INSERT INTO audit_event (occurred_at, event_type, actor_type, actor_id, target_type, target_id,
-				                         outcome, correlation_id, reason_code)
-				VALUES (:at, :type, :actorType, :actorId, :targetType, :targetId, :outcome, :correlation, :reason)
+				INSERT INTO audit_event (occurred_at, event_type, company_id, actor_type, actor_id, target_type,
+				                         target_id, outcome, correlation_id, reason_code)
+				VALUES (:at, :type, :company, :actorType, :actorId, :targetType, :targetId, :outcome, :correlation,
+				        :reason)
 				""")
 			.param("at", OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC))
 			.param("type", eventType)
+			.param("company", companyId, Types.OTHER)
 			.param("actorType", actorType.name())
 			.param("actorId", actorId, Types.OTHER)
 			.param("targetType", targetType)

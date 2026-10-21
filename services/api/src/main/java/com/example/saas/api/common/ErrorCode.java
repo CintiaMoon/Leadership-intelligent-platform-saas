@@ -13,6 +13,7 @@ public enum ErrorCode {
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "The email or password is incorrect."),
 	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Authentication is required."),
 	FORBIDDEN(HttpStatus.FORBIDDEN, "The request is not permitted."),
+	NOT_FOUND(HttpStatus.NOT_FOUND, "The resource was not found."),
 	CSRF_REJECTED(HttpStatus.FORBIDDEN, "The request was rejected."),
 	REAUTHENTICATION_REQUIRED(HttpStatus.FORBIDDEN, "Confirm your password to continue."),
 	TOKEN_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "The link is invalid or has expired."),
