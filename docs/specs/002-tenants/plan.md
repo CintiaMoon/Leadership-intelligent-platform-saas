@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-TEN (slice 002)
 
-- Status: **Proposed, partly answered 2026-10-21.** The user answered Q-04, Q-08, Q-14 and Q-15 (see section 10). The D-18 sign-off is recorded (section 10). Q-16 and approval of the rest of the plan and the phase order are still outstanding. Nothing in this plan is implemented. Items Q-01 to Q-16 are proposals; each becomes a decision (D-105 onward) in the register when approved.
+- Status: **Approved 2026-10-21** (user: "approve all"): Q-01 to Q-16 and the phase order. Recorded as D-105 to D-120 in the register. Phase 0 is done except the traceability file; nothing else is implemented.
 - Spec: `docs/specs/002-tenants/spec.md` (SPEC-TEN, Approved 2026-10-17)
 - Related: `docs/architecture/invariants.md`, `data-model.md`, `threat-model.md`, ADR-001, ADR-004, ADR-005; decisions D-03, D-17, D-18, D-19, D-20, D-23, D-43, D-47, D-49, D-54, D-56, D-89
 - Date: 2026-10-21. Written from the spec, the register, and the Slice 001 code; no code was changed.
@@ -104,4 +104,4 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 
 | D-18 | Signed off by the user on 2026-10-21 (instruction "sign it off"), on the matrix in `spec.md` unchanged. Recorded in the register |
 
-Still outstanding: Q-16 (no UI in this slice), the other proposals (Q-01 to Q-03, Q-05 to Q-07, Q-09 to Q-13), and the phase order.
+Q-01 to Q-03, Q-05 to Q-07, Q-09 to Q-13, Q-16 and the phase order were approved on 2026-10-21 ("approve all"). Q-NN maps to D-(104+NN).
