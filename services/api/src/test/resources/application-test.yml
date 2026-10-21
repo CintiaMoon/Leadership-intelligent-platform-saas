@@ -1,4 +1,8 @@
 # Test-only values; none of these is a real secret.
+spring:
+  flyway:
+    # Adds the test-only tables used to exercise tenant isolation (V9001); production never sees this location.
+    locations: classpath:db/migration,classpath:db/testmigration
 app:
   public-base-url: https://app.test.example
   outbox:

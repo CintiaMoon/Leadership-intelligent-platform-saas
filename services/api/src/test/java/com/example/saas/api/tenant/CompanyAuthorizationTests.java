@@ -62,7 +62,7 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		Member owner = member();
 		UUID companyId = company(owner);
 
-		MvcResult result = call(owner, companyId, "settings");
+		MvcResult result = call(owner, companyId, "manage-settings");
 
 		assertThat(result.getResponse().getStatus()).isEqualTo(200);
 		assertThat(AuthApi.parse(result).get("role").asText()).isEqualTo("OWNER");
@@ -73,8 +73,8 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		UUID companyId = company(member());
 		Member stranger = member();
 
-		MvcResult foreign = call(stranger, companyId, "view");
-		MvcResult unknown = call(stranger, UUID.randomUUID(), "view");
+		MvcResult foreign = call(stranger, companyId, "view-company-details");
+		MvcResult unknown = call(stranger, UUID.randomUUID(), "view-company-details");
 
 		assertThat(foreign.getResponse().getStatus()).isEqualTo(404);
 		assertThat(unknown.getResponse().getStatus()).isEqualTo(404);
@@ -99,8 +99,8 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		join(companyId, suspended, "AGENT", "SUSPENDED");
 		join(companyId, removed, "AGENT", "REMOVED");
 
-		assertThat(status(suspended, companyId, "view")).isEqualTo(404);
-		assertThat(status(removed, companyId, "view")).isEqualTo(404);
+		assertThat(status(suspended, companyId, "view-company-details")).isEqualTo(404);
+		assertThat(status(removed, companyId, "view-company-details")).isEqualTo(404);
 	}
 
 	@Test
@@ -109,8 +109,8 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		Member viewer = member();
 		join(companyId, viewer, "VIEWER", "ACTIVE");
 
-		assertThat(status(viewer, companyId, "view")).isEqualTo(200);
-		MvcResult denied = call(viewer, companyId, "edit");
+		assertThat(status(viewer, companyId, "view-company-details")).isEqualTo(200);
+		MvcResult denied = call(viewer, companyId, "edit-core-records");
 
 		assertThat(denied.getResponse().getStatus()).isEqualTo(403);
 		assertThat(AuthApi.parse(denied).get("type").asText()).isEqualTo("urn:saas:problem:forbidden");
@@ -123,7 +123,7 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 	void probesForOtherTenantsAreNotAudited() throws Exception {
 		Member stranger = member();
 
-		status(stranger, UUID.randomUUID(), "view");
+		status(stranger, UUID.randomUUID(), "view-company-details");
 
 		assertThat(count("SELECT count(*) FROM audit_event WHERE actor_id = ? "
 				+ "AND event_type = 'tenant.authorization.denied'", stranger.userId())).isZero();
@@ -134,20 +134,20 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		UUID companyId = company(member());
 		Member agent = member();
 		join(companyId, agent, "AGENT", "ACTIVE");
-		assertThat(status(agent, companyId, "edit")).isEqualTo(200);
-		assertThat(status(agent, companyId, "settings")).isEqualTo(403);
+		assertThat(status(agent, companyId, "edit-core-records")).isEqualTo(200);
+		assertThat(status(agent, companyId, "manage-settings")).isEqualTo(403);
 
 		jdbc.update("UPDATE membership SET role = 'ADMIN' WHERE company_id = ? AND user_id = ?", companyId,
 				agent.userId());
-		assertThat(status(agent, companyId, "settings")).isEqualTo(200);
+		assertThat(status(agent, companyId, "manage-settings")).isEqualTo(200);
 
 		jdbc.update("UPDATE membership SET role = 'VIEWER' WHERE company_id = ? AND user_id = ?", companyId,
 				agent.userId());
-		assertThat(status(agent, companyId, "edit")).isEqualTo(403);
+		assertThat(status(agent, companyId, "edit-core-records")).isEqualTo(403);
 
 		jdbc.update("UPDATE membership SET status = 'SUSPENDED' WHERE company_id = ? AND user_id = ?", companyId,
 				agent.userId());
-		assertThat(status(agent, companyId, "view")).isEqualTo(404);
+		assertThat(status(agent, companyId, "view-company-details")).isEqualTo(404);
 	}
 
 	@Test
@@ -161,8 +161,8 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		jdbc.update("UPDATE membership SET status = 'SUSPENDED' WHERE company_id = ? AND user_id = ?", first,
 				user.userId());
 
-		assertThat(status(user, first, "view")).isEqualTo(404);
-		assertThat(status(user, second, "view")).isEqualTo(200);
+		assertThat(status(user, first, "view-company-details")).isEqualTo(404);
+		assertThat(status(user, second, "view-company-details")).isEqualTo(200);
 	}
 
 	@Test
@@ -174,9 +174,9 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 
 		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", companyId);
 
-		assertThat(status(owner, companyId, "view")).isEqualTo(200);
-		assertThat(status(owner, companyId, "edit")).isEqualTo(403);
-		assertThat(status(agent, companyId, "view")).isEqualTo(403);
+		assertThat(status(owner, companyId, "view-company-details")).isEqualTo(200);
+		assertThat(status(owner, companyId, "edit-core-records")).isEqualTo(403);
+		assertThat(status(agent, companyId, "view-company-details")).isEqualTo(403);
 	}
 
 }
