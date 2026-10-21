@@ -472,6 +472,7 @@ components:
         - TOKEN_INVALID
         - UNAUTHENTICATED
         - FORBIDDEN
+        - NOT_FOUND
         - CSRF_REJECTED
         - REAUTHENTICATION_REQUIRED
         - RATE_LIMITED
