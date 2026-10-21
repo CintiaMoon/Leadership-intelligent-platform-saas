@@ -220,6 +220,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the caller's companies
+         * @description The companies in which the caller has an ACTIVE membership, with the caller's role in each.
+         *     A company that is PENDING_DELETION is listed only for its Owner (AC-DEL-14).
+         */
+        get: operations["listCompanies"];
+        put?: never;
+        /**
+         * Create a company
+         * @description Any signed-in user with a verified email and an ACTIVE account can create a company and becomes
+         *     its Owner. The company and the Owner membership are created in one transaction (AC-TEN-01, 02).
+         *     The role is decided by the server; a `role` or any other unknown field in the body is rejected
+         *     (AC-TEN-05). Limits: 5 attempts per IP per hour and 10 per account per day, counted before the
+         *     name is validated (AC-TEN-13, 15); exceeding either returns 429, and an unavailable counter
+         *     store returns 503 (fail closed, ADR-004).
+         */
+        post: operations["createCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a company
+         * @description Requires the "View company details" permission (SPEC-TEN matrix).
+         */
+        get: operations["getCompany"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -256,6 +306,35 @@ export interface components {
         PasswordResetConfirmRequest: {
             token: string;
             newPassword: string;
+        };
+        /**
+         * @description The caller's role in one company. Decided by the server; never accepted from a request.
+         * @enum {string}
+         */
+        Role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER";
+        /** @enum {string} */
+        CompanyStatus: "ACTIVE" | "PENDING_DELETION";
+        CreateCompanyRequest: {
+            /**
+             * @description 1 to 100 Unicode code points after NFKC normalization and trimming, with no control characters
+             *     (D-105). The wire limit only caps request size. Names are not unique.
+             */
+            name: string;
+        };
+        CompanySummary: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            role: components["schemas"]["Role"];
+        };
+        CompanyDetails: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            status: components["schemas"]["CompanyStatus"];
+            role: components["schemas"]["Role"];
+            /** Format: date-time */
+            createdAt: string;
         };
         SessionInfo: {
             /** Format: uuid */
@@ -337,6 +416,27 @@ export interface components {
         InvalidCredentials: {
             headers: {
                 "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The caller is an active member of the company but lacks the permission (D-108). */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
+         * @description The caller has no ACTIVE membership in the company, or the company does not exist. One response
+         *     for both, so it never reveals that a company exists (D-108).
+         */
+        NotFound: {
+            headers: {
                 [name: string]: unknown;
             };
             content: {
@@ -662,6 +762,84 @@ export interface operations {
             403: components["responses"]["CsrfRejected"];
             422: components["responses"]["TokenInvalid"];
             503: components["responses"]["Unavailable"];
+        };
+    };
+    listCompanies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's companies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createCompany: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description Company created; the caller is its Owner. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySummary"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CsrfRejected"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The company, with the caller's role. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyDetails"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

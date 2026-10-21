@@ -58,6 +58,10 @@ class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
 				.requestMatchers(HttpMethod.GET, "/api/v1/auth/session").authenticated()
 				.requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/v1/auth/step-up").authenticated()
+				// A valid session already means a verified, ACTIVE account (SessionAuthenticationFilter), which is what
+				// company creation needs (AC-TEN-07, 11). Membership and role are checked per company by the service.
+				.requestMatchers(HttpMethod.POST, "/api/v1/companies").authenticated()
+				.requestMatchers(HttpMethod.GET, "/api/v1/companies", "/api/v1/companies/*").authenticated()
 				.anyRequest().denyAll())
 			.exceptionHandling(handling -> handling
 				.authenticationEntryPoint(handlers)
