@@ -1,4 +1,6 @@
 spring:
+  profiles:
+     active: local
   application:
     name: api
   autoconfigure:
@@ -8,7 +10,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/saas}
     username: ${DB_USERNAME:saas}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:change-me-local-only}
   jpa:
     open-in-view: false
     hibernate:
@@ -50,7 +52,7 @@ management:
 
 app:
   # Public address of the web app, used in email links. Required; never taken from the Host header.
-  public-base-url: ${PUBLIC_BASE_URL:}
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   mail:
     from: ${MAIL_FROM:no-reply@liptech.io}
   outbox:
@@ -67,7 +69,7 @@ app:
       hmac-key: ${CSRF_HMAC_KEY:}
       # Origins the BFF may send; empty skips the check. Local development only: set cookie-secure=false
       # and a cookie name without the __Host- prefix when serving over plain HTTP.
-      allowed-origins: ${CSRF_ALLOWED_ORIGINS:}
+      allowed-origins: ${CSRF_ALLOWED_ORIGINS:http://localhost:3000}
       cookie-name: ${CSRF_COOKIE_NAME:__Host-csrf}
       cookie-secure: ${CSRF_COOKIE_SECURE:true}
     device:
@@ -81,7 +83,7 @@ app:
     trusted-proxy-cidrs: ${TRUSTED_PROXY_CIDRS:127.0.0.1/32,::1/128}
   rate-limit:
     # Required, no default: HMAC key for hashing rate-limit identifiers (ADR-004, D-86).
-    hmac-key: ${RATE_LIMIT_HMAC_KEY:}
+    hmac-key: ${RATE_LIMIT_HMAC_KEY:vQ8mZ2xKp7N4aR1sT9wE3yH6uJ0cL5dF8gB2nM4xA7kP1rS6tV9zQ3eW5hY0iO2l}
 
 logging:
   pattern:
