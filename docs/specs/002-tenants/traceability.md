@@ -1,13 +1,13 @@
 # SPEC-TEN Traceability (implementation status)
 
-- Updated: 2026-10-21, after Phase 0 (plan approved). Nothing is implemented; every criterion is Pending.
+- Updated: 2026-10-21, after Phase 1 (schema and domain). Only the database half of AC-TEN-01 and 02 has tests; the rest is Pending.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-105 to D-120.
 
 | AC | Status | Planned in | Tests |
 |---|---|---|---|
-| AC-TEN-01 | Pending | Phase 1 (trigger), Phase 3 | |
-| AC-TEN-02 | Pending | Phase 1 (trigger), Phase 3 | |
+| AC-TEN-01 | Partial | Phase 1 (trigger), Phase 3 | `TenantSchemaTests.aCompanyAndItsOwnerCommitTogether`, `aCompanyWithoutAnOwnerCannotCommit` (database half; service half in Phase 3) |
+| AC-TEN-02 | Partial | Phase 1 (trigger), Phase 3 | `TenantSchemaTests.aFailureAfterTheCompanyInsertLeavesNothing` (database half; service half in Phase 3) |
 | AC-TEN-03 | Pending | Phase 4 | |
 | AC-TEN-04 | Pending | Phase 4 | |
 | AC-TEN-05 | Pending | Phase 3 | |
@@ -23,4 +23,4 @@
 | AC-TEN-15 | Pending | Phase 3 | |
 
 ## Checks not run
-All, until Phase 1 lands.
+Phase 1: `./mvnw verify` ran (277 tests, 0 failures, 2 skipped). Not run: frontend checks, contract lint (no contract change yet), CI jobs.
