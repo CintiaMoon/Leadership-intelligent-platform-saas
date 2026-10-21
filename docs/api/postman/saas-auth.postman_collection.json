@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "SaaS Platform API (SPEC-AUTH)",
-    "description": "Generated from contracts/openapi.yaml v0.1.0. Two folders. 'API direct' calls the API as the BFF would: it needs the X-BFF-Credential and an allowed Origin. Do not store the real credential in the collection; set it in a local environment. Cookie names depend on the profile: the `__Host-` names need HTTPS, so use the local overrides in apps/web/.env.example over plain HTTP.\n\n'BFF' calls the web app routes the browser uses and needs no credential. Order: Get CSRF token, Sign up, Verify email, Log in, Get CSRF token (session-bound), Get session, ... Log out.",
+    "name": "SaaS Platform API (SPEC-AUTH, SPEC-TEN)",
+    "description": "Generated from contracts/openapi.yaml v0.1.0. Two folders. 'API direct' calls the API as the BFF would: it needs the X-BFF-Credential and an allowed Origin. Do not store the real credential in the collection; set it in a local environment. Cookie names depend on the profile: the `__Host-` names need HTTPS, so use the local overrides in apps/web/.env.example over plain HTTP.\n\n'BFF' calls the web app routes the browser uses and needs no credential. Order: Get CSRF token, Sign up, Verify email, Log in, Get CSRF token (session-bound), Get session, ... Log out.\n\nCompanies (SPEC-TEN) exist only in the 'API direct' folder: there is no BFF route yet (D-120). Run them after Log in and the session-bound CSRF token. Create a company stores companyId.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -54,6 +54,10 @@
       "key": "webOrigin",
       "value": "http://localhost:3000",
       "description": "Must equal PUBLIC_BASE_URL of the web app, or state-changing requests get 403."
+    },
+    {
+      "key": "companyId",
+      "value": ""
     }
   ],
   "item": [
@@ -399,6 +403,131 @@
               "raw": "{\n  \"password\": \"{{password}}\"\n}"
             }
           }
+        },
+        {
+          "name": "Create company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-BFF-Credential",
+                "value": "{{bffCredential}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{origin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies"
+              ]
+            },
+            "description": "Verified, signed-in users only. You become the Owner; a role in the body is rejected. 5 per IP per hour and 10 per account per day.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Labs\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201',()=>pm.response.to.have.status(201));",
+                  "const j=pm.response.json();",
+                  "pm.test('Owner',()=>pm.expect(j.role).to.eql('OWNER'));",
+                  "pm.collectionVariables.set('companyId',j.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my companies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-BFF-Credential",
+                "value": "{{bffCredential}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies"
+              ]
+            },
+            "description": "The companies where you have an ACTIVE membership, with your role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get company",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-BFF-Credential",
+                "value": "{{bffCredential}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "description": "404 when you are not an active member (or it does not exist); 403 when you are a member without the permission."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Log out",

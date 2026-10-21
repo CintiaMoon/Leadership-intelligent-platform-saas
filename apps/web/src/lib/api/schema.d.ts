@@ -363,7 +363,7 @@ export interface components {
         ErrorCode: "VALIDATION_FAILED" | "REQUEST_REJECTED" | "INVALID_CREDENTIALS" | "TOKEN_INVALID" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CSRF_REJECTED" | "REAUTHENTICATION_REQUIRED" | "RATE_LIMITED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
         FieldError: {
             field: string;
-            /** @description Stable field error code. One of REQUIRED, INVALID, INVALID_LENGTH, INVALID_EMAIL, TOO_SHORT, TOO_LONG, BREACHED_PASSWORD. */
+            /** @description Stable field error code. One of REQUIRED, INVALID, INVALID_LENGTH, INVALID_EMAIL, INVALID_NAME, TOO_SHORT, TOO_LONG, BREACHED_PASSWORD. */
             code: string;
         };
         /** @description RFC 9457 problem details with a stable `code`. */

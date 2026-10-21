@@ -140,22 +140,43 @@ class CompanyApiTests extends AuthIntegrationTest {
 	@Test
 	void anAccountThatIsNoLongerVerifiedCannotCreateACompany() throws Exception {
 		User user = user();
+		String ip = freshIp();
+		String csrf = api.sessionCsrf(user.cookie(), ip);
 		jdbc.update("UPDATE app_user SET email_verified_at = NULL WHERE id = ?", user.userId());
 
-		MvcResult result = create(user, "Unverified Inc");
+		MvcResult read = api.get(COMPANIES, user.cookie(), freshIp());
+		MvcResult write = api.postWithSession(COMPANIES, json("name", "Unverified Inc"), user.cookie(), csrf, ip);
 
-		assertThat(result.getResponse().getStatus()).isIn(401, 403);
+		assertThat(read.getResponse().getStatus()).isEqualTo(401);
+		assertThat(parse(read).get("code").asString()).isEqualTo("UNAUTHENTICATED");
+		assertThat(write.getResponse().getStatus()).isIn(401, 403);
 		assertThat(membershipCount(user.userId())).isZero();
 	}
 
 	@Test
 	void aDisabledAccountCannotCreateACompany() throws Exception {
 		User user = user();
+		String ip = freshIp();
+		String csrf = api.sessionCsrf(user.cookie(), ip);
 		jdbc.update("UPDATE app_user SET status = 'DISABLED' WHERE id = ?", user.userId());
 
-		MvcResult result = create(user, "Disabled Inc");
+		MvcResult read = api.get(COMPANIES, user.cookie(), freshIp());
+		MvcResult write = api.postWithSession(COMPANIES, json("name", "Disabled Inc"), user.cookie(), csrf, ip);
 
-		assertThat(result.getResponse().getStatus()).isIn(401, 403);
+		assertThat(read.getResponse().getStatus()).isEqualTo(401);
+		assertThat(parse(read).get("code").asString()).isEqualTo("UNAUTHENTICATED");
+		assertThat(write.getResponse().getStatus()).isIn(401, 403);
+		assertThat(membershipCount(user.userId())).isZero();
+	}
+
+	@Test
+	void anOversizedNameIsRejectedWithoutBeingNormalized() throws Exception {
+		User user = user();
+
+		MvcResult result = create(user, "x".repeat(5_000));
+
+		assertThat(result.getResponse().getStatus()).isEqualTo(400);
+		assertThat(parse(result).get("errors").get(0).get("code").asString()).isEqualTo("INVALID_NAME");
 		assertThat(membershipCount(user.userId())).isZero();
 	}
 

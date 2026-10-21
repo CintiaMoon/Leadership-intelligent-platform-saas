@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Compares {@link CompanyPolicy} with the permission table in SPEC-TEN cell by cell (D-114), so changing the spec
+ * Compares {@link CompanyPolicy} with the permission table in SPEC-TEN cell by cell (D-117), so changing the spec
  * without the code, or the code without the spec, fails the build.
  */
 class SpecMatrixParityTest {

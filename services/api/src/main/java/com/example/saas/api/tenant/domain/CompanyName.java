@@ -8,12 +8,15 @@ public final class CompanyName {
 
 	public static final int MAX_CODE_POINTS = 100;
 
+	/** Matches the contract's wire limit; checked before normalization so a huge input costs nothing. */
+	public static final int MAX_RAW_CHARS = 400;
+
 	private CompanyName() {
 	}
 
 	/** The normalized name, or empty if the input breaks the rule. */
 	public static Optional<String> normalize(String raw) {
-		if (raw == null) {
+		if (raw == null || raw.length() > MAX_RAW_CHARS) {
 			return Optional.empty();
 		}
 		String name = Normalizer.normalize(raw, Normalizer.Form.NFKC).strip();

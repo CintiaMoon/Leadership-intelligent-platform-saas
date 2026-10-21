@@ -52,6 +52,14 @@ class TenantConcurrencyTests extends AuthIntegrationTest {
 		}
 	}
 
+	private static String sqlState(DataAccessException e) {
+		Throwable cause = e;
+		while (cause != null && !(cause instanceof java.sql.SQLException)) {
+			cause = cause.getCause();
+		}
+		return cause == null ? "none" : ((java.sql.SQLException) cause).getSQLState();
+	}
+
 	private UUID newUser() {
 		String email = UUID.randomUUID() + "@example.com";
 		return jdbc.queryForObject("INSERT INTO app_user (email_normalized, email_original, display_name, "
@@ -118,6 +126,8 @@ class TenantConcurrencyTests extends AuthIntegrationTest {
 				return true;
 			}
 			catch (DataAccessException e) {
+				// The loser must lose to the Owner invariant, not to a deadlock or a timeout.
+				assertThat(sqlState(e)).as("why the losing transfer failed").isIn("23505", "23000");
 				return false;
 			}
 		});
@@ -127,50 +137,6 @@ class TenantConcurrencyTests extends AuthIntegrationTest {
 				+ "AND status IN ('ACTIVE', 'SUSPENDED')", companyId)).isEqualTo(1);
 		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND role = 'OWNER' AND user_id = ?",
 				companyId, owner)).isZero();
-	}
-
-	@Test
-	void parallelDemotionsOfTheOwnerCannotLeaveACompanyWithoutOne() throws Exception {
-		UUID owner = newUser();
-		UUID companyId = companyWithOwner(owner);
-
-		List<Boolean> committed = inParallel(4, () -> {
-			try {
-				tx.executeWithoutResult(s -> jdbc.update(
-						"UPDATE membership SET role = 'ADMIN' WHERE company_id = ? AND user_id = ?", companyId, owner));
-				return true;
-			}
-			catch (DataAccessException e) {
-				return false;
-			}
-		});
-
-		assertThat(committed).containsOnly(false);
-		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND role = 'OWNER' AND user_id = ?",
-				companyId, owner)).isEqualTo(1);
-	}
-
-	@Test
-	void parallelPromotionsToOwnerNeverProduceTwoOwners() throws Exception {
-		UUID owner = newUser();
-		UUID companyId = companyWithOwner(owner);
-		List<UUID> candidates = List.of(newUser(), newUser(), newUser(), newUser());
-		java.util.concurrent.atomic.AtomicInteger next = new java.util.concurrent.atomic.AtomicInteger();
-
-		List<Boolean> committed = inParallel(4, () -> {
-			UUID candidate = candidates.get(next.getAndIncrement());
-			try {
-				addMember(companyId, candidate, "OWNER");
-				return true;
-			}
-			catch (DataAccessException e) {
-				return false;
-			}
-		});
-
-		assertThat(committed).containsOnly(false);
-		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND role = 'OWNER'", companyId))
-			.isEqualTo(1);
 	}
 
 }

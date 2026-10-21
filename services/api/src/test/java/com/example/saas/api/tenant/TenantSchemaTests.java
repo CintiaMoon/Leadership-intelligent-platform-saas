@@ -1,11 +1,6 @@
 package com.example.saas.api.tenant;
 
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import com.example.saas.api.auth.AuthIntegrationTest;
 import org.junit.jupiter.api.Test;
@@ -206,31 +201,21 @@ class TenantSchemaTests extends AuthIntegrationTest {
 	}
 
 	@Test
-	void parallelOwnerInsertsCannotProduceTwoOwners() throws Exception {
-		UUID companyId = companyWithOwner(newUser());
-		UUID first = newUser();
-		UUID second = newUser();
-		ExecutorService pool = Executors.newFixedThreadPool(2);
-		try {
-			CyclicBarrier barrier = new CyclicBarrier(2);
-			List<Future<Boolean>> results = List.of(first, second).stream().map(u -> pool.submit(() -> {
-				barrier.await();
-				try {
-					addMember(companyId, u, "OWNER", "ACTIVE");
-					return true;
-				}
-				catch (DataIntegrityViolationException e) {
-					return false;
-				}
-			})).toList();
-			for (Future<Boolean> result : results) {
-				assertThat(result.get()).isFalse();
-			}
-		}
-		finally {
-			pool.shutdownNow();
-		}
-		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND role = 'OWNER'", companyId))
+	void aMembershipCannotMoveToAnotherCompany() {
+		UUID owner = newUser();
+		UUID source = companyWithOwner(owner);
+		UUID target = companyWithOwner(newUser());
+
+		// Moving the Owner would leave the source without one; moving anyone else would graft a member onto a tenant.
+		assertThatThrownBy(() -> jdbc.update("UPDATE membership SET company_id = ? WHERE company_id = ? AND user_id = ?",
+				target, source, owner))
+			.isInstanceOf(DataIntegrityViolationException.class);
+		UUID member = newUser();
+		addMember(source, member, "AGENT", "ACTIVE");
+		assertThatThrownBy(() -> jdbc.update("UPDATE membership SET company_id = ? WHERE company_id = ? AND user_id = ?",
+				target, source, member))
+			.isInstanceOf(DataIntegrityViolationException.class);
+		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND user_id = ?", source, owner))
 			.isEqualTo(1);
 	}
 

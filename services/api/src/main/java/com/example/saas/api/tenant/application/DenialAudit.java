@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Records a denial in its own transaction, so it survives the failed request (D-111). */
+/** Records a denial in its own transaction, so it survives the failed request (D-115). */
 @Component
 class DenialAudit {
 
