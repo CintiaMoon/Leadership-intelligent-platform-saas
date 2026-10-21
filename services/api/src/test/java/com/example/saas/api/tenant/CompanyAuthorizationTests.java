@@ -179,4 +179,43 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		assertThat(status(agent, companyId, "view-company-details")).isEqualTo(403);
 	}
 
+	@Test
+	void repeatedDenialsWriteOneAuditRowPerPermissionPerWindowButAreAllRefused() throws Exception {
+		UUID companyId = company(member());
+		Member viewer = member();
+		join(companyId, viewer, "VIEWER", "ACTIVE");
+
+		for (int attempt = 0; attempt < 6; attempt++) {
+			assertThat(status(viewer, companyId, "edit-core-records")).as("attempt %d", attempt).isEqualTo(403);
+		}
+		assertThat(status(viewer, companyId, "manage-settings")).isEqualTo(403);
+		assertThat(status(viewer, companyId, "manage-settings")).isEqualTo(403);
+
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'tenant.authorization.denied' "
+				+ "AND company_id = ? AND actor_id = ? AND reason_code = 'edit_core_records'", companyId,
+				viewer.userId())).isEqualTo(1);
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'tenant.authorization.denied' "
+				+ "AND company_id = ? AND actor_id = ? AND reason_code = 'manage_settings'", companyId,
+				viewer.userId())).isEqualTo(1);
+	}
+
+	@Test
+	void theSameDenialByAnotherUserOrInAnotherCompanyIsAuditedSeparately() throws Exception {
+		UUID first = company(member());
+		UUID second = company(member());
+		Member viewer = member();
+		Member otherViewer = member();
+		join(first, viewer, "VIEWER", "ACTIVE");
+		join(second, viewer, "VIEWER", "ACTIVE");
+		join(first, otherViewer, "VIEWER", "ACTIVE");
+
+		status(viewer, first, "edit-core-records");
+		status(viewer, second, "edit-core-records");
+		status(otherViewer, first, "edit-core-records");
+
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'tenant.authorization.denied' "
+				+ "AND reason_code = 'edit_core_records' AND actor_id IN (?, ?)", viewer.userId(),
+				otherViewer.userId())).isEqualTo(3);
+	}
+
 }

@@ -100,7 +100,8 @@ class CompanyApiTests extends AuthIntegrationTest {
 	void invalidNamesAreRejectedWithAFieldErrorAndNothingIsCreated() throws Exception {
 		User user = user();
 
-		for (String name : new String[] { "", "   ", "Bad\nName", "Bad\u0000Name", "x".repeat(101) }) {
+		for (String name : new String[] { "", "   ", "Bad\nName", "Bad\u0000Name", "x".repeat(101), "Evil\u202Ename",
+				"Zero\u200Bwidth", "\u200B\u200B", "Sep\u2028arator" }) {
 			MvcResult result = create(user, name);
 			assertThat(result.getResponse().getStatus()).as("name %s", name.length()).isEqualTo(400);
 			assertThat(parse(result).get("code").asString()).isEqualTo("VALIDATION_FAILED");
