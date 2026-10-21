@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-TEN (slice 002)
 
-- Status: **Proposed, awaiting approval.** Nothing in this plan is implemented. Items Q-01 to Q-16 are proposals; each becomes a decision (D-105 onward) in the register when approved.
+- Status: **Proposed, partly answered 2026-10-21.** The user answered Q-04, Q-08, Q-14 and Q-15 (see section 10). The D-18 sign-off, Q-16 and approval of the rest of the plan and the phase order are still outstanding. Nothing in this plan is implemented. Items Q-01 to Q-16 are proposals; each becomes a decision (D-105 onward) in the register when approved.
 - Spec: `docs/specs/002-tenants/spec.md` (SPEC-TEN, Approved 2026-10-17)
 - Related: `docs/architecture/invariants.md`, `data-model.md`, `threat-model.md`, ADR-001, ADR-004, ADR-005; decisions D-03, D-17, D-18, D-19, D-20, D-23, D-43, D-47, D-49, D-54, D-56, D-89
 - Date: 2026-10-21. Written from the spec, the register, and the Slice 001 code; no code was changed.
@@ -36,8 +36,8 @@
 | Q-11 | Audit | `tenant.company.created` and `tenant.membership.created` (success) in the creation transaction. A permission denial for an active member is audited as `tenant.authorization.denied` with the permission code in `reason_code`. No-membership 404s are not audited, to avoid flooding the trail |
 | Q-12 | The matrix has no real endpoints yet | A test-only controller (test source tree, as in Slice 001) exposes one route per matrix permission under `/api/v1/companies/{companyId}/test/...`. Real endpoints replace them as slices 003 to 007 land. A policy-level test runs the whole table now |
 | Q-13 | The matrix can drift from the spec | A test parses the permission table in `spec.md` and compares it cell by cell with `CompanyPolicy`, so changing one without the other fails the build |
-| Q-14 | AC-TEN-08 (related record from another company) needs related records | Verified here as a mechanism only (the Q-06 rule plus a test-only table and repository in a test Flyway location). Closed in slice 003, where membership and invitation records reference each other. Alternative: defer the whole criterion and skip the extra test migration |
-| Q-15 | Limit on companies per user | The spec sets only the creation rate (10 per day). No total cap is invented. **Product owner: do you want one?** |
+| Q-14 | AC-TEN-08 (related record from another company) needs related records | Verified here as a mechanism (the Q-06 rule plus a test-only table and repository in a test Flyway location). **Decided: tested now.** The criterion is closed in slice 003, where membership and invitation records reference each other |
+| Q-15 | Limit on companies per user | The spec sets only the creation rate (10 per day). No total cap is invented. **Decided: no cap.** |
 | Q-16 | Frontend | SPEC-TEN has no UI and `docs/design` has no company screens. Proposal: **no UI and no BFF route in 002**; a UI needs a design first. The Postman collection is extended |
 
 ## 4. Phases (one PR each, in order; each leaves `main` green)
@@ -93,3 +93,13 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 1. Security-owner sign-off of D-18 (blocks Phase 1).
 2. Q-01 to Q-16, in whole or with changes. The ones that need a human answer rather than a yes: **Q-04** (404 versus 403), **Q-08** (database trigger), **Q-14** (mechanism now or defer), **Q-15** (cap on companies), **Q-16** (no UI in this slice).
 3. The phase order.
+
+## 10. Answers recorded (2026-10-21, from the user)
+| ID | Answer |
+|---|---|
+| Q-04 | Yes: 404 `NOT_FOUND` when the caller has no active membership (or the company does not exist); 403 `FORBIDDEN` only for an active member who lacks the permission |
+| Q-08 | Yes: the deferred constraint trigger that requires an Owner membership at commit |
+| Q-14 | Test AC-TEN-08 as a mechanism now (test-only table in a test Flyway location); close it in slice 003 |
+| Q-15 | No cap on the number of companies per user; only the creation rate limits apply |
+
+Still outstanding: the security-owner sign-off of D-18, Q-16 (no UI in this slice), the other proposals (Q-01 to Q-03, Q-05 to Q-07, Q-09 to Q-13), and the phase order.
