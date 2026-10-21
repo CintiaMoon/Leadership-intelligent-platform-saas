@@ -7,6 +7,8 @@ import com.example.saas.api.auth.application.InvalidCredentialsException;
 import com.example.saas.api.auth.application.TokenInvalidException;
 import com.example.saas.api.auth.domain.PasswordHashingBusyException;
 import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
+import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.application.PermissionDeniedException;
 import com.example.saas.api.ratelimit.RateLimitedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -63,6 +65,16 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
 			.header(HttpHeaders.RETRY_AFTER, String.valueOf(STORE_RETRY_AFTER_SECONDS))
 			.body(problem(ErrorCode.SERVICE_UNAVAILABLE, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(CompanyNotFoundException.class)
+	ResponseEntity<Object> handleCompanyNotFound(CompanyNotFoundException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem(ErrorCode.NOT_FOUND, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(PermissionDeniedException.class)
+	ResponseEntity<Object> handlePermissionDenied(PermissionDeniedException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem(ErrorCode.FORBIDDEN, request.getRequestURI()));
 	}
 
 	@ExceptionHandler(RateLimitedException.class)
