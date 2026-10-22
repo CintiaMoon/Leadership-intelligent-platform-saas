@@ -4,6 +4,9 @@ spring:
     # Adds the test-only tables used to exercise tenant isolation (V9001); production never sees this location.
     locations: classpath:db/migration,classpath:db/testmigration
 app:
+  tenant:
+    # Short, so the lock-timeout tests are quick; production default is 5s (D-125).
+    lock-timeout: 500ms
   public-base-url: https://app.test.example
   outbox:
     worker-enabled: false
