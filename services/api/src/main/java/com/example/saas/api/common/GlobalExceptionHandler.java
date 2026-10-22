@@ -7,7 +7,9 @@ import com.example.saas.api.auth.application.InvalidCredentialsException;
 import com.example.saas.api.auth.application.TokenInvalidException;
 import com.example.saas.api.auth.domain.PasswordHashingBusyException;
 import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
+import com.example.saas.api.security.ReauthenticationRequiredException;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.application.MembershipConflictException;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
 import com.example.saas.api.ratelimit.RateLimitedException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -80,6 +82,18 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(CompanyNotFoundException.class)
 	ResponseEntity<Object> handleCompanyNotFound(CompanyNotFoundException ex, HttpServletRequest request) {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem(ErrorCode.NOT_FOUND, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(MembershipConflictException.class)
+	ResponseEntity<Object> handleMembershipConflict(MembershipConflictException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem(ErrorCode.CONFLICT, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(ReauthenticationRequiredException.class)
+	ResponseEntity<Object> handleReauthenticationRequired(ReauthenticationRequiredException ex,
+			HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+			.body(problem(ErrorCode.REAUTHENTICATION_REQUIRED, request.getRequestURI()));
 	}
 
 	@ExceptionHandler(PermissionDeniedException.class)

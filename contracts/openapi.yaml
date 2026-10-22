@@ -614,6 +614,7 @@ components:
         - UNAUTHENTICATED
         - FORBIDDEN
         - NOT_FOUND
+        - CONFLICT
         - CSRF_REJECTED
         - REAUTHENTICATION_REQUIRED
         - RATE_LIMITED

@@ -22,6 +22,9 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 	/** The caller's membership in one company; the per-request authorization lookup. */
 	Optional<Membership> findByCompanyIdAndUserIdAndStatus(UUID companyId, UUID userId, MembershipStatus status);
 
+	/** Whether the user is an ACTIVE member; counts rows without loading an entity into the persistence context. */
+	boolean existsByCompanyIdAndUserIdAndStatus(UUID companyId, UUID userId, MembershipStatus status);
+
 	/** {@code SELECT ... FOR UPDATE} on one membership of the company, after the company row (D-125). Use {@code CompanyLocks}. */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select m from Membership m where m.companyId = :companyId and m.id = :id")

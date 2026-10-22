@@ -1,6 +1,5 @@
 package com.example.saas.api.security;
 
-import java.time.Clock;
 import java.util.function.Supplier;
 
 import org.springframework.security.authorization.AuthorizationDecision;
@@ -29,13 +28,10 @@ public class RecentAuthenticationAuthorizationManager implements AuthorizationMa
 
 	}
 
-	private final SessionProperties properties;
+	private final RecentAuthentication recentAuthentication;
 
-	private final Clock clock;
-
-	RecentAuthenticationAuthorizationManager(SessionProperties properties, Clock clock) {
-		this.properties = properties;
-		this.clock = clock;
+	RecentAuthenticationAuthorizationManager(RecentAuthentication recentAuthentication) {
+		this.recentAuthentication = recentAuthentication;
 	}
 
 	@Override
@@ -45,9 +41,7 @@ public class RecentAuthenticationAuthorizationManager implements AuthorizationMa
 		if (!(current instanceof SessionAuthentication session)) {
 			return new AuthorizationDecision(false);
 		}
-		boolean recent = !clock.instant()
-			.isAfter(session.user().lastAuthenticatedAt().plus(properties.recentAuthenticationWindow()));
-		return recent ? new AuthorizationDecision(true) : new Stale();
+		return recentAuthentication.isRecent(session.user()) ? new AuthorizationDecision(true) : new Stale();
 	}
 
 }

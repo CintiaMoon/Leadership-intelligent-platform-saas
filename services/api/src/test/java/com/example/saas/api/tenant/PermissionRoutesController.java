@@ -4,10 +4,13 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.example.saas.api.security.AuthenticatedUser;
+import com.example.saas.api.security.RecentAuthentication;
 import com.example.saas.api.tenant.application.AuthorizedCompany;
 import com.example.saas.api.tenant.application.CompanyAuthorizationService;
 import com.example.saas.api.tenant.application.CompanyLocks;
+import com.example.saas.api.tenant.application.MembershipChangeAuthorizer;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.domain.MembershipOperation;
 import com.example.saas.api.tenant.domain.Permission;
 import com.example.saas.api.tenant.domain.Role;
 import com.example.saas.api.tenant.testrecords.TestNote;
@@ -44,13 +47,20 @@ class PermissionRoutesController {
 
 	private final TransactionTemplate tx;
 
+	private final MembershipChangeAuthorizer changes;
+
+	private final RecentAuthentication recentAuthentication;
+
 	PermissionRoutesController(TestRecordRepository records, TestNoteRepository notes,
-			CompanyAuthorizationService authorization, CompanyLocks locks, TransactionTemplate tx) {
+			CompanyAuthorizationService authorization, CompanyLocks locks, TransactionTemplate tx,
+			MembershipChangeAuthorizer changes, RecentAuthentication recentAuthentication) {
 		this.records = records;
 		this.notes = notes;
 		this.authorization = authorization;
 		this.locks = locks;
 		this.tx = tx;
+		this.changes = changes;
+		this.recentAuthentication = recentAuthentication;
 	}
 
 	@GetMapping("/api/v1/companies/{companyId}/test/view-company-details")
@@ -193,6 +203,26 @@ class PermissionRoutesController {
 	Map<String, String> lockCompany(@Authorized(Permission.VIEW_COMPANY_DETAILS) AuthorizedCompany company) {
 		tx.executeWithoutResult(status -> locks.lockCompany(company.companyId()));
 		return Map.of("locked", "true");
+	}
+
+	/**
+	 * Runs the first step of a membership change the way the Phase 3 service will: authorize under the locks in one
+	 * transaction, then require recent authentication when the decision says so. Nothing is written.
+	 */
+	@GetMapping("/api/v1/companies/{companyId}/test/authorize-change/{operation}")
+	Map<String, String> authorizeChange(@PathVariable UUID companyId, @PathVariable MembershipOperation operation,
+			@RequestParam(required = false) UUID membershipId, @RequestParam(required = false) Role newRole,
+			@AuthenticationPrincipal AuthenticatedUser principal) {
+		MembershipChangeAuthorizer.Authorized authorized = tx.execute(status -> {
+			MembershipChangeAuthorizer.Authorized result = changes.authorize(principal.userId(), companyId,
+					membershipId, operation, newRole);
+			if (result.decision().recentAuthenticationRequired()) {
+				recentAuthentication.require(principal);
+			}
+			return result;
+		});
+		return Map.of("actorRole", authorized.actor().getRole().name(), "targetRole",
+				authorized.target().getRole().name());
 	}
 
 	record NoteRequest(UUID recordId, String body) {
