@@ -3,7 +3,7 @@ info:
   title: SaaS Platform API
   version: 0.1.0
   description: |
-    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001) and SPEC-TEN (slice 002) operations are defined so far;
+    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001), SPEC-TEN (slice 002) and SPEC-MEM (slice 003) operations are defined so far;
     each further endpoint is added with its approved feature spec (docs/api/contract-guidelines.md).
 
     Conventions
@@ -27,6 +27,8 @@ tags:
     description: Signup, email verification, login, logout, session, step-up, and password reset (SPEC-AUTH).
   - name: Companies
     description: Company creation and reading (SPEC-TEN).
+  - name: Members
+    description: Member list, role changes, suspension, removal and leaving (SPEC-MEM).
 paths:
   /api/v1/auth/csrf:
     get:
@@ -401,6 +403,253 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/companies/{companyId}/members:
+    get:
+      tags: [Members]
+      operationId: listMembers
+      summary: List the company's members
+      description: |
+        Requires the "View member list" permission (Owner and Admin). Lists ACTIVE and SUSPENDED members (removed
+        members stay in the audit trail only), at most 500. A member's email is shown to Owners and Admins (D-132).
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/companies/{companyId}/members/{membershipId}:
+    patch:
+      tags: [Members]
+      operationId: changeMemberRole
+      summary: Change a member's role
+      description: |
+        The new role is ADMIN, AGENT or VIEWER; Owner cannot be assigned here (ownership moves by transfer). The
+        target must be ACTIVE and the role must differ. An Owner may change any non-Owner member; an Admin only an
+        Agent or a Viewer, to Agent or Viewer. Promoting to Admin or demoting an Admin is Owner-only and needs a login
+        or step-up within the last 10 minutes (403 `REAUTHENTICATION_REQUIRED`). Nobody changes their own role. The
+        Owner membership is never changed here (409). Changes are serialized per company (D-125).
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membershipId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeMemberRoleRequest'
+      responses:
+        '200':
+          description: The member after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberSummary'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      tags: [Members]
+      operationId: removeMember
+      summary: Remove a member
+      description: |
+        Ends the membership (ACTIVE or SUSPENDED to REMOVED); rejoining needs a new invitation. Only an Owner removes
+        an Admin; an Admin removes Agents and Viewers. The Owner cannot be removed (409). Access ends on the member's
+        next request.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membershipId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/companies/{companyId}/members/{membershipId}/suspend:
+    post:
+      tags: [Members]
+      operationId: suspendMember
+      summary: Suspend a member
+      description: |
+        ACTIVE to SUSPENDED. The role is kept. The member is denied all access to the company from the next request. The
+        actor and time are recorded (AC-MEM-13).
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membershipId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/companies/{companyId}/members/{membershipId}/reactivate:
+    post:
+      tags: [Members]
+      operationId: reactivateMember
+      summary: Reactivate a suspended member
+      description: |
+        SUSPENDED to ACTIVE, with the preserved role. Rejected with 409 if the company's plan has no room for another
+        active member (AC-MEM-17; enforced once plans exist, slice 006).
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membershipId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/companies/{companyId}/leave:
+    post:
+      tags: [Members]
+      operationId: leaveCompany
+      summary: Leave the company
+      description: |
+        The caller's own ACTIVE membership becomes REMOVED. Admins, Agents and Viewers may leave; the Owner may not
+        (403: transfer ownership first). The user account is not deleted and other companies are unaffected. The
+        session identifier is rotated (AC-AUTH-23): the response sets a new session cookie and the old one stops
+        working.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Left the company.
+          headers:
+            Set-Cookie:
+              description: The rotated `__Host-session` cookie.
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   securitySchemes:
     bffCredential:
@@ -573,6 +822,40 @@ components:
         createdAt:
           type: string
           format: date-time
+    MembershipStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED, REMOVED]
+    ChangeMemberRoleRequest:
+      type: object
+      required: [role]
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum: [ADMIN, AGENT, VIEWER]
+          description: The new role. Owner cannot be assigned through role editing.
+    MemberSummary:
+      type: object
+      required: [id, displayName, email, role, status, joinedAt, self]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The membership ID, used in the member paths. Not the user ID.
+        displayName:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        joinedAt:
+          type: string
+          format: date-time
+        self:
+          type: boolean
+          description: True for the caller's own membership.
     SessionInfo:
       type: object
       required: [userId, email, displayName, emailVerified, lastAuthenticatedAt, expiresAt]
@@ -700,6 +983,14 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: |
+        The change is not possible in the current state (for example suspending a suspended member), or it would touch
+        the Owner. Nothing was changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     CsrfRejected:
       description: Missing or invalid CSRF token, or a disallowed `Origin`.
       content:
@@ -723,8 +1014,8 @@ components:
             $ref: '#/components/schemas/Problem'
     Unavailable:
       description: |
-        The rate-limit store is unavailable (fail closed, ADR-004) or no password-hash capacity is
-        available within the wait limit (D-85).
+        The rate-limit store is unavailable (fail closed, ADR-004), no password-hash capacity is
+        available within the wait limit (D-85), or a company lock was not granted within 5 seconds (D-125). Retry.
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'

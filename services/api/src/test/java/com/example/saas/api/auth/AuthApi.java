@@ -129,6 +129,25 @@ public final class AuthApi {
 		return mvc.perform(builder).andReturn();
 	}
 
+	/** Any method on a session, with the given CSRF token (or none). */
+	public MvcResult send(org.springframework.http.HttpMethod method, String path, String body, Cookie session,
+			String csrfToken, String ip) throws Exception {
+		MockHttpServletRequestBuilder builder = org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+			.request(method, path)
+			.header("X-BFF-Credential", BFF_CREDENTIAL)
+			.header("X-Forwarded-For", ip);
+		if (body != null) {
+			builder.contentType(MediaType.APPLICATION_JSON).content(body);
+		}
+		if (session != null) {
+			builder.cookie(session);
+		}
+		if (csrfToken != null) {
+			builder.header("X-CSRF-TOKEN", csrfToken);
+		}
+		return mvc.perform(builder).andReturn();
+	}
+
 	public MvcResult requestReset(String email, String ip) throws Exception {
 		return postJson("/api/v1/auth/password-reset/request", json("email", email), ip);
 	}
