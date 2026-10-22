@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.tenant.application.AuthorizedCompany;
 import com.example.saas.api.tenant.application.CompanyAuthorizationService;
+import com.example.saas.api.tenant.application.CompanyLocks;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.domain.Permission;
 import com.example.saas.api.tenant.domain.Role;
@@ -16,6 +17,7 @@ import com.example.saas.api.tenant.testrecords.TestRecordRepository;
 import com.example.saas.api.tenant.web.Authorized;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,11 +40,17 @@ class PermissionRoutesController {
 
 	private final CompanyAuthorizationService authorization;
 
+	private final CompanyLocks locks;
+
+	private final TransactionTemplate tx;
+
 	PermissionRoutesController(TestRecordRepository records, TestNoteRepository notes,
-			CompanyAuthorizationService authorization) {
+			CompanyAuthorizationService authorization, CompanyLocks locks, TransactionTemplate tx) {
 		this.records = records;
 		this.notes = notes;
 		this.authorization = authorization;
+		this.locks = locks;
+		this.tx = tx;
 	}
 
 	@GetMapping("/api/v1/companies/{companyId}/test/view-company-details")
@@ -178,6 +186,13 @@ class PermissionRoutesController {
 			@RequestParam Role targetRole, @AuthenticationPrincipal AuthenticatedUser principal) {
 		AuthorizedCompany company = authorization.require(principal.userId(), companyId, permission, targetRole);
 		return Map.of("role", company.role().name());
+	}
+
+	/** Takes the company lock in its own transaction, so a held lock shows up as the 503 of D-125. */
+	@GetMapping("/api/v1/companies/{companyId}/test/lock-company")
+	Map<String, String> lockCompany(@Authorized(Permission.VIEW_COMPANY_DETAILS) AuthorizedCompany company) {
+		tx.executeWithoutResult(status -> locks.lockCompany(company.companyId()));
+		return Map.of("locked", "true");
 	}
 
 	record NoteRequest(UUID recordId, String body) {

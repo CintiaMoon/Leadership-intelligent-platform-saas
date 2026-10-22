@@ -33,6 +33,10 @@ public class Company {
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
+	/** Set when an operator disables the Owner's account (D-54); null when the company is not flagged. */
+	@Column(name = "ownership_resolution_at")
+	private Instant ownershipResolutionAt;
+
 	@Version
 	private long version;
 
@@ -64,6 +68,10 @@ public class Company {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public Instant getOwnershipResolutionAt() {
+		return ownershipResolutionAt;
 	}
 
 }

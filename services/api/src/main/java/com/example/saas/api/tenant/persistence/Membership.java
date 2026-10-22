@@ -41,6 +41,13 @@ public class Membership {
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
+	/** When and by whom the status last changed (AC-MEM-13); null for a membership that never changed. */
+	@Column(name = "status_changed_at")
+	private Instant statusChangedAt;
+
+	@Column(name = "status_changed_by")
+	private UUID statusChangedBy;
+
 	@Version
 	private long version;
 
@@ -78,6 +85,14 @@ public class Membership {
 
 	public MembershipStatus getStatus() {
 		return status;
+	}
+
+	public Instant getStatusChangedAt() {
+		return statusChangedAt;
+	}
+
+	public UUID getStatusChangedBy() {
+		return statusChangedBy;
 	}
 
 }

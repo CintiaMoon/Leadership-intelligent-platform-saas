@@ -51,11 +51,21 @@ public class AuditLog {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void recordForCompany(String eventType, Actor actorType, UUID actorId, String targetType, UUID targetId,
 			UUID companyId, String outcome, String reasonCode) {
+		recordChange(eventType, actorType, actorId, targetType, targetId, companyId, outcome, reasonCode, null, null);
+	}
+
+	/**
+	 * Like {@link #recordForCompany} for a change of role or status. The values are enum names only; the database
+	 * accepts nothing else (D-130).
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void recordChange(String eventType, Actor actorType, UUID actorId, String targetType, UUID targetId,
+			UUID companyId, String outcome, String reasonCode, String before, String after) {
 		jdbc.sql("""
 				INSERT INTO audit_event (occurred_at, event_type, company_id, actor_type, actor_id, target_type,
-				                         target_id, outcome, correlation_id, reason_code)
+				                         target_id, outcome, correlation_id, reason_code, before_value, after_value)
 				VALUES (:at, :type, :company, :actorType, :actorId, :targetType, :targetId, :outcome, :correlation,
-				        :reason)
+				        :reason, :before, :after)
 				""")
 			.param("at", OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC))
 			.param("type", eventType)
@@ -67,6 +77,8 @@ public class AuditLog {
 			.param("outcome", outcome)
 			.param("correlation", MDC.get(CorrelationIdFilter.MDC_KEY), Types.VARCHAR)
 			.param("reason", reasonCode, Types.VARCHAR)
+			.param("before", before, Types.VARCHAR)
+			.param("after", after, Types.VARCHAR)
 			.update();
 	}
 

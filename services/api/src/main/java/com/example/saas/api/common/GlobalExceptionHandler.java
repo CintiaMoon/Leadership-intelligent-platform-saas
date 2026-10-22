@@ -13,6 +13,7 @@ import com.example.saas.api.ratelimit.RateLimitedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -62,6 +63,15 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	ResponseEntity<Object> handleStoreUnavailable(RateLimitStoreUnavailableException ex, HttpServletRequest request) {
 		// Fail closed (ADR-004). The cause may mention connection details, so only the type is logged.
 		log.warn("Rate-limit store unavailable: {}", ex.getCause() == null ? "unknown" : ex.getCause().getClass().getName());
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+			.header(HttpHeaders.RETRY_AFTER, String.valueOf(STORE_RETRY_AFTER_SECONDS))
+			.body(problem(ErrorCode.SERVICE_UNAVAILABLE, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(PessimisticLockingFailureException.class)
+	ResponseEntity<Object> handleLockTimeout(PessimisticLockingFailureException ex, HttpServletRequest request) {
+		// A tenant lock was not granted within the timeout (D-125): ask the client to retry. Nothing was changed.
+		log.warn("Tenant lock not acquired: {}", ex.getClass().getSimpleName());
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
 			.header(HttpHeaders.RETRY_AFTER, String.valueOf(STORE_RETRY_AFTER_SECONDS))
 			.body(problem(ErrorCode.SERVICE_UNAVAILABLE, request.getRequestURI()));
