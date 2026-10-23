@@ -1,6 +1,6 @@
 # SPEC-MEM Traceability (implementation status)
 
-- Updated: 2026-10-22, after Phase 4 (isolation and concurrency). Verified: AC-MEM-01 to 16 except where noted (AC-MEM-17 is a mechanism, closed in slice 006); AC-MEM-18 waits for Phase 5.
+- Updated: 2026-10-23, after the Phase 5 procedure and test. All AC-MEM criteria have tests; AC-MEM-17 is verified as a mechanism and closes in slice 006. Independent reviews and closure follow.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-123 to D-140.
 
@@ -19,11 +19,11 @@
 | AC-MEM-11 | Verified | Phase 2, 3 | `MembershipChangesTest.ac11...`; `MemberApiTests.promotingToAdminNeedsARecentLoginAndOtherChangesDoNot`, `removingEndsAccessOnTheNextRequestAndOnlyAnOwnerRemovesAnAdmin` |
 | AC-MEM-12 | Verified | Phase 2, 3 | `MembershipChangesTest.ac12NobodyChangesTheirOwnRole`; `MemberApiTests` (an Admin changing their own role gets 403, the Owner 409) |
 | AC-MEM-13 | Verified | Phase 1, 3 | `MemberApiTests.suspendingDeniesTheMemberOnTheNextRequestKeepsTheRoleAndRecordsWhoAndWhen`, `reactivatingRestoresAccessWithThePreservedRoleAndRecordsTheActor` (status_changed_by and status_changed_at, audit before/after) |
-| AC-MEM-14 | Verified (slice 001); cross-reference | Slice 001, Phase 3 | `MemberApiTests.aDisabledAccountLosesItsSessionsEverywhere`; slice 001 `LoginTests.anExistingSessionDiesWhenTheAccountIsDisabled` |
+| AC-MEM-14 | Verified (slice 001); cross-reference | Slice 001, Phase 3, 5 | `MemberApiTests.aDisabledAccountLosesItsSessionsEverywhere`; `OwnerAccountDisableProcedureTests` (sessions deleted, old cookie 401); slice 001 `LoginTests.anExistingSessionDiesWhenTheAccountIsDisabled` |
 | AC-MEM-15 | Verified | Phase 2, 3 | `MembershipChangesTest.ac15...`; `MemberApiTests.everyActorAndTargetRoleForSuspendAndRemoveMatchesTheMatrixOverHttp` |
 | AC-MEM-16 | Verified | Phase 4 | `MemberConcurrencyTests.aStormOfMixedChangesEndsInStatesThatTheAuditTrailExplains` (3 x 90 mixed requests; exactly one Owner; every membership's final role and status equals the replay of its audited changes; one audit row per success), `memberChangesDuringAnOwnershipTransferNeverLeaveTwoOwnersOrNone`, `aRoleChangeRacingARemoval...` (one active Owner after every round) |
 | AC-MEM-17 | Mechanism verified; closed in slice 006 | Not in 003: hook in Phase 2, closed in slice 006 | `ReactivationLimitHookTests` (a full company refuses reactivation with 409 and the member stays suspended; the default allows everything until plans exist) |
-| AC-MEM-18 | Pending | Phase 5 (runbook SQL and test) | |
+| AC-MEM-18 | Verified | Phase 5 | `OwnerAccountDisableProcedureTests` (runs the runbook SQL against PostgreSQL: Owner membership suspended and still the only Owner, company flagged, Owner-only permissions unavailable to everyone else, Admin/Agent/Viewer unaffected, idempotent, unknown address changes nothing; mutation check: not suspending the Owner fails it) |
 
 Also closed by this slice, for the consumer it supplies: AC-AUTH-14 for promoting or demoting an Admin (`MemberApiTests.promotingToAdminNeedsARecentLoginAndOtherChangesDoNot`; it stays open for the other four operations), AC-AUTH-23 for leaving (`MemberApiTests.aMemberLeavesLosesAccess...`: the old identifier stops working, the rotated cookie works), and AC-TEN-08 for memberships (D-136: `MemberApiTests.aMembershipIdFromAnotherCompanyIsRejectedForEveryRouteAndChangesNothing`).
 
