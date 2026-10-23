@@ -1,6 +1,6 @@
 # SPEC-MEM Traceability (implementation status)
 
-- Updated: 2026-10-23, after the Phase 5 reviews and fixes. All AC-MEM criteria have tests; AC-MEM-17 is a mechanism (closes in slice 006) and AC-MEM-18 leaves the deletion guard to slice 007. The slice is ready for the user's closure sign-off.
+- Updated: 2026-10-23, after the Phase 5 reviews and fixes. All AC-MEM criteria have tests; AC-MEM-17 is a mechanism (closes in slice 006) and AC-MEM-18 leaves the deletion guard to slice 007. The slice was closed by the user on 2026-10-23 (see the closure status).
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-123 to D-140.
 
@@ -93,20 +93,20 @@ Two read-only agents reviewed the merged slice and the operator procedure: a sec
 ## Slice 003 closure status (2026-10-23)
 All acceptance criteria that belong to this slice have tests. Exceptions: AC-MEM-17 is a mechanism (the plan-based limit arrives in slice 006) and AC-MEM-18 leaves the deletion guard to slice 007. AC-AUTH-14 (for promoting or demoting an Admin), AC-AUTH-23 (for leaving) and AC-TEN-08 (for memberships) are closed for this consumer.
 
-**Closure sign-off: pending the user.** Nothing below has been signed off yet; the list is for the user to confirm or change in the pull request. Each accepted risk stays a gate for the point stated in its row; nothing here claims it was checked.
+**The user confirmed the closure sign-off on 2026-10-23** ("1. confirmed"), including the accepted-risk list below. D-141 and D-142 stay open. Each accepted risk stays a gate for the point stated in its row; nothing here claims it was checked.
 
 | Open item | Status | Evidence / what is still owed |
 |---|---|---|
 | Independent security and code reviews | Done | Findings and dispositions are in the Phase 5 section |
-| D-137 (no rate limit for Owners and Admins) | Accepted risk, pending sign-off | Agents and Viewers are refused before any lock; Owners' and Admins' changes are audited and serialized but not throttled |
+| D-137 (no rate limit for Owners and Admins) | Accepted risk (signed off 2026-10-23) | Agents and Viewers are refused before any lock; Owners' and Admins' changes are audited and serialized but not throttled |
 | D-141 memberships of a disabled account | Open | Needs a decision; does not block closure |
 | D-142 recovery of a re-enabled Owner | Open | Needs a decision; blocks the slice 005 runbook |
-| Operator procedure in a deployed environment, with `psql` | Accepted risk, pending sign-off | The test runs the same statements through JDBC; the runbook stays Draft until one rehearsal is recorded. Owed: before the procedure is used in production |
-| V12 lock behaviour on a large `audit_event` table | Accepted risk, pending sign-off | The migration comment overstates; apply in a quiet period (D-129 note) |
+| Operator procedure in a deployed environment, with `psql` | Accepted risk (signed off 2026-10-23) | The test runs the same statements through JDBC; the runbook stays Draft until one rehearsal is recorded. Owed: before the procedure is used in production |
+| V12 lock behaviour on a large `audit_event` table | Accepted risk (signed off 2026-10-23) | The migration comment overstates; apply in a quiet period (D-129 note) |
 | Deletion guard on `ownership_resolution_at` (AC-MEM-18) | Carried forward | Slice 007 |
 | Plan-based active-member limit (AC-MEM-17) | Carried forward | Slice 006 |
 | Ownership-transfer race through its own service; operator transfer runbook | Carried forward | Slice 005 |
-| Frontend unit tests, lint and build, Playwright E2E, CI results of the merged pull requests | Accepted risk, pending sign-off | Not run by the assistant for this slice; there is no UI (D-138). CI results of the merged pull requests were not read |
-| Connection-pool headroom, request body size limit | Accepted risk, pending sign-off | Not measured or configured (platform decisions) |
-| Storm test audit ordering by timestamp then random ID | Accepted risk, pending sign-off | A same-microsecond tie could flake it in theory |
-| Closure sign-off | Pending | The user |
+| Frontend unit tests, lint and build, Playwright E2E, CI results of the merged pull requests | Accepted risk (signed off 2026-10-23) | Not run by the assistant for this slice; there is no UI (D-138). CI results of the merged pull requests were not read |
+| Connection-pool headroom, request body size limit | Accepted risk (signed off 2026-10-23) | Not measured or configured (platform decisions) |
+| Storm test audit ordering by timestamp then random ID | Accepted risk (signed off 2026-10-23) | A same-microsecond tie could flake it in theory |
+| Closure sign-off | Done | Slice 003 closed by the user on 2026-10-23, with D-141 and D-142 still open |
