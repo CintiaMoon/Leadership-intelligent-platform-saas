@@ -9,6 +9,7 @@ import com.example.saas.api.auth.domain.PasswordHashingBusyException;
 import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
 import com.example.saas.api.security.ReauthenticationRequiredException;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.application.DenialAudit;
 import com.example.saas.api.tenant.application.MembershipConflictException;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
 import com.example.saas.api.ratelimit.RateLimitedException;
@@ -40,6 +41,12 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
 	static final int STORE_RETRY_AFTER_SECONDS = 5;
+
+	private final DenialAudit denialAudit;
+
+	GlobalExceptionHandler(DenialAudit denialAudit) {
+		this.denialAudit = denialAudit;
+	}
 
 	@Override
 	protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
@@ -98,6 +105,15 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(PermissionDeniedException.class)
 	ResponseEntity<Object> handlePermissionDenied(PermissionDeniedException ex, HttpServletRequest request) {
+		// Written here, after the service's transaction has ended and returned its connection (D-125).
+		ex.pendingAudit().ifPresent(pending -> {
+			try {
+				denialAudit.denied(pending.userId(), pending.companyId(), pending.permission());
+			}
+			catch (RuntimeException e) {
+				log.error("Denial audit could not be written: {}", e.getClass().getName());
+			}
+		});
 		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem(ErrorCode.FORBIDDEN, request.getRequestURI()));
 	}
 

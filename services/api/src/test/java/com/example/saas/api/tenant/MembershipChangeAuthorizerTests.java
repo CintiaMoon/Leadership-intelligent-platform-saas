@@ -139,17 +139,15 @@ class MembershipChangeAuthorizerTests extends AuthIntegrationTest {
 	}
 
 	@Test
-	void aRefusedRoleIsForbiddenAndAuditedOnce() {
+	void aRefusedRoleIsForbiddenAndCarriesWhatTheHandlerWillAudit() {
 		Company c = company();
 
 		assertThatThrownBy(() -> authorize(c.agent(), c.id(), c.viewer().membershipId(), MembershipOperation.SUSPEND, null))
-			.isInstanceOf(PermissionDeniedException.class);
-		assertThatThrownBy(() -> authorize(c.agent(), c.id(), c.viewer().membershipId(), MembershipOperation.SUSPEND, null))
-			.isInstanceOf(PermissionDeniedException.class);
-
+			.isInstanceOfSatisfying(PermissionDeniedException.class, e -> assertThat(e.pendingAudit()).contains(
+					new PermissionDeniedException.PendingAudit(c.agent().userId(), c.id(),
+							com.example.saas.api.tenant.domain.Permission.SUSPEND_OR_REMOVE_MEMBERS)));
 		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'tenant.authorization.denied' "
-				+ "AND company_id = ? AND actor_id = ? AND reason_code = 'suspend_or_remove_members'", c.id(),
-				c.agent().userId())).as("audited once per window (D-121)").isEqualTo(1);
+				+ "AND company_id = ?", c.id())).as("not written inside the transaction that holds the locks").isZero();
 	}
 
 	@Test

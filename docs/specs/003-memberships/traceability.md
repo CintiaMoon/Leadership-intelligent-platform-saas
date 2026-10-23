@@ -1,6 +1,6 @@
 # SPEC-MEM Traceability (implementation status)
 
-- Updated: 2026-10-22, after Phase 3 (endpoints). Verified: AC-MEM-01, 02, 04, 05, 06, 07, 09, 10, 11, 12, 13, 14, 15. AC-MEM-17 is verified as a mechanism and closed in slice 006. AC-MEM-03, 08 and 16 wait for the Phase 4 concurrency tests; AC-MEM-18 for Phase 5.
+- Updated: 2026-10-22, after Phase 4 (isolation and concurrency). Verified: AC-MEM-01 to 16 except where noted (AC-MEM-17 is a mechanism, closed in slice 006); AC-MEM-18 waits for Phase 5.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-123 to D-140.
 
@@ -8,12 +8,12 @@
 |---|---|---|---|
 | AC-MEM-01 | Verified | Phase 2, 3 | `MembershipChangesTest` (4,800 combinations); `MemberApiTests.anAgentAndAViewerCannotChangeRoles`, `everyActorAndTargetRoleForSuspendAndRemoveMatchesTheMatrixOverHttp` (4 actors x 3 targets x suspend, reactivate, remove), `anOwnerAndAnAdminSeeTheMembersAndAnAgentAndAViewerDoNot` |
 | AC-MEM-02 | Verified | Phase 2, 3 | `MembershipChangesTest` (4,800 combinations); `MemberApiTests.anAdminChangesAnAgentToAViewerButCannotMakeAnAdminOrTouchAnAdminOrTheOwner`, `theOwnerMembershipCannotBeChangedAndOwnerCannotBeAssigned` |
-| AC-MEM-03 | Pending | Phase 4 (on the slice 002 schema guarantees) | |
+| AC-MEM-03 | Verified | Phase 4 | `MemberConcurrencyTests.parallelAttemptsOnTheOwnerByTheOwnerAndByAnAdminAllFailAndNothingChanges` (28 parallel attempts on the Owner by the Owner and an Admin: all 409 or 403, the Owner row unchanged and unaudited), `MembershipChangesTest.ac03AndAc09...`, slice 002 `TenantSchemaTests` (the database refuses an Owner-less company) |
 | AC-MEM-04 | Verified | Phase 3, 4 | `MemberApiTests.suspendingDeniesTheMemberOnTheNextRequestKeepsTheRoleAndRecordsWhoAndWhen`, `removingEndsAccessOnTheNextRequestAndOnlyAnOwnerRemovesAnAdmin` (same session, next request is 404); Phase 4 repeats it under concurrency |
 | AC-MEM-05 | Verified (slice 002) | Slice 002 | `TenantSchemaTests` (partial unique index on live memberships); cross-referenced |
 | AC-MEM-06 | Verified | Phase 1, 3 | `MemberApiTests.auditRowsHoldIdentifiersAndEnumValuesOnly` (no email, name, password or token in any membership audit row; before/after are enum names), `MembershipSchemaV12Tests` |
 | AC-MEM-07 | Verified | Phase 3 | `MemberApiTests.aMemberLeavesLosesAccessKeepsTheAccountAndGetsANewSessionIdentifier` (access ends, account kept, other companies unaffected, recorded as done by the member), `anAdminAnAgentAndAViewerCanLeaveButTheOwnerCannot` |
-| AC-MEM-08 | Pending | Phase 4 | |
+| AC-MEM-08 | Verified | Phase 4 | `MemberConcurrencyTests.aRoleChangeRacingARemovalOfTheSameMemberLeavesOneConsistentState` (12 rounds), `twoRoleChangesOfOneMemberLeaveTheRoleTheLastAuditRowSays`, `theSameChangeRequestedManyTimesAtOnceHappensExactlyOnce` (12 parallel suspends, reactivations and removals: one winner each), `aMemberLeavingWhileAnAdminSuspendsThemEndsInExactlyOneOfTwoStates` |
 | AC-MEM-09 | Verified | Phase 3 | `MemberApiTests.anAdminAnAgentAndAViewerCanLeaveButTheOwnerCannot` (Owner gets 403, membership unchanged), `MembershipChangesTest.ac03AndAc09TheOwnerIsNeverChangedAndCannotLeave` |
 | AC-MEM-10 | Verified | Phase 2, 3 | `MembershipChangesTest.ac10TheRoleAssignmentTable`; `MemberApiTests` (Owner assigns Admin/Agent/Viewer, Admin only Agent/Viewer, Owner refused with 400) |
 | AC-MEM-11 | Verified | Phase 2, 3 | `MembershipChangesTest.ac11...`; `MemberApiTests.promotingToAdminNeedsARecentLoginAndOtherChangesDoNot`, `removingEndsAccessOnTheNextRequestAndOnlyAnOwnerRemovesAnAdmin` |
@@ -21,7 +21,7 @@
 | AC-MEM-13 | Verified | Phase 1, 3 | `MemberApiTests.suspendingDeniesTheMemberOnTheNextRequestKeepsTheRoleAndRecordsWhoAndWhen`, `reactivatingRestoresAccessWithThePreservedRoleAndRecordsTheActor` (status_changed_by and status_changed_at, audit before/after) |
 | AC-MEM-14 | Verified (slice 001); cross-reference | Slice 001, Phase 3 | `MemberApiTests.aDisabledAccountLosesItsSessionsEverywhere`; slice 001 `LoginTests.anExistingSessionDiesWhenTheAccountIsDisabled` |
 | AC-MEM-15 | Verified | Phase 2, 3 | `MembershipChangesTest.ac15...`; `MemberApiTests.everyActorAndTargetRoleForSuspendAndRemoveMatchesTheMatrixOverHttp` |
-| AC-MEM-16 | Pending | Phase 4 | |
+| AC-MEM-16 | Verified | Phase 4 | `MemberConcurrencyTests.aStormOfMixedChangesEndsInStatesThatTheAuditTrailExplains` (3 x 90 mixed requests; exactly one Owner; every membership's final role and status equals the replay of its audited changes; one audit row per success), `memberChangesDuringAnOwnershipTransferNeverLeaveTwoOwnersOrNone`, `aRoleChangeRacingARemoval...` (one active Owner after every round) |
 | AC-MEM-17 | Mechanism verified; closed in slice 006 | Not in 003: hook in Phase 2, closed in slice 006 | `ReactivationLimitHookTests` (a full company refuses reactivation with 409 and the member stays suspended; the default allows everything until plans exist) |
 | AC-MEM-18 | Pending | Phase 5 (runbook SQL and test) | |
 
@@ -53,3 +53,12 @@ Also closed by this slice, for the consumer it supplies: AC-AUTH-14 for promotin
 
 ## Checks run (Phase 3)
 `./mvnw verify` ran 394 tests with 0 failures and 2 skipped; `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts`; `npm run typecheck` in `apps/web` printed no errors. Not run: Playwright E2E, CI jobs. There is no BFF route or UI for these endpoints (D-138).
+
+## Phase 4 evidence (not tied to one AC)
+- Concurrency tests run through the real endpoints with the production lock timeout (5 s). Mutation check: replacing the company-row lock with a plain read makes the leave-versus-suspend race test fail (two different rows are involved: the caller's own membership and the target).
+- **Finding fixed in this phase (D-125 note):** a refused request wrote its denial-audit row in a second transaction while still holding the company lock. In the 90-request storm the connection pool of 10 was exhausted (active 10, waiting 70, 30 s connection timeouts) and the error handler itself failed. The audit row is now written by the exception handler after the service's transaction has ended. The first run of the Owner-untouchable test, before the fix, returned 503 for most requests for the same reason (lock timeouts while connections were held).
+- Deviation from the plan: the plan said to repeat the slice 002 ownership race "through the service". No ownership-transfer service exists until slice 005, so the test performs the transfer the way slice 005 will (lock the company row, demote the Owner, promote the successor, commit) in a raw transaction while the member endpoints run against it. Slice 005 must repeat it through its own service.
+- Cross-tenant membership IDs and same-session revocation were already covered in Phase 3 (`MemberApiTests`).
+
+## Checks run (Phase 4)
+`./mvnw verify` ran 401 tests with 0 failures and 2 skipped. The contract and frontend did not change in this phase and were not re-run. Not run: Playwright E2E, CI jobs.

@@ -38,19 +38,16 @@ public class MembershipChangeAuthorizer {
 
 	private final CompanyLocks locks;
 
-	private final DenialAudit denialAudit;
-
-	MembershipChangeAuthorizer(MembershipRepository memberships, CompanyLocks locks, DenialAudit denialAudit) {
+	MembershipChangeAuthorizer(MembershipRepository memberships, CompanyLocks locks) {
 		this.memberships = memberships;
 		this.locks = locks;
-		this.denialAudit = denialAudit;
 	}
 
 	/**
 	 * @param membershipId the membership to change; ignored for LEAVE, which always concerns the caller's own
 	 * @param newRole the requested role for CHANGE_ROLE
 	 * @throws CompanyNotFoundException the caller is not an ACTIVE member, or the membership is not in this company (404)
-	 * @throws PermissionDeniedException the caller's role does not allow it (403, audited)
+	 * @throws PermissionDeniedException the caller's role does not allow it (403; the handler audits it)
 	 * @throws MembershipConflictException not possible in the current state, or it would touch the Owner (409)
 	 * @throws ValidationFailedException the request asks for something no actor may do, such as assigning Owner (400)
 	 */
@@ -78,8 +75,8 @@ public class MembershipChangeAuthorizer {
 				target.getStatus(), actor.getId().equals(target.getId()), newRole, company.getStatus());
 		switch (decision.outcome()) {
 			case FORBIDDEN -> {
-				denialAudit.denied(userId, companyId, decision.deniedPermission());
-				throw new PermissionDeniedException();
+				// Audited by the exception handler once this transaction has ended (see PermissionDeniedException).
+				throw new PermissionDeniedException(userId, companyId, decision.deniedPermission());
 			}
 			case CONFLICT -> throw new MembershipConflictException();
 			case INVALID -> throw new ValidationFailedException(List.of(new FieldProblem("role", "INVALID")));
