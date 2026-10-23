@@ -646,8 +646,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Unavailable'
 components:
@@ -887,7 +885,8 @@ components:
       type: string
       description: |
         Stable application error code (ADR-005). The frontend maps codes to messages. `REAUTHENTICATION_REQUIRED`
-        (403) is returned by the sensitive operations of later slices when the session is valid but the last login or
+        (403) is returned by the sensitive operations (promoting or demoting an Admin now; ownership transfer, company
+        deletion and export in later slices) when the session is valid but the last login or
         step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry.
       enum:
         - VALIDATION_FAILED

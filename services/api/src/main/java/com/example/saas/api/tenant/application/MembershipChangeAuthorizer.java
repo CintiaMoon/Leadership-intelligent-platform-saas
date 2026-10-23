@@ -9,6 +9,7 @@ import com.example.saas.api.tenant.domain.ChangeDecision;
 import com.example.saas.api.tenant.domain.MembershipChanges;
 import com.example.saas.api.tenant.domain.MembershipOperation;
 import com.example.saas.api.tenant.domain.MembershipStatus;
+import com.example.saas.api.tenant.domain.Permission;
 import com.example.saas.api.tenant.domain.Role;
 import com.example.saas.api.tenant.persistence.Company;
 import com.example.saas.api.tenant.persistence.Membership;
@@ -22,8 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
  * the values as they are now. The caller then writes the change and the audit rows in the same transaction.
  *
  * <p>
- * Sequence: (1) an unlocked check that the caller is an ACTIVE member, so an outsider can never queue for a company
- * lock; (2) lock the company row; (3) lock the target membership (the caller's own, for LEAVE); (4) load the caller's
+ * Sequence: (1) an unlocked check that the caller is an ACTIVE member whose role could do this at all, so neither an
+ * outsider nor an Agent or Viewer can queue for a company lock; (2) lock the company row; (3) lock the target membership (the caller's own, for LEAVE); (4) load the caller's
  * membership again, now that the locks serialize every change in this company; (5) decide with
  * {@link MembershipChanges}.
  */
@@ -54,9 +55,14 @@ public class MembershipChangeAuthorizer {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public Authorized authorize(UUID userId, UUID companyId, UUID membershipId, MembershipOperation operation,
 			Role newRole) {
-		// Counts rows without loading an entity: an entity loaded here would be reused after the locks with stale state.
-		if (!memberships.existsByCompanyIdAndUserIdAndStatus(companyId, userId, MembershipStatus.ACTIVE)) {
-			throw new CompanyNotFoundException();
+		// Step 1 takes no lock and loads no entity (only the role as a value). An outsider is answered 404, and a role
+		// that can never do this is refused now, so neither can queue for the company lock (D-137).
+		Role unlockedRole = memberships
+			.findRoleByCompanyIdAndUserIdAndStatus(companyId, userId, MembershipStatus.ACTIVE)
+			.orElseThrow(CompanyNotFoundException::new);
+		Permission refused = MembershipChanges.refusedWhateverTheTarget(operation, unlockedRole);
+		if (refused != null) {
+			throw new PermissionDeniedException(userId, companyId, refused);
 		}
 		Company company = locks.lockCompany(companyId);
 		Membership actor;
@@ -79,7 +85,8 @@ public class MembershipChangeAuthorizer {
 				throw new PermissionDeniedException(userId, companyId, decision.deniedPermission());
 			}
 			case CONFLICT -> throw new MembershipConflictException();
-			case INVALID -> throw new ValidationFailedException(List.of(new FieldProblem("role", "INVALID")));
+			case INVALID -> throw new ValidationFailedException(
+					List.of(new FieldProblem("role", newRole == null ? "REQUIRED" : "INVALID")));
 			case ALLOWED -> {
 			}
 		}

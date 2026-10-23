@@ -497,7 +497,8 @@ export interface components {
         };
         /**
          * @description Stable application error code (ADR-005). The frontend maps codes to messages. `REAUTHENTICATION_REQUIRED`
-         *     (403) is returned by the sensitive operations of later slices when the session is valid but the last login or
+         *     (403) is returned by the sensitive operations (promoting or demoting an Admin now; ownership transfer, company
+         *     deletion and export in later slices) when the session is valid but the last login or
          *     step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry.
          * @enum {string}
          */
@@ -1173,7 +1174,6 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
         };
     };

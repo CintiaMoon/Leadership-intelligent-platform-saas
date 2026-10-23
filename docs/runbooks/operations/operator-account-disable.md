@@ -14,23 +14,27 @@
 The security owner approves; a database operator runs it with a named, audited role. Record the ticket and the reason.
 
 ## Procedure
-Run the reviewed script in **one transaction** on the primary database, with the account's normalized address (lower case) as the variable:
+Run the reviewed script in **one transaction** on the primary database. Both variables are required:
 
 ```
-psql --single-transaction --set ON_ERROR_STOP=1 -v email=person@example.com \
+psql --single-transaction --set ON_ERROR_STOP=1 -v email=person@example.com -v ticket=SEC-123 \
      -f docs/runbooks/operations/sql/disable-account-and-flag-companies.sql
 ```
 
-The script has five steps: disable the account (and audit it), delete its sessions, lock the company rows it owns, suspend its Owner memberships and flag those companies (and audit both), and print a check. It is idempotent: a second run changes nothing and writes no second set of audit rows. An address that matches no account changes nothing.
+- `email` is trimmed and lower-cased by the script. An address that matches no account **stops the script with an error and commits nothing** (a typo cannot look like success).
+- `ticket` is the approval ticket (letters, digits, `-`, `_`, up to 40). It is written into every audit row together with the database role that ran the script, because operators have no user ID yet. A missing or malformed ticket stops the script.
+- The script gives up on a lock after 5 seconds instead of queuing behind a long application transaction; run it again.
+
+It does, in this order: check the inputs; lock the company rows the account owns (before touching the account, the same order as the application, D-125); disable the account and audit it; delete its sessions; suspend its Owner memberships and flag those companies, with audit rows; print a check. It is idempotent: a second run changes nothing and writes no second set of audit rows.
 
 Check the output:
-- Step 3 lists the companies the account owns. Zero rows means it owns none (only the disable and the session deletion apply).
-- Step 5 shows, for each of those companies, a non-null `ownership_resolution_at` and `owner_memberships = 1`. Anything else: stop and do not commit (`ON_ERROR_STOP` and `--single-transaction` roll back on an error; if you ran it interactively, `ROLLBACK`).
+- Step 1 lists the companies the account owns. Zero rows means it owns none (only the disable and the session deletion apply).
+- The last query shows, for each of those companies, a non-null `ownership_resolution_at` and `owner_memberships = 1`. Anything else: stop and do not commit (`ON_ERROR_STOP` and `--single-transaction` roll back on an error; if you ran it interactively, `ROLLBACK`).
 
 Then confirm: the user's next request returns 401, a login attempt returns the same generic failure as a wrong password, and an Admin of an affected company can still open the member list.
 
 ## Revoke sessions without disabling (suspected stolen session)
-Run only the `DELETE FROM spring_session ...` statement (step 2 of the script). The user stays able to log in again. If the password may be known to the attacker, also require a password reset (the user can use the forgot-password page, which signs out every device).
+Run only the `DELETE FROM spring_session ...` statement (step 3 of the script). The user stays able to log in again. If the password may be known to the attacker, also require a password reset (the user can use the forgot-password page, which signs out every device).
 
 ## Re-enabling
 `UPDATE app_user SET status = 'ACTIVE' WHERE email_normalized = '...';` Sessions are not restored; the user logs in again.
@@ -38,9 +42,10 @@ Run only the `DELETE FROM spring_session ...` statement (step 2 of the script). 
 **Re-enabling does not undo the company effects.** An Owner membership that the procedure suspended stays suspended and the company stays flagged. Returning the Owner, or transferring ownership, needs a decision by the security owner and a separate reviewed script; none exists yet. Do not improvise one with ad-hoc `UPDATE`s: the Owner invariant (exactly one Owner membership per company) is enforced by the database, and a mistake there is a data incident.
 
 ## Gaps to close
-- There is no operator endpoint or operator identity; the audit rows carry no operator ID. Add them in the slice that introduces operators.
+- There is no operator endpoint or operator identity; the audit rows carry the ticket and the database role instead of an operator ID. Add real operators in the slice that introduces them.
 - The transfer to an active member (slice 005) and the reversal above are not written.
-- Members' plan counts still include a disabled user's membership (slice 006 must decide).
+- Memberships of the disabled account in companies it does not own stay `ACTIVE`: they appear in member lists, count toward plan limits, and become usable again if the account is re-enabled. Decision D-141 (open).
+- A re-enabled Owner stays suspended and nobody can reactivate the membership (an Admin may not act on an Owner). Decision D-142 (open).
 - Disabling does not clear `login_throttle` state; that is intended.
 
 ## Test record

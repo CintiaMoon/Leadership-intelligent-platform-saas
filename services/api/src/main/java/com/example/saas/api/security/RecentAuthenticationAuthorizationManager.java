@@ -12,8 +12,9 @@ import org.springframework.stereotype.Component;
 /**
  * Requires a login or step-up within the recent-authentication window (AC-AUTH-14, 22). Use it with
  * {@code .access(recentAuthentication)} on the sensitive operations: ownership transfer, company deletion,
- * promoting or demoting an Admin, and data export. A stale value is rejected, never queued. No such operation
- * exists yet; the mechanism is tested through a test-only endpoint.
+ * promoting or demoting an Admin, and data export. A stale value is rejected, never queued. Where the need depends on
+ * the request body (promoting a member to Admin), services call {@link RecentAuthentication} instead; this manager is
+ * for fixed URLs and is tested through a test-only endpoint.
  */
 @Component
 public class RecentAuthenticationAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext> {

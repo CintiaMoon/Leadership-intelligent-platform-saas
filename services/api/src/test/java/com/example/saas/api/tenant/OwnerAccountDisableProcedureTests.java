@@ -15,6 +15,7 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpMethod;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -23,6 +24,7 @@ import static com.example.saas.api.auth.AuthApi.freshIp;
 import static com.example.saas.api.auth.AuthApi.json;
 import static com.example.saas.api.auth.AuthApi.sessionCookie;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * AC-MEM-14 and AC-MEM-18 (D-54): runs the operator's SQL from the runbook against PostgreSQL. A company whose Owner's
@@ -66,14 +68,15 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 	}
 
 	/** The runbook's statements with the psql variable replaced; comments dropped; one statement per element. */
-	private static List<String> statements(String email) throws IOException {
+	private static List<String> statements(String email, String ticket) throws IOException {
 		StringBuilder current = new StringBuilder();
 		List<String> out = new ArrayList<>();
 		for (String line : Files.readAllLines(SCRIPT)) {
 			if (line.strip().startsWith("--")) {
 				continue;
 			}
-			current.append(line.replace(":'email'", "'" + email.replace("'", "''") + "'")).append('\n');
+			current.append(line.replace(":'email'", "'" + email.replace("'", "''") + "'")
+				.replace(":'ticket'", "'" + ticket.replace("'", "''") + "'")).append('\n');
 			if (line.stripTrailing().endsWith(";")) {
 				out.add(current.toString());
 				current.setLength(0);
@@ -85,8 +88,12 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 
 	/** Runs the script in one transaction, as psql --single-transaction does. */
 	private void runProcedure(String email) throws IOException {
-		List<String> statements = statements(email);
-		assertThat(statements).as("the five statements of the runbook").hasSize(5);
+		runProcedure(email, "TEST-1");
+	}
+
+	private void runProcedure(String email, String ticket) throws IOException {
+		List<String> statements = statements(email, ticket);
+		assertThat(statements).as("the eight statements of the runbook").hasSize(8);
 		tx.executeWithoutResult(s -> statements.forEach(jdbc::execute));
 	}
 
@@ -141,7 +148,11 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 			.as("other members are untouched").isEqualTo("ACTIVE");
 		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'account.status.changed' "
 				+ "AND target_id = ? AND actor_type = 'operator' AND before_value = 'ACTIVE' "
-				+ "AND after_value = 'DISABLED'", owner.userId())).isEqualTo(1);
+				+ "AND after_value = 'DISABLED' AND reason_code LIKE 'operator_disable ticket=TEST-1 db_user=%'",
+				owner.userId())).as("the audit row names the ticket and the database role").isEqualTo(1);
+		assertThat(count("SELECT count(*) FROM audit_event WHERE company_id = ? "
+				+ "AND event_type IN ('membership.suspended', 'company.ownership_resolution.flagged') "
+				+ "AND reason_code = 'owner_account_disabled ticket=TEST-1'", first.id())).isEqualTo(2);
 
 		// The company keeps working for everyone else, but nothing that needs an Owner is available.
 		String base = "/api/v1/companies/" + first.id();
@@ -187,14 +198,71 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 	}
 
 	@Test
-	void anUnknownAddressChangesNothing() throws Exception {
+	void anUnknownAddressStopsTheScriptAndChangesNothing() throws Exception {
 		int audit = count("SELECT count(*) FROM audit_event");
 		int suspended = count("SELECT count(*) FROM membership WHERE status = 'SUSPENDED'");
 
-		runProcedure("nobody." + UUID.randomUUID() + "@example.com");
+		assertThatThrownBy(() -> runProcedure("nobody." + UUID.randomUUID() + "@example.com"))
+			.as("a typo must not look like success")
+			.isInstanceOf(DataAccessException.class);
 
 		assertThat(count("SELECT count(*) FROM audit_event")).isEqualTo(audit);
 		assertThat(count("SELECT count(*) FROM membership WHERE status = 'SUSPENDED'")).isEqualTo(suspended);
+	}
+
+	@Test
+	void aMissingOrMalformedTicketStopsTheScriptAndChangesNothing() throws Exception {
+		Person owner = person();
+		Company company = company(owner);
+
+		for (String ticket : new String[] { "", "has space", "semi;colon", "x".repeat(41), ":'ticket'" }) {
+			assertThatThrownBy(() -> runProcedure(owner.email(), ticket)).as("ticket '%s'", ticket)
+				.isInstanceOf(DataAccessException.class);
+		}
+
+		assertThat(jdbc.queryForObject("SELECT status FROM app_user WHERE id = ?", String.class, owner.userId()))
+			.isEqualTo("ACTIVE");
+		assertThat(jdbc.queryForObject("SELECT status FROM membership WHERE id = ?", String.class, company.ownerSeat()))
+			.isEqualTo("ACTIVE");
+	}
+
+	@Test
+	void theAddressIsTrimmedAndLowerCased() throws Exception {
+		Person owner = person();
+		Company company = company(owner);
+
+		runProcedure("  " + owner.email().toUpperCase() + "  ");
+
+		assertThat(jdbc.queryForObject("SELECT status FROM app_user WHERE id = ?", String.class, owner.userId()))
+			.isEqualTo("DISABLED");
+		assertThat(jdbc.queryForObject("SELECT status FROM membership WHERE id = ?", String.class, company.ownerSeat()))
+			.isEqualTo("SUSPENDED");
+	}
+
+	/** The dead end the runbook warns about (D-142): re-enabling the account does not bring the Owner back. */
+	@Test
+	void aReEnabledOwnerStaysSuspendedAndNobodyCanReactivateTheMembership() throws Exception {
+		Person owner = person();
+		Person admin = person();
+		Company company = company(owner);
+		UUID adminSeat = tx.execute(s -> seat(company.id(), admin.userId(), "ADMIN"));
+		runProcedure(owner.email());
+
+		jdbc.update("UPDATE app_user SET status = 'ACTIVE' WHERE id = ?", owner.userId());
+		Cookie again = sessionCookie(api.login(owner.email(), STRONG_PASSWORD, freshIp()));
+		String base = "/api/v1/companies/" + company.id();
+
+		assertThat(api.get("/api/v1/auth/session", again, freshIp()).getResponse().getStatus())
+			.as("the account works again").isEqualTo(200);
+		assertThat(api.get(base, again, freshIp()).getResponse().getStatus())
+			.as("but the suspended Owner membership gives no access to the company").isEqualTo(404);
+		assertThat(request(admin, HttpMethod.POST, base + "/members/" + company.ownerSeat() + "/reactivate", null))
+			.as("an Admin may not act on an Owner").isEqualTo(403);
+		assertThat(jdbc.queryForObject("SELECT status FROM membership WHERE id = ?", String.class, company.ownerSeat()))
+			.isEqualTo("SUSPENDED");
+		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND role = 'OWNER' "
+				+ "AND status IN ('ACTIVE', 'SUSPENDED')", company.id())).isEqualTo(1);
+		assertThat(adminSeat).isNotNull();
 	}
 
 	@Test

@@ -25,16 +25,17 @@ public final class MembershipChanges {
 	 */
 	public static ChangeDecision decide(MembershipOperation operation, Role actorRole, Role targetRole,
 			MembershipStatus targetStatus, boolean self, Role newRole, CompanyStatus companyStatus) {
-		// No role editing assigns Owner (SPEC-MEM table); ownership moves only by transfer (slice 005).
-		if (operation == MembershipOperation.CHANGE_ROLE && (newRole == null || newRole == Role.OWNER)) {
-			return ChangeDecision.invalid();
-		}
 		boolean involvesAdmin = operation == MembershipOperation.CHANGE_ROLE
 				&& (newRole == Role.ADMIN || targetRole == Role.ADMIN);
 
 		Permission refused = firstRefusedPermission(operation, actorRole, targetRole, involvesAdmin, companyStatus);
 		if (refused != null) {
 			return ChangeDecision.forbidden(refused);
+		}
+		// No role editing assigns Owner (SPEC-MEM table); ownership moves only by transfer (slice 005). Checked after
+		// the permission so a caller who may not change roles is refused (and audited) rather than told what is valid.
+		if (operation == MembershipOperation.CHANGE_ROLE && (newRole == null || newRole == Role.OWNER)) {
+			return ChangeDecision.invalid();
 		}
 		// Only an Owner gets past the permission check with an Owner as target, and the Owner is never changed here.
 		if (operation != MembershipOperation.LEAVE && targetRole == Role.OWNER) {
@@ -56,12 +57,7 @@ public final class MembershipChanges {
 				&& !CompanyPolicy.permits(actorRole, Permission.ASSIGN_OR_REVOKE_ADMIN, companyStatus, null)) {
 			return Permission.ASSIGN_OR_REVOKE_ADMIN;
 		}
-		Permission needed = switch (operation) {
-			case CHANGE_ROLE -> Permission.CHANGE_MEMBER_ROLE;
-			case SUSPEND, REMOVE -> Permission.SUSPEND_OR_REMOVE_MEMBERS;
-			case REACTIVATE -> Permission.REACTIVATE_MEMBERS;
-			case LEAVE -> Permission.LEAVE_COMPANY;
-		};
+		Permission needed = neededPermission(operation);
 		Role target = operation == MembershipOperation.LEAVE ? null : targetRole;
 		return CompanyPolicy.permits(actorRole, needed, companyStatus, target) ? null : needed;
 	}
@@ -74,6 +70,26 @@ public final class MembershipChanges {
 			case REACTIVATE -> targetStatus == MembershipStatus.SUSPENDED;
 			case REMOVE -> targetStatus == MembershipStatus.ACTIVE || targetStatus == MembershipStatus.SUSPENDED;
 		};
+	}
+
+	private static Permission neededPermission(MembershipOperation operation) {
+		return switch (operation) {
+			case CHANGE_ROLE -> Permission.CHANGE_MEMBER_ROLE;
+			case SUSPEND, REMOVE -> Permission.SUSPEND_OR_REMOVE_MEMBERS;
+			case REACTIVATE -> Permission.REACTIVATE_MEMBERS;
+			case LEAVE -> Permission.LEAVE_COMPANY;
+		};
+	}
+
+	/**
+	 * The matrix row that refuses this role whatever the target is, or null if the role might be allowed. Agents and
+	 * Viewers never manage memberships and the Owner never leaves, so they are refused before any lock is taken: a
+	 * member with no such permission must not be able to queue for the company lock and starve the people who do (D-137).
+	 */
+	public static Permission refusedWhateverTheTarget(MembershipOperation operation, Role actorRole) {
+		Permission needed = neededPermission(operation);
+		Grant grant = CompanyPolicy.grant(actorRole, needed);
+		return grant == Grant.DENIED || grant == Grant.SYSTEM_ONLY ? needed : null;
 	}
 
 }

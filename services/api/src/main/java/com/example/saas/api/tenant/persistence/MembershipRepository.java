@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.example.saas.api.tenant.domain.MembershipStatus;
+import com.example.saas.api.tenant.domain.Role;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -24,8 +25,14 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 	/** The caller's membership in one company; the per-request authorization lookup. */
 	Optional<Membership> findByCompanyIdAndUserIdAndStatus(UUID companyId, UUID userId, MembershipStatus status);
 
-	/** Whether the user is an ACTIVE member; counts rows without loading an entity into the persistence context. */
-	boolean existsByCompanyIdAndUserIdAndStatus(UUID companyId, UUID userId, MembershipStatus status);
+	/**
+	 * The user's role if they have a membership with this status. Returns a plain value, not an entity, so nothing
+	 * stale enters the persistence context before the locks are taken.
+	 */
+	@Query("select m.role from Membership m where m.companyId = :companyId and m.userId = :userId "
+			+ "and m.status = :status")
+	Optional<Role> findRoleByCompanyIdAndUserIdAndStatus(@Param("companyId") UUID companyId,
+			@Param("userId") UUID userId, @Param("status") MembershipStatus status);
 
 	/** {@code SELECT ... FOR UPDATE} on one membership of the company, after the company row (D-125). Use {@code CompanyLocks}. */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)

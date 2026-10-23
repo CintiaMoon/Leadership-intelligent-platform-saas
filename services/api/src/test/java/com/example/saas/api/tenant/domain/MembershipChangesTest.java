@@ -24,9 +24,6 @@ class MembershipChangesTest {
 	/** The rules as the spec states them, one question at a time. */
 	private static Outcome expected(MembershipOperation op, Role actor, Role target, MembershipStatus status,
 			boolean self, Role newRole, CompanyStatus company) {
-		if (op == MembershipOperation.CHANGE_ROLE && (newRole == null || newRole == Role.OWNER)) {
-			return Outcome.INVALID;
-		}
 		// While a company is pending deletion nothing in this slice is allowed to anyone (AC-DEL-12).
 		if (company == CompanyStatus.PENDING_DELETION) {
 			return Outcome.FORBIDDEN;
@@ -45,6 +42,10 @@ class MembershipChangesTest {
 		}
 		if (!permitted) {
 			return Outcome.FORBIDDEN;
+		}
+		// The request itself is judged only after the caller is known to be allowed to ask.
+		if (op == MembershipOperation.CHANGE_ROLE && (newRole == null || newRole == Role.OWNER)) {
+			return Outcome.INVALID;
 		}
 		if (op != MembershipOperation.LEAVE && target == Role.OWNER) {
 			return Outcome.CONFLICT;
@@ -118,8 +119,10 @@ class MembershipChangesTest {
 					Role.AGENT).outcome()).isEqualTo(Outcome.FORBIDDEN);
 		}
 		for (Role actor : Role.values()) {
+			// A caller who may change roles asked for something nobody may do; one who may not is simply refused.
+			Outcome expected = actor == Role.OWNER || actor == Role.ADMIN ? Outcome.INVALID : Outcome.FORBIDDEN;
 			assertThat(decide(MembershipOperation.CHANGE_ROLE, actor, Role.AGENT, MembershipStatus.ACTIVE, false,
-					Role.OWNER).outcome()).as("%s assigning Owner", actor).isEqualTo(Outcome.INVALID);
+					Role.OWNER).outcome()).as("%s assigning Owner", actor).isEqualTo(expected);
 		}
 	}
 
@@ -231,6 +234,36 @@ class MembershipChangesTest {
 				null).deniedPermission()).isEqualTo(Permission.REACTIVATE_MEMBERS);
 		assertThat(decide(MembershipOperation.LEAVE, Role.OWNER, Role.OWNER, MembershipStatus.ACTIVE, true, null)
 			.deniedPermission()).isEqualTo(Permission.LEAVE_COMPANY);
+	}
+
+	@Test
+	void aCallerWhoMayNotChangeRolesIsRefusedEvenWhenTheRequestIsMalformed() {
+		for (Role actor : new Role[] { Role.AGENT, Role.VIEWER }) {
+			assertThat(decide(MembershipOperation.CHANGE_ROLE, actor, Role.VIEWER, MembershipStatus.ACTIVE, false, Role.OWNER)
+				.outcome()).as("%s sending OWNER", actor).isEqualTo(Outcome.FORBIDDEN);
+			assertThat(decide(MembershipOperation.CHANGE_ROLE, actor, Role.VIEWER, MembershipStatus.ACTIVE, false, null)
+				.outcome()).as("%s sending nothing", actor).isEqualTo(Outcome.FORBIDDEN);
+		}
+		assertThat(decide(MembershipOperation.CHANGE_ROLE, Role.OWNER, Role.AGENT, MembershipStatus.ACTIVE, false,
+				Role.OWNER).outcome()).as("an Owner sending OWNER is a bad request").isEqualTo(Outcome.INVALID);
+	}
+
+	@Test
+	void refusedWhateverTheTargetNamesTheRowOnlyForRolesThatCanNeverDoIt() {
+		for (MembershipOperation op : new MembershipOperation[] { MembershipOperation.CHANGE_ROLE,
+				MembershipOperation.SUSPEND, MembershipOperation.REACTIVATE, MembershipOperation.REMOVE }) {
+			assertThat(MembershipChanges.refusedWhateverTheTarget(op, Role.OWNER)).as("Owner %s", op).isNull();
+			assertThat(MembershipChanges.refusedWhateverTheTarget(op, Role.ADMIN)).as("Admin %s", op).isNull();
+			assertThat(MembershipChanges.refusedWhateverTheTarget(op, Role.AGENT)).as("Agent %s", op).isNotNull();
+			assertThat(MembershipChanges.refusedWhateverTheTarget(op, Role.VIEWER)).as("Viewer %s", op).isNotNull();
+		}
+		assertThat(MembershipChanges.refusedWhateverTheTarget(MembershipOperation.SUSPEND, Role.AGENT))
+			.isEqualTo(Permission.SUSPEND_OR_REMOVE_MEMBERS);
+		assertThat(MembershipChanges.refusedWhateverTheTarget(MembershipOperation.LEAVE, Role.OWNER))
+			.isEqualTo(Permission.LEAVE_COMPANY);
+		for (Role role : new Role[] { Role.ADMIN, Role.AGENT, Role.VIEWER }) {
+			assertThat(MembershipChanges.refusedWhateverTheTarget(MembershipOperation.LEAVE, role)).isNull();
+		}
 	}
 
 }

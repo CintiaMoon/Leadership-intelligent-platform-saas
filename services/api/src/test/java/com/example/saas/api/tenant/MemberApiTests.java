@@ -224,6 +224,7 @@ class MemberApiTests extends AuthIntegrationTest {
 		assertThat(assignOwner.getResponse().getStatus()).isEqualTo(400);
 		assertThat(unknownRole.getResponse().getStatus()).isEqualTo(400);
 		assertThat(missing.getResponse().getStatus()).isEqualTo(400);
+		assertThat(parse(missing).get("errors").get(0).get("code").asString()).isEqualTo("REQUIRED");
 		assertThat(extra.getResponse().getStatus()).as("unknown fields are rejected").isEqualTo(400);
 		assertThat(role(team.membership(Role.OWNER))).isEqualTo("OWNER");
 		assertThat(role(team.membership(Role.AGENT))).isEqualTo("AGENT");
@@ -422,7 +423,7 @@ class MemberApiTests extends AuthIntegrationTest {
 
 		assertThat(owner.getResponse().getStatus()).isEqualTo(403);
 		assertThat(status(team.membership(Role.OWNER))).isEqualTo("ACTIVE");
-		for (Role role : new Role[] { Role.ADMIN, Role.VIEWER }) {
+		for (Role role : new Role[] { Role.ADMIN, Role.AGENT, Role.VIEWER }) {
 			assertThat(send(team.person(role), HttpMethod.POST, "/api/v1/companies/" + team.companyId() + "/leave", null)
 				.getResponse().getStatus()).as(role.name()).isEqualTo(204);
 		}
@@ -432,9 +433,13 @@ class MemberApiTests extends AuthIntegrationTest {
 	void aStrangerAndASuspendedMemberCannotLeaveACompanyTheyAreNotActiveIn() throws Exception {
 		Team team = team();
 		Person stranger = person();
+		String leave = "/api/v1/companies/" + team.companyId() + "/leave";
 
-		assertThat(send(stranger, HttpMethod.POST, "/api/v1/companies/" + team.companyId() + "/leave", null)
-			.getResponse().getStatus()).isEqualTo(404);
+		assertThat(send(stranger, HttpMethod.POST, leave, null).getResponse().getStatus()).isEqualTo(404);
+		send(team.person(Role.OWNER), HttpMethod.POST, member(team.companyId(), team.membership(Role.AGENT)) + "/suspend", null);
+		assertThat(send(team.person(Role.AGENT), HttpMethod.POST, leave, null).getResponse().getStatus())
+			.as("a suspended member has no access to leave through").isEqualTo(404);
+		assertThat(status(team.membership(Role.AGENT))).isEqualTo("SUSPENDED");
 	}
 
 	// ---- isolation, CSRF, audit hygiene
@@ -515,7 +520,8 @@ class MemberApiTests extends AuthIntegrationTest {
 			assertThat(row).doesNotContain("@example.com", "Verified Person", "password", "token");
 		}
 		assertThat(count("SELECT count(*) FROM audit_event WHERE company_id = ? AND event_type LIKE 'membership.%' "
-				+ "AND (before_value !~ '^[A-Z_]+$' OR after_value !~ '^[A-Z_]+$')", team.companyId())).isZero();
+				+ "AND (COALESCE(before_value, '') !~ '^[A-Z_]+$' OR COALESCE(after_value, '') !~ '^[A-Z_]+$')",
+				team.companyId())).as("every membership audit row has both values, as enum names").isZero();
 	}
 
 	@Test
@@ -573,6 +579,46 @@ class MemberApiTests extends AuthIntegrationTest {
 		return jdbc.queryForObject("INSERT INTO app_user (email_normalized, email_original, display_name, "
 				+ "password_hash, created_at, updated_at) VALUES (?, ?, 'U', 'hash', now(), now()) RETURNING id",
 				UUID.class, email, email);
+	}
+
+	@Test
+	void anAttemptToAssignOwnerByAMemberWithNoRightsIsRefusedAndRecordedAsADenial() throws Exception {
+		Team team = team();
+		Person viewer = team.person(Role.VIEWER);
+
+		MvcResult attempt = send(viewer, HttpMethod.PATCH, member(team.companyId(), team.membership(Role.AGENT)),
+				json("role", "OWNER"));
+
+		assertThat(attempt.getResponse().getStatus()).as("403, not the 400 an Owner would get").isEqualTo(403);
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'tenant.authorization.denied' "
+				+ "AND company_id = ? AND actor_id = ? AND reason_code = 'change_member_role'", team.companyId(),
+				viewer.userId())).as("the attempted escalation is on record").isEqualTo(1);
+		assertThat(role(team.membership(Role.AGENT))).isEqualTo("AGENT");
+	}
+
+	@Test
+	void whileACompanyIsPendingDeletionNoMemberChangeIsAllowedToAnyone() throws Exception {
+		Team team = team();
+		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		Person owner = team.person(Role.OWNER);
+		Person admin = team.person(Role.ADMIN);
+		String agentPath = member(team.companyId(), team.membership(Role.AGENT));
+
+		for (Person actor : List.of(owner, admin)) {
+			assertThat(send(actor, HttpMethod.PATCH, agentPath, json("role", "VIEWER")).getResponse().getStatus())
+				.isEqualTo(403);
+			assertThat(send(actor, HttpMethod.POST, agentPath + "/suspend", null).getResponse().getStatus())
+				.isEqualTo(403);
+			assertThat(send(actor, HttpMethod.DELETE, agentPath, null).getResponse().getStatus()).isEqualTo(403);
+		}
+		assertThat(send(team.person(Role.AGENT), HttpMethod.POST, "/api/v1/companies/" + team.companyId() + "/leave",
+				null).getResponse().getStatus()).as("not even leaving (AC-DEL-12)").isEqualTo(403);
+		assertThat(get(owner, members(team.companyId())).getResponse().getStatus()).as("the Owner may still read")
+			.isEqualTo(200);
+		assertThat(get(admin, members(team.companyId())).getResponse().getStatus()).as("other roles may not read")
+			.isEqualTo(403);
+		assertThat(status(team.membership(Role.AGENT))).isEqualTo("ACTIVE");
+		assertThat(role(team.membership(Role.AGENT))).isEqualTo("AGENT");
 	}
 
 }

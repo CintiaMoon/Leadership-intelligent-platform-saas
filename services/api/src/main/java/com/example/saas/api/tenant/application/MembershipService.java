@@ -83,30 +83,30 @@ public class MembershipService {
 
 	@Transactional
 	public MemberView suspend(AuthenticatedUser actor, UUID companyId, UUID membershipId) {
-		return changeStatus(actor, companyId, membershipId, MembershipOperation.SUSPEND, MembershipStatus.SUSPENDED,
-				"membership.suspended");
+		return viewOf(applyStatus(actor, companyId, membershipId, MembershipOperation.SUSPEND,
+				MembershipStatus.SUSPENDED, "membership.suspended"), actor.userId());
 	}
 
 	@Transactional
 	public MemberView reactivate(AuthenticatedUser actor, UUID companyId, UUID membershipId) {
 		// Called under the company lock the authorizer took, so two reactivations cannot both take the last place.
-		return changeStatus(actor, companyId, membershipId, MembershipOperation.REACTIVATE, MembershipStatus.ACTIVE,
-				"membership.reactivated");
+		return viewOf(applyStatus(actor, companyId, membershipId, MembershipOperation.REACTIVATE,
+				MembershipStatus.ACTIVE, "membership.reactivated"), actor.userId());
 	}
 
 	@Transactional
 	public void remove(AuthenticatedUser actor, UUID companyId, UUID membershipId) {
-		changeStatus(actor, companyId, membershipId, MembershipOperation.REMOVE, MembershipStatus.REMOVED,
+		applyStatus(actor, companyId, membershipId, MembershipOperation.REMOVE, MembershipStatus.REMOVED,
 				"membership.removed");
 	}
 
 	/** The caller leaves. The membership is recorded as removed by the member (D-20, D-128). */
 	@Transactional
 	public void leave(AuthenticatedUser actor, UUID companyId) {
-		changeStatus(actor, companyId, null, MembershipOperation.LEAVE, MembershipStatus.REMOVED, "membership.left");
+		applyStatus(actor, companyId, null, MembershipOperation.LEAVE, MembershipStatus.REMOVED, "membership.left");
 	}
 
-	private MemberView changeStatus(AuthenticatedUser actor, UUID companyId, UUID membershipId,
+	private Membership applyStatus(AuthenticatedUser actor, UUID companyId, UUID membershipId,
 			MembershipOperation operation, MembershipStatus newStatus, String eventType) {
 		MembershipChangeAuthorizer.Authorized authorized = authorize(actor, companyId, membershipId, operation, null);
 		Membership target = authorized.target();
@@ -118,7 +118,7 @@ public class MembershipService {
 		target.changeStatus(newStatus, actor.userId(), now);
 		audit.recordChange(eventType, AuditLog.Actor.user, actor.userId(), "membership", target.getId(), companyId,
 				"success", null, before.name(), newStatus.name());
-		return viewOf(target, actor.userId());
+		return target;
 	}
 
 	private MembershipChangeAuthorizer.Authorized authorize(AuthenticatedUser actor, UUID companyId,
