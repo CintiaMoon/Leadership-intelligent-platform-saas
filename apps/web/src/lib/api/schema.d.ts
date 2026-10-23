@@ -270,6 +270,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/companies/{companyId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the company's members
+         * @description Requires the "View member list" permission (Owner and Admin). Lists ACTIVE and SUSPENDED members (removed
+         *     members stay in the audit trail only), at most 500. A member's email is shown to Owners and Admins (D-132).
+         */
+        get: operations["listMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/members/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a member
+         * @description Ends the membership (ACTIVE or SUSPENDED to REMOVED); rejoining needs a new invitation. Only an Owner removes
+         *     an Admin; an Admin removes Agents and Viewers. The Owner cannot be removed (409). Access ends on the member's
+         *     next request.
+         */
+        delete: operations["removeMember"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a member's role
+         * @description The new role is ADMIN, AGENT or VIEWER; Owner cannot be assigned here (ownership moves by transfer). The
+         *     target must be ACTIVE and the role must differ. An Owner may change any non-Owner member; an Admin only an
+         *     Agent or a Viewer, to Agent or Viewer. Promoting to Admin or demoting an Admin is Owner-only and needs a login
+         *     or step-up within the last 10 minutes (403 `REAUTHENTICATION_REQUIRED`). Nobody changes their own role. The
+         *     Owner membership is never changed here (409). Changes are serialized per company (D-125).
+         */
+        patch: operations["changeMemberRole"];
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/members/{membershipId}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend a member
+         * @description ACTIVE to SUSPENDED. The role is kept. The member is denied all access to the company from the next request. The
+         *     actor and time are recorded (AC-MEM-13).
+         */
+        post: operations["suspendMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/members/{membershipId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate a suspended member
+         * @description SUSPENDED to ACTIVE, with the preserved role. Rejected with 409 if the company's plan has no room for another
+         *     active member (AC-MEM-17; enforced once plans exist, slice 006).
+         */
+        post: operations["reactivateMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave the company
+         * @description The caller's own ACTIVE membership becomes REMOVED. Admins, Agents and Viewers may leave; the Owner may not
+         *     (403: transfer ownership first). The user account is not deleted and other companies are unaffected. The
+         *     session identifier is rotated (AC-AUTH-23): the response sets a new session cookie and the old one stops
+         *     working.
+         */
+        post: operations["leaveCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -336,6 +452,30 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @enum {string} */
+        MembershipStatus: "ACTIVE" | "SUSPENDED" | "REMOVED";
+        ChangeMemberRoleRequest: {
+            /**
+             * @description The new role. Owner cannot be assigned through role editing.
+             * @enum {string}
+             */
+            role: "ADMIN" | "AGENT" | "VIEWER";
+        };
+        MemberSummary: {
+            /**
+             * Format: uuid
+             * @description The membership ID, used in the member paths. Not the user ID.
+             */
+            id: string;
+            displayName: string;
+            email: string;
+            role: components["schemas"]["Role"];
+            status: components["schemas"]["MembershipStatus"];
+            /** Format: date-time */
+            joinedAt: string;
+            /** @description True for the caller's own membership. */
+            self: boolean;
         };
         SessionInfo: {
             /** Format: uuid */
@@ -444,6 +584,18 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /**
+         * @description The change is not possible in the current state (for example suspending a suspended member), or it would touch
+         *     the Owner. Nothing was changed.
+         */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Missing or invalid CSRF token, or a disallowed `Origin`. */
         CsrfRejected: {
             headers: {
@@ -473,8 +625,8 @@ export interface components {
             };
         };
         /**
-         * @description The rate-limit store is unavailable (fail closed, ADR-004) or no password-hash capacity is
-         *     available within the wait limit (D-85).
+         * @description The rate-limit store is unavailable (fail closed, ADR-004), no password-hash capacity is
+         *     available within the wait limit (D-85), or a company lock was not granted within 5 seconds (D-125). Retry.
          */
         Unavailable: {
             headers: {
@@ -841,6 +993,188 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    changeMemberRole: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description The member after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSummary"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    suspendMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The member after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    reactivateMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The member after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    leaveCompany: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Left the company. */
+            204: {
+                headers: {
+                    /** @description The rotated `__Host-session` cookie. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
         };
     };
 }

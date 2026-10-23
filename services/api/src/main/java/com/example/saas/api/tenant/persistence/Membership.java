@@ -67,6 +67,20 @@ public class Membership {
 		return membership;
 	}
 
+	/** Changes the role. The rules (who may, to what) are decided before this is called. */
+	public void changeRole(Role newRole, Instant now) {
+		this.role = newRole;
+		this.updatedAt = now;
+	}
+
+	/** Changes the status and records who did it and when (AC-MEM-13). */
+	public void changeStatus(MembershipStatus newStatus, UUID changedBy, Instant now) {
+		this.status = newStatus;
+		this.statusChangedAt = now;
+		this.statusChangedBy = changedBy;
+		this.updatedAt = now;
+	}
+
 	public UUID getId() {
 		return id;
 	}
@@ -81,6 +95,10 @@ public class Membership {
 
 	public Role getRole() {
 		return role;
+	}
+
+	public Instant getCreatedAt() {
+		return createdAt;
 	}
 
 	public MembershipStatus getStatus() {

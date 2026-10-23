@@ -1,31 +1,31 @@
 # SPEC-MEM Traceability (implementation status)
 
-- Updated: 2026-10-22, after Phase 2 (authorization and domain rules). The rules behind AC-MEM-01, 02, 09, 10, 11, 12 and 15 are tested; nothing is exposed over HTTP yet, so those criteria become Verified in Phase 3. AC-MEM-03, 08 and 16 wait for Phase 4.
+- Updated: 2026-10-22, after Phase 3 (endpoints). Verified: AC-MEM-01, 02, 04, 05, 06, 07, 09, 10, 11, 12, 13, 14, 15. AC-MEM-17 is verified as a mechanism and closed in slice 006. AC-MEM-03, 08 and 16 wait for the Phase 4 concurrency tests; AC-MEM-18 for Phase 5.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL).
 - Plan: `plan.md`. Decisions: D-123 to D-140.
 
 | AC | Status | Planned in | Tests |
 |---|---|---|---|
-| AC-MEM-01 | Pending (rules ready) | Phase 2, 3 | `MembershipChangesTest.everyCombinationMatchesTheSpecStatement` (4,800 combinations against a second statement of the SPEC-MEM rules); `MembershipChangeAuthorizerTests.aRefusedRoleIsForbiddenAndAuditedOnce`, `MembershipChangeHttpTests.aRefusedRoleGetsForbiddenAndAnImpossibleChangeGetsConflict`; the real endpoints come in Phase 3 |
-| AC-MEM-02 | Pending (rules ready) | Phase 2, 3 | `MembershipChangesTest.everyCombinationMatchesTheSpecStatement` (4,800 combinations against a second statement of the SPEC-MEM rules); endpoints in Phase 3 |
+| AC-MEM-01 | Verified | Phase 2, 3 | `MembershipChangesTest` (4,800 combinations); `MemberApiTests.anAgentAndAViewerCannotChangeRoles`, `everyActorAndTargetRoleForSuspendAndRemoveMatchesTheMatrixOverHttp` (4 actors x 3 targets x suspend, reactivate, remove), `anOwnerAndAnAdminSeeTheMembersAndAnAgentAndAViewerDoNot` |
+| AC-MEM-02 | Verified | Phase 2, 3 | `MembershipChangesTest` (4,800 combinations); `MemberApiTests.anAdminChangesAnAgentToAViewerButCannotMakeAnAdminOrTouchAnAdminOrTheOwner`, `theOwnerMembershipCannotBeChangedAndOwnerCannotBeAssigned` |
 | AC-MEM-03 | Pending | Phase 4 (on the slice 002 schema guarantees) | |
-| AC-MEM-04 | Pending | Phase 3, 4 | |
-| AC-MEM-05 | Pending | Slice 002 (`TenantSchemaTests`); cross-referenced | |
-| AC-MEM-06 | Pending (schema ready) | Phase 1 (audit columns), Phase 3 | `MembershipSchemaV12Tests.anAuditRowCarriesBeforeAndAfterValuesThatAreEnumNamesOnly` (the database accepts enum names only for before/after); the events themselves come in Phase 3 |
-| AC-MEM-07 | Pending | Phase 3 | |
+| AC-MEM-04 | Verified | Phase 3, 4 | `MemberApiTests.suspendingDeniesTheMemberOnTheNextRequestKeepsTheRoleAndRecordsWhoAndWhen`, `removingEndsAccessOnTheNextRequestAndOnlyAnOwnerRemovesAnAdmin` (same session, next request is 404); Phase 4 repeats it under concurrency |
+| AC-MEM-05 | Verified (slice 002) | Slice 002 | `TenantSchemaTests` (partial unique index on live memberships); cross-referenced |
+| AC-MEM-06 | Verified | Phase 1, 3 | `MemberApiTests.auditRowsHoldIdentifiersAndEnumValuesOnly` (no email, name, password or token in any membership audit row; before/after are enum names), `MembershipSchemaV12Tests` |
+| AC-MEM-07 | Verified | Phase 3 | `MemberApiTests.aMemberLeavesLosesAccessKeepsTheAccountAndGetsANewSessionIdentifier` (access ends, account kept, other companies unaffected, recorded as done by the member), `anAdminAnAgentAndAViewerCanLeaveButTheOwnerCannot` |
 | AC-MEM-08 | Pending | Phase 4 | |
-| AC-MEM-09 | Verified at rule level; HTTP in Phase 3 | Phase 3 | `MembershipChangesTest.ac03AndAc09TheOwnerIsNeverChangedAndCannotLeave`; `MembershipChangeAuthorizerTests.leavingConcernsTheCallersOwnMembershipAndTheOwnerCannotLeave` |
-| AC-MEM-10 | Verified at rule level; HTTP in Phase 3 | Phase 2, 3 | `MembershipChangesTest.ac10TheRoleAssignmentTable`, `everyCombinationMatchesTheSpecStatement`; `MembershipChangeHttpTests.assigningOwnerIsABadRequestWithAFieldError` |
-| AC-MEM-11 | Verified at rule level; HTTP in Phase 3 | Phase 2, 3 | `MembershipChangesTest.ac11OnlyAnOwnerPromotesDemotesOrRemovesAnAdmin`; `MembershipChangeHttpTests.promotingToAdminNeedsARecentLoginButOtherRoleChangesDoNot` |
-| AC-MEM-12 | Verified at rule level; HTTP in Phase 3 | Phase 2, 3 | `MembershipChangesTest.ac12NobodyChangesTheirOwnRole` |
-| AC-MEM-13 | Pending (schema ready) | Phase 1, 3 | `MembershipSchemaV12Tests.whoChangedTheStatusMustBeARealUser`, `theNewColumnsAreNullableSoExistingRowsAndNewMembershipsNeedNoValue`; the behaviour comes in Phase 3 |
-| AC-MEM-14 | Pending | Slice 001 (enforced); cross-reference test in Phase 3 | |
-| AC-MEM-15 | Verified at rule level; HTTP in Phase 3 | Phase 2, 3 | `MembershipChangesTest.ac15AnAdminCannotTouchAnOwnerOrAnotherAdminButCanActOnAgentsAndViewers`; `MembershipChangeHttpTests.aRefusedRoleGetsForbiddenAndAnImpossibleChangeGetsConflict` (Admin on Owner gets 403) |
+| AC-MEM-09 | Verified | Phase 3 | `MemberApiTests.anAdminAnAgentAndAViewerCanLeaveButTheOwnerCannot` (Owner gets 403, membership unchanged), `MembershipChangesTest.ac03AndAc09TheOwnerIsNeverChangedAndCannotLeave` |
+| AC-MEM-10 | Verified | Phase 2, 3 | `MembershipChangesTest.ac10TheRoleAssignmentTable`; `MemberApiTests` (Owner assigns Admin/Agent/Viewer, Admin only Agent/Viewer, Owner refused with 400) |
+| AC-MEM-11 | Verified | Phase 2, 3 | `MembershipChangesTest.ac11...`; `MemberApiTests.promotingToAdminNeedsARecentLoginAndOtherChangesDoNot`, `removingEndsAccessOnTheNextRequestAndOnlyAnOwnerRemovesAnAdmin` |
+| AC-MEM-12 | Verified | Phase 2, 3 | `MembershipChangesTest.ac12NobodyChangesTheirOwnRole`; `MemberApiTests` (an Admin changing their own role gets 403, the Owner 409) |
+| AC-MEM-13 | Verified | Phase 1, 3 | `MemberApiTests.suspendingDeniesTheMemberOnTheNextRequestKeepsTheRoleAndRecordsWhoAndWhen`, `reactivatingRestoresAccessWithThePreservedRoleAndRecordsTheActor` (status_changed_by and status_changed_at, audit before/after) |
+| AC-MEM-14 | Verified (slice 001); cross-reference | Slice 001, Phase 3 | `MemberApiTests.aDisabledAccountLosesItsSessionsEverywhere`; slice 001 `LoginTests.anExistingSessionDiesWhenTheAccountIsDisabled` |
+| AC-MEM-15 | Verified | Phase 2, 3 | `MembershipChangesTest.ac15...`; `MemberApiTests.everyActorAndTargetRoleForSuspendAndRemoveMatchesTheMatrixOverHttp` |
 | AC-MEM-16 | Pending | Phase 4 | |
-| AC-MEM-17 | Pending | Not in 003: hook in Phase 2, closed in slice 006 | |
+| AC-MEM-17 | Mechanism verified; closed in slice 006 | Not in 003: hook in Phase 2, closed in slice 006 | `ReactivationLimitHookTests` (a full company refuses reactivation with 409 and the member stays suspended; the default allows everything until plans exist) |
 | AC-MEM-18 | Pending | Phase 5 (runbook SQL and test) | |
 
-Also closed by this slice, for the consumer it supplies: AC-AUTH-14 (promoting or demoting an Admin; it stays open for the other four operations) and AC-AUTH-23 (session rotation after a change to one's own membership), and AC-TEN-08 for memberships (D-136).
+Also closed by this slice, for the consumer it supplies: AC-AUTH-14 for promoting or demoting an Admin (`MemberApiTests.promotingToAdminNeedsARecentLoginAndOtherChangesDoNot`; it stays open for the other four operations), AC-AUTH-23 for leaving (`MemberApiTests.aMemberLeavesLosesAccess...`: the old identifier stops working, the rotated cookie works), and AC-TEN-08 for memberships (D-136: `MemberApiTests.aMembershipIdFromAnotherCompanyIsRejectedForEveryRouteAndChangesNothing`).
 
 
 ## Phase 1 evidence (not tied to one AC)
@@ -44,3 +44,12 @@ Also closed by this slice, for the consumer it supplies: AC-AUTH-14 (promoting o
 
 ## Checks run (Phase 2)
 `./mvnw verify` ran 371 tests with 0 failures and 2 skipped; `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts` (one line: the error-code enum); `npm run typecheck` in `apps/web` printed no errors. Not run: Playwright E2E, CI jobs. The three membership operations that write (suspend, reactivate, remove, leave, role change) do not exist yet.
+
+## Phase 3 evidence (not tied to one AC)
+- Endpoints (contract first): `GET /members`, `PATCH /members/{id}`, `POST /members/{id}/suspend`, `POST /members/{id}/reactivate`, `DELETE /members/{id}`, `POST /leave`, all under `/api/v1/companies/{companyId}`. `contracts/openapi.yaml`, `schema.d.ts` and the Postman collection are aligned.
+- Each change is one transaction: authorize under the locks, write, audit. The session identifier is rotated after the leave transaction commits.
+- Paths accept only canonical UUIDs (`PathIds`); anything else is 404.
+- Mutation checks: removing the session rotation fails the leave test; removing the audit write fails the suspend and audit-hygiene tests.
+
+## Checks run (Phase 3)
+`./mvnw verify` ran 394 tests with 0 failures and 2 skipped; `npm run lint` in `contracts` passed (2 warnings, not examined); `gen:api` regenerated `schema.d.ts`; `npm run typecheck` in `apps/web` printed no errors. Not run: Playwright E2E, CI jobs. There is no BFF route or UI for these endpoints (D-138).

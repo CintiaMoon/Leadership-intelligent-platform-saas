@@ -62,6 +62,13 @@ class SecurityConfig {
 				// company creation needs (AC-TEN-07, 11). Membership and role are checked per company by the service.
 				.requestMatchers(HttpMethod.POST, "/api/v1/companies").authenticated()
 				.requestMatchers(HttpMethod.GET, "/api/v1/companies", "/api/v1/companies/*").authenticated()
+				// Membership routes (SPEC-MEM). Who may do what is decided per company by the service.
+				.requestMatchers(HttpMethod.GET, "/api/v1/companies/*/members").authenticated()
+				.requestMatchers(HttpMethod.PATCH, "/api/v1/companies/*/members/*").authenticated()
+				.requestMatchers(HttpMethod.DELETE, "/api/v1/companies/*/members/*").authenticated()
+				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/members/*/suspend",
+						"/api/v1/companies/*/members/*/reactivate", "/api/v1/companies/*/leave")
+					.authenticated()
 				.anyRequest().denyAll())
 			.exceptionHandling(handling -> handling
 				.authenticationEntryPoint(handlers)

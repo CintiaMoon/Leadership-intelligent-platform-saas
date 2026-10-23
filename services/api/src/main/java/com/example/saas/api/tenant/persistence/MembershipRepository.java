@@ -1,5 +1,6 @@
 package com.example.saas.api.tenant.persistence;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -8,6 +9,7 @@ import com.example.saas.api.tenant.domain.MembershipStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +31,13 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select m from Membership m where m.companyId = :companyId and m.id = :id")
 	Optional<Membership> lockByCompanyIdAndId(@Param("companyId") UUID companyId, @Param("id") UUID id);
+
+	/** The company's members with their names, oldest first. Bounded by the {@code Pageable}. */
+	@Query("select new com.example.saas.api.tenant.persistence.MemberRow(m.id, u.id, u.displayName, u.emailOriginal, "
+			+ "m.role, m.status, m.createdAt) from Membership m join UserAccount u on u.id = m.userId "
+			+ "where m.companyId = :companyId and m.status in :statuses order by m.createdAt, m.id")
+	List<MemberRow> listMembers(@Param("companyId") UUID companyId,
+			@Param("statuses") Collection<MembershipStatus> statuses, Pageable pageable);
 
 	/** The caller's own memberships, to list their companies. Scoped by user, never by a client-supplied company. */
 	@CrossTenantByDesign(reason = "lists the companies of the authenticated user")
