@@ -122,6 +122,9 @@ class MembershipChangeHttpTests extends AuthIntegrationTest {
 
 		assertThat(forbidden.getResponse().getStatus()).isEqualTo(403);
 		assertThat(parse(forbidden).get("code").asString()).isEqualTo("FORBIDDEN");
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'tenant.authorization.denied' "
+				+ "AND company_id = ? AND actor_id = ? AND reason_code = 'suspend_or_remove_members'", companyId,
+				viewer.userId())).as("the handler audited the denial once the transaction had ended").isEqualTo(1);
 		assertThat(adminOnOwner.getResponse().getStatus()).isEqualTo(403);
 		assertThat(conflict.getResponse().getStatus()).isEqualTo(409);
 		assertThat(parse(conflict).get("code").asString()).isEqualTo("CONFLICT");

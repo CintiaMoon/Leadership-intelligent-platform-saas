@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  * evidence is worse than a few extra rows, and the response stays 403, not 503.
  */
 @Component
-class DenialAudit {
+public class DenialAudit {
 
 	private final AuditLog audit;
 
@@ -28,7 +28,7 @@ class DenialAudit {
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	void denied(UUID userId, UUID companyId, Permission permission) {
+	public void denied(UUID userId, UUID companyId, Permission permission) {
 		if (firstInWindow(userId, companyId, permission)) {
 			audit.recordForCompany("tenant.authorization.denied", AuditLog.Actor.user, userId, "company", companyId,
 					companyId, "denied", permission.code());
