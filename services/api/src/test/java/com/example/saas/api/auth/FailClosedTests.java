@@ -33,6 +33,11 @@ class FailClosedTests extends AuthIntegrationTest {
 					throw new RateLimitStoreUnavailableException(new RuntimeException("connection refused"));
 				}
 
+				@Override
+				public RateLimitResult current(RateLimitPolicy policy, String identifier) {
+					throw new RateLimitStoreUnavailableException(new RuntimeException("connection refused"));
+				}
+
 			};
 		}
 

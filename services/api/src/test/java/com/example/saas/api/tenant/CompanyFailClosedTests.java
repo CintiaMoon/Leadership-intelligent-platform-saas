@@ -45,6 +45,14 @@ class CompanyFailClosedTests extends AuthIntegrationTest {
 			return new RateLimitResult(true, 1, policy.limit(), Instant.now().plus(policy.window()));
 		}
 
+		@Override
+		public RateLimitResult current(RateLimitPolicy policy, String identifier) {
+			if (down.get()) {
+				throw new RateLimitStoreUnavailableException(new RuntimeException("connection refused"));
+			}
+			return new RateLimitResult(true, 0, policy.limit(), Instant.now().plus(policy.window()));
+		}
+
 	}
 
 	@TestConfiguration(proxyBeanMethods = false)

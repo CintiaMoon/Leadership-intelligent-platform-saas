@@ -55,8 +55,12 @@ public class CompanyLocks {
 		return memberships.lockByCompanyIdAndId(companyId, membershipId).orElseThrow(CompanyNotFoundException::new);
 	}
 
-	/** {@code SET LOCAL lock_timeout}: lasts for this transaction only, so no pooled connection keeps it. */
-	private void limitWait() {
+	/**
+	 * {@code SET LOCAL lock_timeout}: lasts for this transaction only, so no pooled connection keeps it. Public so that
+	 * other locks taken in the same transaction (invitations) wait no longer than the company lock does.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void limitWait() {
 		entityManager.createNativeQuery("select set_config('lock_timeout', :value, true)")
 			.setParameter("value", timeout.toMillis() + "ms")
 			.getSingleResult();
