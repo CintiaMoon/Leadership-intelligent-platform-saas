@@ -210,6 +210,56 @@ class JdbcRateLimiterTests {
 	}
 
 	/** A clock the test can move forward. */
+
+	@Test
+	void currentReadsTheCountWithoutAddingToIt() throws Exception {
+		JdbcRateLimiter limiter = newInstance();
+		RateLimitPolicy policy = new RateLimitPolicy(policyName, 3, Duration.ofHours(1));
+
+		assertThat(limiter.current(policy, "ip-1").count()).as("nothing recorded yet").isZero();
+		assertThat(limiter.current(policy, "ip-1").allowed()).isTrue();
+		limiter.hit(policy, "ip-1");
+		limiter.hit(policy, "ip-1");
+		RateLimitResult two = limiter.current(policy, "ip-1");
+		assertThat(two.count()).isEqualTo(2);
+		assertThat(two.allowed()).as("one more attempt is still within the limit").isTrue();
+		limiter.hit(policy, "ip-1");
+
+		RateLimitResult three = limiter.current(policy, "ip-1");
+		assertThat(three.count()).isEqualTo(3);
+		assertThat(three.allowed()).as("with the limit reached the next attempt is refused").isFalse();
+		assertThat(limiter.current(policy, "ip-1").count()).as("reading never counts").isEqualTo(3);
+		assertThat(limiter.hit(policy, "ip-1").count()).as("the next hit is the 4th").isEqualTo(4);
+	}
+
+	@Test
+	void currentSeesTheHitsOfAnotherInstanceAndKeepsKeysAndPoliciesApart() throws Exception {
+		JdbcRateLimiter first = newInstance();
+		JdbcRateLimiter second = newInstance();
+		RateLimitPolicy policy = new RateLimitPolicy(policyName, 2, Duration.ofHours(1));
+		RateLimitPolicy other = new RateLimitPolicy(policyName + "-other", 2, Duration.ofHours(1));
+
+		first.hit(policy, "shared");
+		first.hit(policy, "shared");
+
+		assertThat(second.current(policy, "shared").allowed()).as("the second instance reads the shared count").isFalse();
+		assertThat(second.current(policy, "someone-else").count()).isZero();
+		assertThat(second.current(other, "shared").count()).isZero();
+	}
+
+	@Test
+	void currentStartsOverWhenTheWindowRollsOver() throws Exception {
+		JdbcRateLimiter limiter = newInstance();
+		RateLimitPolicy policy = new RateLimitPolicy(policyName, 1, Duration.ofMinutes(15));
+		limiter.hit(policy, "x");
+		assertThat(limiter.current(policy, "x").allowed()).isFalse();
+
+		clock.advance(Duration.ofMinutes(15));
+
+		assertThat(limiter.current(policy, "x").count()).isZero();
+		assertThat(limiter.current(policy, "x").allowed()).isTrue();
+	}
+
 	static final class MutableClock extends Clock {
 
 		private final AtomicReference<Instant> now;

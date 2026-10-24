@@ -9,12 +9,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /** Runs tasks at the same moment (all wait at a barrier, then start) and returns their results in task order. */
-final class Parallel {
+public final class Parallel {
 
 	private Parallel() {
 	}
 
-	static <T> List<T> runAll(List<Callable<T>> tasks) throws Exception {
+	public static <T> List<T> runAll(List<Callable<T>> tasks) throws Exception {
 		ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
 		try {
 			CyclicBarrier start = new CyclicBarrier(tasks.size());
@@ -37,7 +37,7 @@ final class Parallel {
 	}
 
 	/** The same task, {@code times} times at once. */
-	static <T> List<T> runAll(int times, Callable<T> task) throws Exception {
+	public static <T> List<T> runAll(int times, Callable<T> task) throws Exception {
 		List<Callable<T>> tasks = new ArrayList<>();
 		for (int i = 0; i < times; i++) {
 			tasks.add(task);

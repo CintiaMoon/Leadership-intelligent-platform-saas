@@ -28,6 +28,11 @@ public final class JdbcRateLimiter implements RateLimiter {
 			RETURNING hit_count
 			""";
 
+	private static final String READ = """
+			SELECT hit_count FROM rate_limit_counter
+			WHERE policy = ? AND key_hash = ? AND window_start = ?
+			""";
+
 	private static final String SWEEP = """
 			DELETE FROM rate_limit_counter
 			WHERE ctid IN (SELECT ctid FROM rate_limit_counter WHERE expires_at < ? LIMIT ?)
@@ -79,6 +84,29 @@ public final class JdbcRateLimiter implements RateLimiter {
 			throw new RateLimitStoreUnavailableException(ex);
 		}
 		return new RateLimitResult(count <= policy.limit(), count, policy.limit(), windowEnd);
+	}
+
+	@Override
+	public RateLimitResult current(RateLimitPolicy policy, String identifier) {
+		long windowSeconds = policy.window().toSeconds();
+		long windowStartEpoch = (clock.instant().getEpochSecond() / windowSeconds) * windowSeconds;
+		Instant windowStart = Instant.ofEpochSecond(windowStartEpoch);
+		Instant windowEnd = windowStart.plusSeconds(windowSeconds);
+		String keyHash = hasher.hash(policy.name(), identifier);
+		int count;
+		try {
+			count = store.jdbc()
+				.query(READ, (rows, n) -> rows.getInt(1), policy.name(), keyHash, utc(windowStart))
+				.stream()
+				.findFirst()
+				.orElse(0);
+		}
+		catch (RuntimeException ex) {
+			throw new RateLimitStoreUnavailableException(ex);
+		}
+		AtomicInteger local = localCounts.getIfPresent(new LocalKey(policy.name(), keyHash, windowStartEpoch));
+		int seen = Math.max(count, local == null ? 0 : local.get());
+		return new RateLimitResult(seen < policy.limit(), seen, policy.limit(), windowEnd);
 	}
 
 	/** Deletes expired counters in batches and returns how many rows were removed. */

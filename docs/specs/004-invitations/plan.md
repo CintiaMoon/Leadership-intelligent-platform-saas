@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-INV (slice 004)
 
-- Status: **Approved 2026-10-24: Q-01 to Q-20** (user: "Q-1 to Q-20 approved"), recorded as D-144 to D-163 in the register (Q-NN maps to D-(143+NN)). SPEC-INV was approved the same day with its amendments. **The phase order has not been approved yet**: Phase 0 (this change) is the first phase and needs no ordering decision; ask before Phase 1. Nothing is implemented.
+- Status: **Approved 2026-10-24: Q-01 to Q-20** (user: "Q-1 to Q-20 approved"), recorded as D-144 to D-163 in the register (Q-NN maps to D-(143+NN)). SPEC-INV was approved the same day with its amendments. **The phase order was approved on 2026-10-24** (user: "I approve"); Phase 0 is done and Phase 1 is in progress. Nothing is implemented.
 - Spec: `docs/specs/004-invitations/spec.md` (SPEC-INV, Draft)
 - Related: SPEC-TEN (matrix, pending deletion), SPEC-MEM (membership rules, member limit hook), SPEC-AUTH (verified email, token pattern, fragment links), SPEC-PLAN (member limit), ADR-003 (outbox), ADR-004 (rate limiting), ADR-005 (errors); decisions D-24 to D-27, D-38, D-43, D-44, D-48, D-52, D-55, D-62, D-63, D-93, D-100, D-125, D-127, D-134, D-138
 - Date: 2026-10-24. Written from the spec, the register and the slice 001 to 003 code; no code was changed.
@@ -51,7 +51,7 @@
 Done 2026-10-24: the spec is approved; Q-01 to Q-20 are recorded as D-144 to D-163; the AC-INV criteria (including AC-INV-27 to AC-INV-29) are in `traceability.md` as Pending.
 
 ### Phase 1: Schema and persistence
-- Migration `V13__create_invitation.sql` (Q-04), reviewed for locks (new table only). Entity and repository (every method scoped by company, except the marked token lookup); `CompanyLocks.lockInvitation`; `RateLimiter.current` and its implementations.
+- Migration `V13__create_invitation.sql` (Q-04), reviewed for locks (new table only). Entity and repository (every method scoped by company, except the marked token lookup); `InvitationLocks.lockInvitation` (a new class in `invitation/application`, so the invitation package does not make `CompanyLocks` depend on it; it reuses `CompanyLocks.limitWait`); `RateLimiter.current` and its implementations.
 - Tests on PostgreSQL: constraints, the partial unique index (including under concurrency), token-hash uniqueness, CHECKs; the clean-database and prior-data migration check.
 
 ### Phase 2: Rules, service, delivery
@@ -113,4 +113,4 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 ## 9. Approval needed
 1. **Done 2026-10-24:** approval of SPEC-INV by the product owner, including the amendments: expiry counted from the latest create or resend (Q-03); recent authentication for Admin invitations (Q-05); suspended members also rejected (Q-06); a second create for the same address is 409 (Q-07); an existing live member gets 409 and nothing changes (Q-08).
 2. **Done 2026-10-24:** Q-01 to Q-20, in whole (Q-20 was added after the user asked what other pages the spec needs). Most worth a deliberate look: Q-03 (the token is minted at delivery), Q-09 (the uniform 422 and the two 409 cases), Q-10 (failures-only throttle and the new read method on the limiter), Q-11 (accept-time re-check of the inviter), Q-14 (accept page only, no management UI).
-3. The phase order (still waiting).
+3. **Done 2026-10-24:** the phase order.
