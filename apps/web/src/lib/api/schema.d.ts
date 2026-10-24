@@ -464,6 +464,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept an invitation
+         * @description Needs a verified session and the session-bound CSRF token. The token from the invitation link is sent **in the
+         *     request body only**: it is never accepted in the path or the query string, and the link carries it in the URL
+         *     fragment, which browsers do not send. There is no company in the request: the company is the one the
+         *     invitation belongs to. The signed-in user's verified address must match the invitation's address.
+         *
+         *     Every reason the invitation itself cannot be used returns the same 422 `TOKEN_INVALID`: unknown, expired
+         *     (7 days after it was last issued), revoked, replaced by a resend, already used, the signed-in address does not
+         *     match, the company is pending deletion or gone, or the inviter can no longer grant the role. Only after the
+         *     address matched can the answer differ: 409 `CONFLICT` if the user is already an ACTIVE or SUSPENDED member
+         *     (nothing changes and the invitation stays pending) or the company has no room for another active member. The
+         *     user becomes a member with the invited role, in one transaction with the end of the invitation. Following a link
+         *     never verifies an address.
+         *
+         *     Only failed attempts count toward the limit: the 11th failed attempt from one client address within an hour
+         *     returns 429. An unavailable counter store returns 503 (fail closed).
+         */
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -582,6 +616,10 @@ export interface components {
             createdAt: string;
             /** @description False until the invitation email has been delivered. Never exposes a token. */
             emailSent: boolean;
+        };
+        AcceptInvitationRequest: {
+            /** @description The raw token from the invitation link. Single use. Never logged. */
+            token: string;
         };
         SessionInfo: {
             /** Format: uuid */
@@ -1402,6 +1440,40 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The company that was joined and the role received. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySummary"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CsrfRejected"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["TokenInvalid"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["Unavailable"];
         };
     };

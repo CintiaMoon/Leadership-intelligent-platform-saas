@@ -1,40 +1,40 @@
 # SPEC-INV Traceability (implementation status)
 
-- Updated: 2026-10-24, after Phase 3 (management endpoints). Verified over HTTP: AC-INV-01, 16, 17, 21, 23, 27, 28 and the creating, resending and revoking sides of AC-INV-13 and AC-INV-15. Everything about accepting an invitation waits for Phase 4.
+- Updated: 2026-10-24, after Phase 4 (acceptance). Every criterion except AC-INV-07 (log hygiene, Phase 5) and AC-INV-20 (the accept page, Phase 5) is Verified; AC-INV-12 and AC-INV-26 are mechanisms that close in slice 006.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL), and for AC-INV-20 and the accept flow, in the web unit tests and Playwright.
 - Plan: `plan.md`. Decisions: D-144 to D-163. Spec approved 2026-10-24 with AC-INV-27 to AC-INV-29 added.
 
 | AC | Status | Planned in | Tests |
 |---|---|---|---|
 | AC-INV-01 | Verified | Phase 2, 3 | `InvitationApiTests.everyOperationForEveryRoleMatchesTheMatrixOverHttp` (4 roles x create, list, resend, revoke, plus an outsider), `InvitationServiceTests.anAgentAndAViewerAreRefusedBeforeAnyLock...`; mutation check on the route security fails the revoke tests |
-| AC-INV-02 | Pending | Phase 4 | |
-| AC-INV-03 | Pending | Phase 3 (revoked), Phase 4 | |
-| AC-INV-04 | Pending | Phase 4 (PostgreSQL concurrency) | |
+| AC-INV-02 | Verified | Phase 4 | `InvitationAcceptTests.everyReasonTheInvitationIsUnusableGivesTheSameAnswer` (a different signed-in address is refused and the invitation stays pending), `theInvitedUserJoinsWithTheInvitedRoleAndTheTokenIsSpent`; mutation check: removing the address match fails it |
+| AC-INV-03 | Verified | Phase 3, 4 | `InvitationAcceptTests.everyReasonTheInvitationIsUnusableGivesTheSameAnswer` (unknown, wrong address, expired, revoked, replaced by a resend, used, company pending deletion: seven cases, same 422 and same body), `anInvitationIsUsableUntilItsExpiryAndNotAtOrAfterIt` |
+| AC-INV-04 | Verified | Phase 4 | `InvitationAcceptTests.manyAcceptancesOfOneTokenAtOnceCreateExactlyOneMembership` (10 parallel: one 200, nine 422, one membership, one audit row), `anAcceptanceRacingARevokeOrAResendEndsInOneOfTwoSerialOrders` (6 rounds), `anAcceptanceRacingTheSuspensionOfTheInviterEndsInOneOfTwoSerialOrders` (5 rounds) |
 | AC-INV-05 | Verified | Phase 1, 2 | `InvitationDeliveryTests.deliveryMintsATokenStoresOnlyItsHashAndSendsAFragmentLink` (only the SHA-256 is stored; a search for the raw token in the table finds nothing), `theOutboxEventNeverHoldsTheAddressOrTheTokenAndIsScrubbedOnceSent`, `InvitationSchemaTests` |
-| AC-INV-06 | Pending | Phase 3, 4 | |
-| AC-INV-07 | Pending | Phase 5 | |
-| AC-INV-08 | Pending | Phase 4 | |
-| AC-INV-09 | Pending | Phase 4 | |
-| AC-INV-10 | Pending | Phase 4 | |
-| AC-INV-11 | Pending | Phase 2, 4 | |
-| AC-INV-12 | Pending | Mechanism in Phase 4; closed in slice 006 | |
+| AC-INV-06 | Verified | Phase 3, 4 | The accept route has no company in its path or body (`aTokenInThePathOrTheQueryStringIsNotAccepted`, `malformedBodiesAreBadRequests...`: a `companyId` in the body is a 400); the company is the invitation's, so the membership is created there only (`theInvitedUserJoinsWithTheInvitedRoleAndTheTokenIsSpent`); management side: `InvitationApiTests.anInvitationIdFromAnotherCompanyIsNotFoundAndNothingChanges` |
+| AC-INV-07 | Pending | Phase 5 | `LogHygieneTests` for the invitation journeys, including the accept request body (the request record's `toString` is already redacted) |
+| AC-INV-08 | Verified | Phase 4 | `InvitationAcceptTests.anUnauthenticatedCallerOrOneWhoseEmailIsNoLongerVerifiedCannotAcceptAndTheInvitationIsNotConsumed`, `theSessionBoundCsrfTokenIsRequired` |
+| AC-INV-09 | Verified | Phase 4 | `InvitationAcceptTests.everyReasonTheInvitationIsUnusableGivesTheSameAnswer` (a company pending deletion: 422 and no membership; a purged company has no invitation row left, which is the unknown-token case) |
+| AC-INV-10 | Verified | Phase 4 | `InvitationAcceptTests.anInviteeWhoIsAlreadyAnActiveOrSuspendedMemberGetsAConflictAndNothingChanges` (409 `CONFLICT`, no extra membership, no role change, a suspension is not lifted, the invitation stays pending); mutation check: without the check the unique index fails the request with a 500 |
+| AC-INV-11 | Verified | Phase 4 | `InvitationAcceptTests.theEleventhFailedAttemptFromOneAddressIsThrottledButSuccessesDoNotCount` (429 `RATE_LIMITED` with `Retry-After` on the 11th failure; a success from the same address does not count; another address is unaffected); mutation check: not counting failures fails it |
+| AC-INV-12 | Mechanism verified; closed in slice 006 | Phase 4, slice 006 | `InvitationAcceptLimitTests` (a stand-in limit of five active members: a full company gives 409 and keeps the invitation pending; eight simultaneous acceptances against three free places give exactly three 200 and five 409); mutation check: removing the hook fails both. Creating is never limited (`InvitationApiTests`) |
 | AC-INV-13 | Verified for creating, resending and revoking | Phase 3 | `InvitationApiTests.noInvitationOperationIsAllowedWhileTheCompanyIsPendingDeletion` (403 for each, nothing changes). Acceptance for a pending-deletion company comes in Phase 4 (AC-INV-09) |
-| AC-INV-14 | Pending | Phase 4 | |
-| AC-INV-15 | Verified for creation and resend; accept side in Phase 4 | Phase 1, 2, 3, 4 | `InvitationApiTests.anAddressThatIsAlreadyAMemberOrAlreadyInvitedIsAConflict` (409 `CONFLICT`), `resendingGivesANewExpiryAndRevokingMakesItFinal` (the old token is dead after the resend), `InvitationServiceTests.manyCreationsOfTheSameInvitationAtOnceLeaveExactlyOnePending`; that the previous token is rejected at acceptance is shown in Phase 4 |
+| AC-INV-14 | Verified | Phase 4 | `InvitationAcceptTests.anInvitationIsUsableUntilItsExpiryAndNotAtOrAfterIt` (30 seconds before the end it works, 1 millisecond after it does not), `aResendKillsTheOldTokenAndOnlyTheNewOneWorks` (a resend issues it again) |
+| AC-INV-15 | Verified | Phase 1, 2, 3, 4 | `InvitationAcceptTests.aResendKillsTheOldTokenAndOnlyTheNewOneWorks` (the previous token is rejected after a resend, the new one works), plus the creation side in `InvitationApiTests` and `InvitationServiceTests` |
 | AC-INV-16 | Verified | Phase 3 | `InvitationApiTests.anAddressThatIsAlreadyAMemberOrAlreadyInvitedIsAConflict` (ACTIVE and SUSPENDED members, 409), `InvitationServiceTests...CannotBeInvitedButARemovedOneCan` |
 | AC-INV-17 | Verified | Phase 2, 3 | `InvitationApiTests.anAdminInvitesAgentsAndViewersButNotAdminsAndNobodyInvitesAnOwner` (201, 201, 403, 400, 400), `InvitationRulesTest` |
-| AC-INV-18 | Pending | Phase 4 | |
-| AC-INV-19 | Verified at delivery; lookup in Phase 4 | Phase 1, 2, 4 | `InvitationDeliveryTests` (the token is 43 base64url characters from the existing 256-bit `TokenCodec`; `aRetriedDeliveryMintsANewTokenAndKillsThePreviousOne`), `InvitationSchemaTests` (unique hash, the lookup by hash) |
+| AC-INV-18 | Verified | Phase 4 | `InvitationAcceptTests.aTokenInThePathOrTheQueryStringIsNotAccepted` (a query value is ignored; the body without the field is a 400; a path token has no route) |
+| AC-INV-19 | Verified | Phase 1, 2, 4 | The token is 256 bits from `TokenCodec` (`InvitationDeliveryTests`); the invitation is found by its hash (`InvitationSchemaTests`, `InvitationAcceptTests`); after acceptance the hash is gone and a search for it finds nothing |
 | AC-INV-20 | Pending | Phase 5 | |
 | AC-INV-21 | Verified | Phase 2, 3 | `InvitationApiTests.resendingGivesANewExpiryAndRevokingMakesItFinal` (over HTTP: the old hash is gone when the response arrives), `InvitationServiceTests` |
-| AC-INV-22 | Pending | Phase 4 | |
+| AC-INV-22 | Verified | Phase 4 | `InvitationAcceptTests.everyReasonTheInvitationIsUnusableGivesTheSameAnswer` (the wrong-address case returns exactly the unknown-token body) |
 | AC-INV-23 | Verified | Phase 2, 3 | `InvitationApiTests.the21stInvitationByOneInviterIsThrottledWithRetryAfter` (429 `RATE_LIMITED` with `Retry-After`; another inviter is unaffected), `the4thSendToOneAddressWithin24HoursIsThrottled`; the company limit of 50 and the fail-closed 503 at service level in `InvitationServiceTests` and `InvitationFailClosedTests` |
-| AC-INV-24 | Pending | Phase 4 | |
-| AC-INV-25 | Pending | Phase 4 | |
+| AC-INV-24 | Verified | Phase 4 | `InvitationAcceptTests.changingAnInvitersMembershipThroughTheServiceRevokesWhatTheyCanNoLongerGrantInTheSameTransaction` (suspend), `removalLeavingAndDemotionOfTheInviterAlsoRevokeTheirInvitations` (remove, leave, demote), `anInviterWhoIsSuspendedOrDemotedOutsideTheServiceCanNoLongerHaveTheirInvitationsAccepted` (the accept-time re-check, as for the operator procedure); mutation checks: dropping the listener or the re-check fails them |
+| AC-INV-25 | Verified | Phase 4 | `InvitationAcceptTests.followingALinkNeverVerifiesAnAddressSoANewUserMustVerifyBeforeAccepting` (signing up with the invited address leaves it unverified, login fails, and acceptance works only after the normal verification) |
 | AC-INV-26 | Not exercised until plans exist (slice 006) | Phase 3, closed in slice 006 | The create path never asks about plan capacity: there is no code that could reject it, and `InvitationApiTests` creates invitations freely. The capacity warning is a screen concern (frontend slice F1). The criterion cannot be shown against a real plan before slice 006 |
 | AC-INV-27 | Verified | Phase 3 | `InvitationApiTests.invitingAnAdminNeedsARecentLoginAndInvitingOthersDoesNot` and `anAdminCannotResendOrRevokeAnAdminInvitationAndResendingOneNeedsARecentLogin` (403 `REAUTHENTICATION_REQUIRED` after 11 minutes; other roles and revoking need none) |
 | AC-INV-28 | Verified | Phase 1, 3 | `InvitationApiTests.anAddressThatIsAlreadyAMemberOrAlreadyInvitedIsAConflict` (a duplicate pending invitation is 409), `InvitationServiceTests.aSecondPendingInvitationForTheSameAddressIsRefusedUntilTheFirstExpires` |
-| AC-INV-29 | Pending | Phase 4 | |
+| AC-INV-29 | Verified | Phase 4 | `InvitationAcceptTests.anInviteeWhoIsAlreadyAnActiveOrSuspendedMemberGetsAConflictAndNothingChanges` |
 
 Also closed by this slice, for the consumer it supplies: AC-AUTH-14 (inviting an Admin), AC-TEN-08 for invitations. The screens beyond the accept page belong to frontend slice F1 (D-163) and are not part of these criteria.
 
@@ -63,3 +63,12 @@ Also closed by this slice, for the consumer it supplies: AC-AUTH-14 (inviting an
 
 ## Checks run (Phase 3)
 `./mvnw verify` ran 489 tests with 0 failures and 2 skipped. `npm run lint` in `contracts`, `gen:api` and the `apps/web` typecheck were run for the contract change. Not run: Playwright E2E, CI jobs. There is no BFF route or UI for these endpoints (D-162).
+
+## Phase 4 evidence (not tied to one AC)
+- `POST /api/v1/invitations/accept` (contract first): needs a verified session and the session-bound CSRF token; the token is read from the body only. One transaction: the company is found from the token hash as a plain value, the company row is locked, then the invitation (re-read, hash re-checked); status, expiry, signed-in address, company state and the inviter's current right to grant the role are checked under the locks; then the existing-member and member-limit checks (these two are the only answers that differ, and only once the address matched); then the membership, the end of the invitation and the audit rows (`invitation.accepted`, `membership.created`).
+- `MembershipChangeListener` (a port in the tenant package) lets `MembershipService` tell the invitation module about a role or status change without depending on it; `InvitationsOfChangedInviter` revokes what the member can no longer grant, in the same transaction, and audits it as `invitation.revoked` with reason `inviter_changed`.
+- Mutation checks (each fails a test): removing the address match; removing the inviter re-check; removing the existing-member check (a 500 from the unique index); removing the limit hook; removing the listener call; not counting failed attempts.
+- Test lesson: the shared registration helper reads the first email sent to an address as the verification link, so the tests forget the invitation email after reading its token; without that the invitee's account stayed unverified and every request failed CSRF. The 403 was misleading; reading the response body found it.
+
+## Checks run (Phase 4)
+See the pull request for `./mvnw verify`. `npm run lint` in `contracts`, `gen:api` and the `apps/web` typecheck were run for the contract change. Not run: Playwright E2E, CI jobs. There is no BFF route or UI for acceptance yet (Phase 5).
