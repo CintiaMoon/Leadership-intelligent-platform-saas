@@ -84,7 +84,7 @@ Two read-only agents reviewed the merged slice and the operator procedure: a sec
 ## Carried forward to later slices
 - Slice 005: repeat the ownership-transfer race through its own service (Phase 4 used a raw transaction); write and rehearse the operator transfer runbook (D-142); the transfer must lock the company row first.
 - Slice 006: replace `UnlimitedActiveMembers` with the plan-based limit (AC-MEM-17); an ACTIVE membership of a DISABLED account uses a plan seat (D-141), so count it.
-- Slice 007: refuse company deletion while `ownership_resolution_at` is set (AC-MEM-18).
+- Slice 007: refuse company deletion requests while `ownership_resolution_at` is set (AC-MEM-18, AC-DEL-20) and do not purge a flagged company (D-143, which amends SPEC-DEL; change the spec text in the slice 007 plan).
 - Platform: still no server-wide request body limit and no measured connection-pool headroom (the Phase 4 storm showed that a burst of 90 simultaneous requests is survivable only because the denial audit no longer needs a second connection).
 
 ## Checks run (Phase 5)
@@ -100,7 +100,7 @@ All acceptance criteria that belong to this slice have tests. Exceptions: AC-MEM
 | Independent security and code reviews | Done | Findings and dispositions are in the Phase 5 section |
 | D-137 (no rate limit for Owners and Admins) | Accepted risk (signed off 2026-10-23) | Agents and Viewers are refused before any lock; Owners' and Admins' changes are audited and serialized but not throttled |
 | D-141 memberships of a disabled account | Done | Decided 2026-10-24: leave ACTIVE, reversible, a plan seat is used (slice 006 must count them) |
-| D-142 recovery of a re-enabled Owner | Partly decided | The reversal script is written and tested (`OwnerAccountReversalProcedureTests`, 6, with mutation checks on its two safety conditions); the operator transfer, the single-member company and the production gate are still open and block the slice 005 runbook |
+| D-142 recovery of a re-enabled Owner | Decided (2026-10-24) | Reversal script written and tested (`OwnerAccountReversalProcedureTests`, 6, with mutation checks on its two safety conditions); the operator transfer is designed in `operator-ownership-transfer.md` and built in slice 005; a company with no other member stays flagged and retained (`list-flagged-companies.sql`, `FlaggedCompaniesQueryTests`); the production gate is in the disable runbook |
 | Operator procedure in a deployed environment, with `psql` | Accepted risk (signed off 2026-10-23) | The test runs the same statements through JDBC; the runbook stays Draft until one rehearsal is recorded. Owed: before the procedure is used in production |
 | V12 lock behaviour on a large `audit_event` table | Accepted risk (signed off 2026-10-23) | The migration comment overstates; apply in a quiet period (D-129 note) |
 | Deletion guard on `ownership_resolution_at` (AC-MEM-18) | Carried forward | Slice 007 |
@@ -114,4 +114,7 @@ All acceptance criteria that belong to this slice have tests. Exceptions: AC-MEM
 ## Follow-up (2026-10-24): D-141 and D-142
 - D-141 decided (leave ACTIVE; reversible; a plan seat is used). No code change.
 - D-142 item 1 decided and built: `reverse-account-disable.sql` restores the Owner membership and clears the flag only when the membership is still the Owner role, is SUSPENDED in a flagged company, and the audit trail holds the operator suspension for it. `OwnerAccountReversalProcedureTests` (6): full round trip including the Owner working again after logging in; idempotent; after a (simulated) ownership transfer nothing is restored and the company stays flagged; an Owner suspended by hand is never restored; an unknown address or a bad ticket commits nothing; an account that owns nothing is only enabled. Mutation checks: removing the audit-trail condition and removing the Owner-role condition each make a test fail. New audit event `company.ownership_resolution.cleared` added to the catalogue.
-- Not run: the script with real `psql` or in a deployed environment. `./mvnw verify` ran 419 tests with 0 failures and 2 skipped after this follow-up.
+- Not run: the script with real `psql` or in a deployed environment. `./mvnw verify` ran 420 tests with 0 failures and 2 skipped after the last follow-up (D-142 items 2 to 4 added the flagged-companies query test).
+
+- D-142 items 2 to 4 decided on 2026-10-24: design of the operator transfer recorded in `operator-ownership-transfer.md` (to be built and rehearsed in slice 005); a company whose Owner was its only member stays flagged and retained, listed by `docs/runbooks/operations/sql/list-flagged-companies.sql` (`FlaggedCompaniesQueryTests` runs it against PostgreSQL); production gate (routine use waits for the rehearsals, emergency use with the security owner's recorded approval) written into the disable runbook.
+- D-143 (new, decided 2026-10-24): a flagged company must not be purged. Found while answering D-142: a deletion pending when the Owner is disabled could not be cancelled by anyone. Amends SPEC-DEL; slice 007 carries it.

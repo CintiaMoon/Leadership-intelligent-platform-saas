@@ -10,6 +10,19 @@
 - **Companies where the account is only a member.** Their memberships stay `ACTIVE` by decision (D-141): the session filter and the account status already deny every tenant, re-enabling the account restores access, and the memberships keep using a plan seat.
 - The procedure writes audit rows with `actor_type = 'operator'`: `account.status.changed`, `membership.suspended` and `company.ownership_resolution.flagged` (reason `owner_account_disabled`). The operator is identified by the ticket you record, not by a user ID.
 
+## Production gate (D-142)
+- **Routine use waits** until the operator transfer runbook is written, the disable, reversal and transfer scripts have been rehearsed with real `psql` on staging (record it under "Test record"), and the single-member rule below is in force.
+- **Emergency use is allowed** (for example a compromised Owner) with the security owner's recorded approval. The ticket must state that the company stays in Admin-only mode (Owner-only operations unavailable) until the transfer runbook exists, and that the reversal script is the only way back before then.
+
+## Companies left flagged
+List them, oldest first, with the number of active members who could take over:
+
+```
+psql -f docs/runbooks/operations/sql/list-flagged-companies.sql
+```
+
+A company whose Owner was its only member shows `other_active_members = 0`. It stays flagged and retained: nobody can use it, and the reversal script still works if the disable was a mistake. There is no deletion or invitation path for it; deleting after a retention period is a product and legal decision (D-40, D-100). A deletion that was already pending when the Owner was disabled must not be purged while the company is flagged (D-143, slice 007).
+
 ## Who may do it
 The security owner approves; a database operator runs it with a named, audited role. Record the ticket and the reason.
 
@@ -55,7 +68,7 @@ If the check shows a company still flagged, it was not restored (for example own
 
 ## Gaps to close
 - There is no operator endpoint or operator identity; the audit rows carry the ticket and the database role instead of an operator ID. Add real operators in the slice that introduces them.
-- The operator transfer to an active member (slice 005, `operator-ownership-transfer.md`) is not written, and D-142 still has open questions: who verifies and approves, who may receive ownership, a company whose Owner was its only member, and whether the disable procedure may be used in production before that runbook is rehearsed.
+- The operator transfer to an active member (slice 005, `operator-ownership-transfer.md`) is decided (D-142) but not written or rehearsed. The purge guard for flagged companies (D-143) belongs to slice 007.
 - Memberships of the disabled account in companies it does not own stay `ACTIVE`, appear in member lists and keep using a plan seat (D-141, decided).
 - Disabling does not clear `login_throttle` state; that is intended.
 
