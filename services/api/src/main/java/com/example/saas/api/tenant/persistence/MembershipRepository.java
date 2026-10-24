@@ -22,6 +22,15 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 
 	Membership save(Membership membership);
 
+	/** Writes now, so a following statement sees the row. */
+	Membership saveAndFlush(Membership membership);
+
+	/** Whether the user holds an ACTIVE or SUSPENDED membership in the company (the unique index covers exactly these). */
+	@Query("select count(m) > 0 from Membership m where m.companyId = :companyId and m.userId = :userId and m.status in "
+			+ "(com.example.saas.api.tenant.domain.MembershipStatus.ACTIVE, "
+			+ "com.example.saas.api.tenant.domain.MembershipStatus.SUSPENDED)")
+	boolean hasLiveMembership(@Param("companyId") UUID companyId, @Param("userId") UUID userId);
+
 	/** The caller's membership in one company; the per-request authorization lookup. */
 	Optional<Membership> findByCompanyIdAndUserIdAndStatus(UUID companyId, UUID userId, MembershipStatus status);
 

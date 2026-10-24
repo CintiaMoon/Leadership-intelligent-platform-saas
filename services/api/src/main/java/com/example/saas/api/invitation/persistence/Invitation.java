@@ -121,6 +121,16 @@ public class Invitation {
 		this.updatedAt = now;
 	}
 
+	/** The invitee joined. The token is dead from this moment. */
+	public void accept(UUID by, Instant now) {
+		requirePending();
+		this.status = InvitationStatus.ACCEPTED;
+		this.tokenHash = null;
+		this.acceptedAt = now;
+		this.acceptedBy = by;
+		this.updatedAt = now;
+	}
+
 	public void revoke(UUID by, Instant now) {
 		requirePending();
 		this.status = InvitationStatus.REVOKED;
