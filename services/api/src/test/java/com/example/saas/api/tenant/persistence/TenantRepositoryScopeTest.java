@@ -75,7 +75,7 @@ class TenantRepositoryScopeTest {
 		if (method.isAnnotationPresent(CrossTenantByDesign.class) || Modifier.isStatic(method.getModifiers())) {
 			return true;
 		}
-		if (method.getName().equals("save") || method.getName().equals("saveAll")) {
+		if (method.getName().equals("save") || method.getName().equals("saveAll") || method.getName().equals("saveAndFlush")) {
 			return true;
 		}
 		// A derived query is scoped only if it filters on the company first; "ByUserIdOrCompanyId" is not.

@@ -58,8 +58,9 @@ class InvitationSchemaTests extends AuthIntegrationTest {
 		jdbc.update(INSERT, seed.companyId(), email, email, role, status, tokenHash, seed.inviter());
 	}
 
-	private static String hash(char c) {
-		return String.valueOf(c).repeat(64);
+	/** 64 lower-case hex characters, different every time: the tests share one database. */
+	private static String hash() {
+		return (UUID.randomUUID().toString() + UUID.randomUUID()).replace("-", "").substring(0, 64);
 	}
 
 	private static String address() {
@@ -107,16 +108,17 @@ class InvitationSchemaTests extends AuthIntegrationTest {
 			assertThatThrownBy(() -> insert(seed, address(), "AGENT", "PENDING", bad)).as("hash of length %d", bad.length())
 				.isInstanceOf(DataIntegrityViolationException.class);
 		}
-		insert(seed, address(), "AGENT", "PENDING", hash('a'));
+		insert(seed, address(), "AGENT", "PENDING", hash());
 	}
 
 	@Test
 	void aTokenHashIdentifiesAtMostOneInvitationAcrossAllCompanies() {
 		Seed first = company();
 		Seed second = company();
-		insert(first, address(), "AGENT", "PENDING", hash('b'));
+		String shared = hash();
+		insert(first, address(), "AGENT", "PENDING", shared);
 
-		assertThatThrownBy(() -> insert(second, address(), "VIEWER", "PENDING", hash('b')))
+		assertThatThrownBy(() -> insert(second, address(), "VIEWER", "PENDING", shared))
 			.isInstanceOf(DataIntegrityViolationException.class);
 		insert(second, address(), "VIEWER", "PENDING", null);
 		insert(second, address(), "VIEWER", "PENDING", null);
@@ -126,7 +128,7 @@ class InvitationSchemaTests extends AuthIntegrationTest {
 	void onlyAPendingInvitationCanHoldATokenAndTheOutcomeFieldsMatchTheStatus() {
 		Seed seed = company();
 		String email = address();
-		insert(seed, email, "AGENT", "PENDING", hash('c'));
+		insert(seed, email, "AGENT", "PENDING", hash());
 		UUID id = jdbc.queryForObject("SELECT id FROM invitation WHERE email_normalized = ?", UUID.class, email);
 
 		assertThatThrownBy(() -> jdbc.update("UPDATE invitation SET status = 'REVOKED', revoked_at = now() WHERE id = ?", id))
@@ -139,7 +141,7 @@ class InvitationSchemaTests extends AuthIntegrationTest {
 			.as("a revoked invitation records when")
 			.isInstanceOf(DataIntegrityViolationException.class);
 		jdbc.update("UPDATE invitation SET status = 'REVOKED', token_hash = NULL, revoked_at = now() WHERE id = ?", id);
-		assertThatThrownBy(() -> jdbc.update("UPDATE invitation SET token_hash = ? WHERE id = ?", hash('d'), id))
+		assertThatThrownBy(() -> jdbc.update("UPDATE invitation SET token_hash = ? WHERE id = ?", hash(), id))
 			.as("a token cannot be put back on a revoked invitation")
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
@@ -231,13 +233,14 @@ class InvitationSchemaTests extends AuthIntegrationTest {
 		assertThat(loaded.getEmailOriginal()).isEqualTo("A@Example.com");
 		assertThat(loaded.getRole()).isEqualTo(Role.AGENT);
 		assertThat(loaded.getTokenHash()).as("no token until delivery").isNull();
-		assertThat(invitations.findCompanyIdByTokenHash(hash('e'))).isEmpty();
+		String mine = hash();
+		assertThat(invitations.findCompanyIdByTokenHash(mine)).isEmpty();
 
-		jdbc.update("UPDATE invitation SET token_hash = ? WHERE id = ?", hash('e'), saved.getId());
-		assertThat(invitations.findCompanyIdByTokenHash(hash('e'))).contains(seed.companyId());
-		assertThat(invitations.findCompanyIdByTokenHash(hash('f'))).isEmpty();
+		jdbc.update("UPDATE invitation SET token_hash = ? WHERE id = ?", mine, saved.getId());
+		assertThat(invitations.findCompanyIdByTokenHash(mine)).contains(seed.companyId());
+		assertThat(invitations.findCompanyIdByTokenHash(hash())).isEmpty();
 		jdbc.update("UPDATE invitation SET status = 'EXPIRED', token_hash = NULL WHERE id = ?", saved.getId());
-		assertThat(invitations.findCompanyIdByTokenHash(hash('e'))).as("a dead token finds nothing").isEmpty();
+		assertThat(invitations.findCompanyIdByTokenHash(mine)).as("a dead token finds nothing").isEmpty();
 	}
 
 	@Test
