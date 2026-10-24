@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-INV (slice 004)
 
-- Status: **Proposed 2026-10-24.** Nothing in this plan is implemented. Items Q-01 to Q-19 are proposals; each becomes a decision (D-144 onward, Q-NN maps to D-(143+NN)) in the register when approved. **SPEC-INV is still `Draft`**: CLAUDE.md forbids implementing a feature before its spec and plan are approved, so Phase 0 includes the product owner's approval of the spec together with the amendments proposed here.
+- Status: **Proposed 2026-10-24; spec approved 2026-10-24.** The user approved SPEC-INV with the amendments (approval item 1: expiry from the latest issue, recent authentication for Admin invitations, suspended members, duplicate create, accepting as an existing member). Q-01 to Q-19 and the phase order are still waiting for approval; nothing is implemented. Each Q-NN becomes a decision (D-144 onward, Q-NN maps to D-(143+NN)) when approved.
 - Spec: `docs/specs/004-invitations/spec.md` (SPEC-INV, Draft)
 - Related: SPEC-TEN (matrix, pending deletion), SPEC-MEM (membership rules, member limit hook), SPEC-AUTH (verified email, token pattern, fragment links), SPEC-PLAN (member limit), ADR-003 (outbox), ADR-004 (rate limiting), ADR-005 (errors); decisions D-24 to D-27, D-38, D-43, D-44, D-48, D-52, D-55, D-62, D-63, D-93, D-100, D-125, D-127, D-134, D-138
 - Date: 2026-10-24. Written from the spec, the register and the slice 001 to 003 code; no code was changed.
@@ -8,7 +8,7 @@
 ## 1. Readiness check (CLAUDE.md workflow step 1)
 | Item | State | Action |
 |---|---|---|
-| SPEC-INV status | **Draft** ("stays Draft until the product owner approves the full baseline") | Phase 0: the product owner approves the spec and the amendments in section 3 |
+| SPEC-INV status | Approved 2026-10-24 with the amendments (was Draft) | Done. AC-INV-27 to AC-INV-29 were added and AC-INV-10, 14 and 16 amended in the spec |
 | D-24 to D-27, D-38, D-43, D-44, D-48, D-52, D-62, D-63 | Decided | None |
 | D-18 (matrix) | Decided; the "Invite" and "Revoke or resend" rows already exist | None |
 | D-100 (retention of outbox and audit rows) | Approved; final periods need legal review | Not blocking. The invitation row holds an email address; see Q-04 and the risks |
@@ -47,7 +47,7 @@
 
 ## 4. Phases (one PR each, in order; each branches from `main` after the previous one is merged)
 ### Phase 0: Governance (docs only)
-Product-owner approval of SPEC-INV with the amendments (Q-03 expiry from the latest issue, Q-05 recent authentication for Admin invitations, Q-06 suspended members, Q-07, Q-08); record Q-01 to Q-19 as D-144 onward; mark the plan Approved; add the AC-INV criteria to a traceability file as Pending; status Approved in the spec.
+The spec is approved (done). Remaining: record Q-01 to Q-19 as D-144 onward; mark the plan Approved; add the AC-INV criteria (including AC-INV-27 to AC-INV-29) to a traceability file as Pending.
 
 ### Phase 1: Schema and persistence
 - Migration `V13__create_invitation.sql` (Q-04), reviewed for locks (new table only). Entity and repository (every method scoped by company, except the marked token lookup); `CompanyLocks.lockInvitation`; `RateLimiter.current` and its implementations.
@@ -106,6 +106,6 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint, the API-type drift check, web unit tests, typecheck, lint and build, Playwright (Phase 5 on), and the CI jobs. `V13` is validated on an empty database and on one that already holds V1 to V12 data. Checks not run are listed in the traceability file.
 
 ## 9. Approval needed
-1. Approval of SPEC-INV by the product owner, including the amendments: expiry counted from the latest create or resend (Q-03); recent authentication for Admin invitations (Q-05); suspended members also rejected (Q-06); a second create for the same address is 409 (Q-07); an existing live member gets 409 and nothing changes (Q-08).
+1. **Done 2026-10-24:** approval of SPEC-INV by the product owner, including the amendments: expiry counted from the latest create or resend (Q-03); recent authentication for Admin invitations (Q-05); suspended members also rejected (Q-06); a second create for the same address is 409 (Q-07); an existing live member gets 409 and nothing changes (Q-08).
 2. Q-01 to Q-19, in whole or with changes. Most worth a deliberate look: Q-03 (the token is minted at delivery), Q-09 (the uniform 422 and the two 409 cases), Q-10 (failures-only throttle and the new read method on the limiter), Q-11 (accept-time re-check of the inviter), Q-14 (accept page only, no management UI).
 3. The phase order.
