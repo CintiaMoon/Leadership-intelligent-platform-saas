@@ -34,6 +34,13 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 	Optional<Role> findRoleByCompanyIdAndUserIdAndStatus(@Param("companyId") UUID companyId,
 			@Param("userId") UUID userId, @Param("status") MembershipStatus status);
 
+	/** Whether an ACTIVE or SUSPENDED member of the company has this normalized address (D-26, D-150). */
+	@Query("select count(m) > 0 from Membership m join UserAccount u on u.id = m.userId "
+			+ "where m.companyId = :companyId and u.emailNormalized = :email and m.status in "
+			+ "(com.example.saas.api.tenant.domain.MembershipStatus.ACTIVE, "
+			+ "com.example.saas.api.tenant.domain.MembershipStatus.SUSPENDED)")
+	boolean hasLiveMemberWithEmail(@Param("companyId") UUID companyId, @Param("email") String email);
+
 	/** {@code SELECT ... FOR UPDATE} on one membership of the company, after the company row (D-125). Use {@code CompanyLocks}. */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select m from Membership m where m.companyId = :companyId and m.id = :id")

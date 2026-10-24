@@ -21,6 +21,9 @@ public interface InvitationRepository extends Repository<Invitation, UUID> {
 
 	Invitation save(Invitation invitation);
 
+	/** Writes now, so a following statement (a unique index on pending rows) sees the change. */
+	Invitation saveAndFlush(Invitation invitation);
+
 	Optional<Invitation> findByCompanyIdAndId(UUID companyId, UUID id);
 
 	List<Invitation> findByCompanyIdAndStatusOrderByCreatedAtDesc(UUID companyId, InvitationStatus status);

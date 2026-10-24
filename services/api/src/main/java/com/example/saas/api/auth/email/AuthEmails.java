@@ -32,6 +32,25 @@ public class AuthEmails {
 				""".formatted(properties.publicBaseUrl(), token));
 	}
 
+	/**
+	 * The invitation email (SPEC-INV, D-155). It carries the company name as plain text, the role and the expiry, and no
+	 * text chosen by the inviter (no name, no address), because it goes to an address nobody has proven they own. The
+	 * token is in the fragment.
+	 */
+	public EmailMessage invitation(String to, String companyName, String role, java.time.Instant expiresAt, String token) {
+		return new EmailMessage(to, "You have been invited to join " + companyName, """
+				Hello,
+
+				You have been invited to join \"%s\" as %s. To accept, sign in (or create an account with this email address), then open this link before %s:
+
+				%s/invitations/accept#token=%s
+
+				If you were not expecting this invitation, you can ignore this message.
+				""".formatted(companyName, role, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+					.withZone(java.time.ZoneOffset.UTC)
+					.format(expiresAt) + " (UTC)", properties.publicBaseUrl(), token));
+	}
+
 	public EmailMessage passwordReset(String to, String displayName, String token) {
 		return new EmailMessage(to, "Reset your password", """
 				Hello %s,

@@ -95,6 +95,47 @@ public class Invitation {
 		return invitation;
 	}
 
+	/**
+	 * Issues the invitation again (resend): any earlier token stops working at once because the hash is cleared, and a new
+	 * expiry starts. The new token is minted when the email is delivered (D-146).
+	 */
+	public void reissue(Instant now, Instant newExpiry) {
+		requirePending();
+		this.tokenHash = null;
+		this.expiresAt = newExpiry;
+		this.updatedAt = now;
+	}
+
+	/** Stores the hash of the token that was just put in the email. Replaces any earlier hash (a retried delivery). */
+	public void deliverWith(String newTokenHash, Instant now) {
+		requirePending();
+		this.tokenHash = newTokenHash;
+		this.updatedAt = now;
+	}
+
+	/** Marks a pending invitation that ran past its expiry. It holds no token afterwards. */
+	public void expire(Instant now) {
+		requirePending();
+		this.status = InvitationStatus.EXPIRED;
+		this.tokenHash = null;
+		this.updatedAt = now;
+	}
+
+	public void revoke(UUID by, Instant now) {
+		requirePending();
+		this.status = InvitationStatus.REVOKED;
+		this.tokenHash = null;
+		this.revokedAt = now;
+		this.revokedBy = by;
+		this.updatedAt = now;
+	}
+
+	private void requirePending() {
+		if (status != InvitationStatus.PENDING) {
+			throw new IllegalStateException("The invitation is not pending");
+		}
+	}
+
 	public UUID getId() {
 		return id;
 	}
