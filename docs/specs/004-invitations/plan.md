@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-INV (slice 004)
 
-- Status: **Proposed 2026-10-24; spec approved 2026-10-24.** The user approved SPEC-INV with the amendments (approval item 1: expiry from the latest issue, recent authentication for Admin invitations, suspended members, duplicate create, accepting as an existing member). Q-01 to Q-19 and the phase order are still waiting for approval; nothing is implemented. Each Q-NN becomes a decision (D-144 onward, Q-NN maps to D-(143+NN)) when approved.
+- Status: **Proposed 2026-10-24; spec approved 2026-10-24.** The user approved SPEC-INV with the amendments (approval item 1: expiry from the latest issue, recent authentication for Admin invitations, suspended members, duplicate create, accepting as an existing member). Q-01 to Q-20 and the phase order are still waiting for approval; nothing is implemented. Each Q-NN becomes a decision (D-144 onward, Q-NN maps to D-(143+NN)) when approved.
 - Spec: `docs/specs/004-invitations/spec.md` (SPEC-INV, Draft)
 - Related: SPEC-TEN (matrix, pending deletion), SPEC-MEM (membership rules, member limit hook), SPEC-AUTH (verified email, token pattern, fragment links), SPEC-PLAN (member limit), ADR-003 (outbox), ADR-004 (rate limiting), ADR-005 (errors); decisions D-24 to D-27, D-38, D-43, D-44, D-48, D-52, D-55, D-62, D-63, D-93, D-100, D-125, D-127, D-134, D-138
 - Date: 2026-10-24. Written from the spec, the register and the slice 001 to 003 code; no code was changed.
@@ -44,10 +44,11 @@
 | Q-17 | Tests that must exist beyond the criteria | The invitation lookup by token hash is the only unscoped read, marked `@CrossTenantByDesign`; `TenantRepositoryScopeTest` stays green. `LogHygieneTests` gains the invitation journeys (create, deliver, accept, failed accept: no raw token in any log line). A real-endpoint matrix over four roles for create, list, resend, revoke. Cross-tenant invitation IDs give 404 and change nothing (AC-TEN-08 for invitations) |
 | Q-18 | Slice 003 interplay | The accept transaction and the membership operations take the same locks in the same order, tested together (an accept racing a suspend of the inviter; an accept racing a removal of the invited address's existing membership). New audit event `membership.created` is written by the accept path |
 | Q-19 | Slice 007 | The purge must delete a company's invitations (they hold email addresses) in the same transaction as the company and memberships. Recorded as a carry-forward |
+| Q-20 | Screens beyond the accept page (found by reading the documents; the spec itself says "the interface shows a warning" about plan capacity when inviting, and slice 003's API has no screen) | A separate **frontend slice (F1)**, after the product owner reviews `docs/design/members-and-invitations/README.md`: the Members and invitations page (list, invite dialog with the capacity warning, resend, revoke, change role, suspend, reactivate, remove), the confirm-password dialog (step-up, needs a BFF route and a component), a minimal signed-in header with a My companies page (the accept page's success state needs somewhere to link), and leave company. Each needs BFF allowlist additions (D-93). **Slice 004's build scope does not change**: Phases 1 to 5 deliver the API and the accept page only. Not needed: a page listing the invitee's invitations (impossible by design: the raw token is not stored). The open design questions in the brief (the signed-in home, navigation, visual mockups in Figma or from the brief) are the product owner's |
 
 ## 4. Phases (one PR each, in order; each branches from `main` after the previous one is merged)
 ### Phase 0: Governance (docs only)
-The spec is approved (done). Remaining: record Q-01 to Q-19 as D-144 onward; mark the plan Approved; add the AC-INV criteria (including AC-INV-27 to AC-INV-29) to a traceability file as Pending.
+The spec is approved (done). Remaining: record Q-01 to Q-20 as D-144 onward; mark the plan Approved; add the AC-INV criteria (including AC-INV-27 to AC-INV-29) to a traceability file as Pending.
 
 ### Phase 1: Schema and persistence
 - Migration `V13__create_invitation.sql` (Q-04), reviewed for locks (new table only). Entity and repository (every method scoped by company, except the marked token lookup); `CompanyLocks.lockInvitation`; `RateLimiter.current` and its implementations.
@@ -66,11 +67,14 @@ Accept service and endpoint (Q-09), membership creation, `MembershipService` rev
 ### Phase 5: Frontend and end to end
 The accept page, BFF route, `next` handling, `Referrer-Policy`, fragment removal (Q-14, Q-15); unit tests; Playwright flows (existing user, new user with Mailpit, wrong address, replay); `LogHygieneTests`.
 
+### Frontend slice F1 (separate; after the design is reviewed)
+Pages P2 to P6 of `docs/design/members-and-invitations/README.md` with their BFF routes and Playwright flows. It gets its own short plan when the design is approved. It does not block slice 004's closure; it blocks using invitations without API access.
+
 ### Phase 6: Review and closure
 Independent security and code review (read-only agents), fixes, traceability, Postman collection and OpenAPI alignment, the list of unrun checks, closure status for the user's sign-off.
 
 ## 5. Expected files
-`contracts/openapi.yaml`; migration `V13`; in `com.example.saas.api`: `invitation/domain` (`InvitationRules`), `invitation/application` (`InvitationService`, `InvitationAcceptService`, delivery handler), `invitation/persistence`, `invitation/web`, changes to `tenant/application/MembershipService`, `CompanyLocks`, `ratelimit/RateLimiter` and `JdbcRateLimiter`, `auth/email/AuthEmails` (or an `InvitationEmails`), the outbox registration; `apps/web`: the accept page, BFF route, sign-in `next` handling, `schema.d.ts`; tests under `src/test/.../invitation` and `apps/web` (unit and Playwright); `docs/specs/004-invitations/traceability.md`; register entries; the Postman collection.
+`contracts/openapi.yaml`; migration `V13`; in `com.example.saas.api`: `invitation/domain` (`InvitationRules`), `invitation/application` (`InvitationService`, `InvitationAcceptService`, delivery handler), `invitation/persistence`, `invitation/web`, changes to `tenant/application/MembershipService`, `CompanyLocks`, `ratelimit/RateLimiter` and `JdbcRateLimiter`, `auth/email/AuthEmails` (or an `InvitationEmails`), the outbox registration; `apps/web`: the accept page, BFF route, sign-in `next` handling, `schema.d.ts` (the other screens belong to F1); tests under `src/test/.../invitation` and `apps/web` (unit and Playwright); `docs/specs/004-invitations/traceability.md`; `docs/design/members-and-invitations/README.md` (draft); register entries; the Postman collection.
 
 ## 6. Acceptance-criteria coverage
 | AC | Where |
@@ -101,11 +105,12 @@ Independent security and code review (read-only agents), fixes, traceability, Po
 - `sessionStorage` holds the token during sign-in; a script running in the page could read it. The CSP (D-102) and the short window are the mitigation; a person who signs in from another tab loses nothing but a click.
 - The failure throttle is per IP address: users behind one address share it (10 failures per hour). The successes do not count.
 - Until slice 006, accepting is not capped by plan, so a company can exceed its future limit; the hook is in place.
+- Until frontend slice F1, an invited person can accept but has no company page to open (the success state links to My companies, which F1 builds), and Owners and Admins can only manage invitations through the API or Postman. Accepting the plan without F1 leaves invitations usable by API clients only.
 
 ## 8. Checks that will be run per phase
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint, the API-type drift check, web unit tests, typecheck, lint and build, Playwright (Phase 5 on), and the CI jobs. `V13` is validated on an empty database and on one that already holds V1 to V12 data. Checks not run are listed in the traceability file.
 
 ## 9. Approval needed
 1. **Done 2026-10-24:** approval of SPEC-INV by the product owner, including the amendments: expiry counted from the latest create or resend (Q-03); recent authentication for Admin invitations (Q-05); suspended members also rejected (Q-06); a second create for the same address is 409 (Q-07); an existing live member gets 409 and nothing changes (Q-08).
-2. Q-01 to Q-19, in whole or with changes. Most worth a deliberate look: Q-03 (the token is minted at delivery), Q-09 (the uniform 422 and the two 409 cases), Q-10 (failures-only throttle and the new read method on the limiter), Q-11 (accept-time re-check of the inviter), Q-14 (accept page only, no management UI).
+2. Q-01 to Q-20, in whole or with changes (Q-20 added 2026-10-24 after the user asked what other pages the spec needs). Most worth a deliberate look: Q-03 (the token is minted at delivery), Q-09 (the uniform 422 and the two 409 cases), Q-10 (failures-only throttle and the new read method on the limiter), Q-11 (accept-time re-check of the inviter), Q-14 (accept page only, no management UI).
 3. The phase order.
