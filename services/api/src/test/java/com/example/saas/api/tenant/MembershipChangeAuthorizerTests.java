@@ -216,13 +216,28 @@ class MembershipChangeAuthorizerTests extends AuthIntegrationTest {
 
 		try (Holder holder = new Holder(tx, locks, c.id(), () -> {
 		})) {
-			long started = System.nanoTime();
+			// With the lock held and a 500 ms timeout, a request that queued would fail with a locking exception.
 			assertThatThrownBy(() -> authorize(outsider, c.id(), c.agent().membershipId(), MembershipOperation.SUSPEND,
 					null)).isInstanceOf(CompanyNotFoundException.class);
+		}
+	}
 
-			assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
-				.as("no queueing for a lock that an outsider may not take")
-				.isLessThan(400L);
+	@Test
+	void anAgentAndAViewerAreRefusedWithoutQueueingForTheLockAndSoIsTheOwnerLeaving() throws Exception {
+		Company c = company();
+
+		try (Holder holder = new Holder(tx, locks, c.id(), () -> {
+		})) {
+			for (Member weak : new Member[] { c.agent(), c.viewer() }) {
+				for (MembershipOperation op : new MembershipOperation[] { MembershipOperation.CHANGE_ROLE,
+						MembershipOperation.SUSPEND, MembershipOperation.REACTIVATE, MembershipOperation.REMOVE }) {
+					assertThatThrownBy(() -> authorize(weak, c.id(), c.admin().membershipId(), op, Role.AGENT))
+						.as("%s by a member with no such permission", op)
+						.isInstanceOf(PermissionDeniedException.class);
+				}
+			}
+			assertThatThrownBy(() -> authorize(c.owner(), c.id(), null, MembershipOperation.LEAVE, null))
+				.isInstanceOf(PermissionDeniedException.class);
 		}
 	}
 

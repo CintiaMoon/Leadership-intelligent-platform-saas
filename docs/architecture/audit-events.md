@@ -16,7 +16,7 @@
 |---|---|---|
 | auth | `auth.user.registered`, `auth.email.verified`, `auth.login.succeeded`, `auth.login.failed`, `auth.session.revoked`, `auth.password.reset_requested`, `auth.password.reset_completed`, `auth.step_up.succeeded` | SPEC-AUTH |
 | account | `account.status.changed` (operator disable or enable) | SPEC-AUTH, SPEC-MEM |
-| company | `company.created`, `company.settings.changed`, `company.ownership_resolution.flagged` | SPEC-TEN, SPEC-MEM |
+| company | `company.created`, `company.settings.changed`, `company.ownership_resolution.flagged`, `company.ownership_resolution.cleared` | SPEC-TEN, SPEC-MEM |
 | membership | `membership.created`, `membership.role.changed`, `membership.suspended`, `membership.reactivated`, `membership.removed`, `membership.left` | SPEC-TEN, SPEC-MEM |
 | invitation | `invitation.created`, `invitation.resent`, `invitation.revoked`, `invitation.accepted`, `invitation.expired` | SPEC-INV |
 | ownership | `ownership.transfer.initiated`, `ownership.transfer.accepted`, `ownership.transfer.declined`, `ownership.transfer.cancelled`, `ownership.transfer.expired`, `ownership.transfer.operator_completed` | SPEC-OWN, SPEC-MEM |
