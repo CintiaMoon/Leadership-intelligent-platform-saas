@@ -69,6 +69,12 @@ class SecurityConfig {
 				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/members/*/suspend",
 						"/api/v1/companies/*/members/*/reactivate", "/api/v1/companies/*/leave")
 					.authenticated()
+				// Invitation management (SPEC-INV). Who may do what is decided per company by the service.
+				.requestMatchers(HttpMethod.GET, "/api/v1/companies/*/invitations").authenticated()
+				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/invitations",
+						"/api/v1/companies/*/invitations/*/resend")
+					.authenticated()
+				.requestMatchers(HttpMethod.DELETE, "/api/v1/companies/*/invitations/*").authenticated()
 				.anyRequest().denyAll())
 			.exceptionHandling(handling -> handling
 				.authenticationEntryPoint(handlers)

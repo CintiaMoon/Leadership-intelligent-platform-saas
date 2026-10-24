@@ -386,6 +386,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/companies/{companyId}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the pending invitations
+         * @description Requires the "View member list" permission (Owner and Admin). Lists the company's PENDING invitations that have
+         *     not expired, newest first. Revoked, accepted and expired invitations are not listed.
+         */
+        get: operations["listInvitations"];
+        put?: never;
+        /**
+         * Invite someone to the company
+         * @description Requires the "Invite new members" permission (Owner and Admin). An Owner may invite Admin, Agent or Viewer; an
+         *     Admin only Agent or Viewer; nobody can invite an Owner (a bad request). Inviting an **Admin** needs a login or
+         *     step-up within the last 10 minutes (403 `REAUTHENTICATION_REQUIRED`). The invitation is valid for 7 days; it
+         *     is rejected (409) if the address already belongs to an ACTIVE or SUSPENDED member or already has a pending,
+         *     unexpired invitation (resend it instead). Creating is not limited by the company's remaining plan capacity.
+         *     The invitation email is sent after the request commits; until then `emailSent` is false and the invitation cannot
+         *     be accepted. The response never contains a token. Limits: 20 per inviter per hour, 50 per company per day and
+         *     3 sends per recipient address per 24 hours, resends included, counted before the request is validated; an
+         *     unavailable counter store returns 503 (fail closed).
+         */
+        post: operations["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/invitations/{invitationId}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send an invitation again
+         * @description Requires the "Revoke or resend invitations" permission, and only for roles the caller may invite (an Admin cannot
+         *     resend an Admin invitation). The earlier token stops working at once, in the same transaction; a new token is
+         *     minted when the new email is delivered, and the 7 days start again. A pending invitation that has run past its
+         *     expiry can be resent. An invitation that is not pending returns 409. Resending an Admin invitation needs a login
+         *     or step-up within the last 10 minutes. Counts toward the send limits (see `createInvitation`).
+         */
+        post: operations["resendInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/invitations/{invitationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an invitation
+         * @description Requires the "Revoke or resend invitations" permission, and only for roles the caller may invite. Takes effect
+         *     at once: the token stops working in the same transaction. An invitation that is not pending returns 409.
+         */
+        delete: operations["revokeInvitation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -476,6 +554,34 @@ export interface components {
             joinedAt: string;
             /** @description True for the caller's own membership. */
             self: boolean;
+        };
+        CreateInvitationRequest: {
+            /** @description The address to invite. Matched on its normalized form. */
+            email: string;
+            /**
+             * @description The role the person receives on accepting. Owner cannot be invited.
+             * @enum {string}
+             */
+            role: "ADMIN" | "AGENT" | "VIEWER";
+        };
+        /** @enum {string} */
+        InvitationStatus: "PENDING" | "ACCEPTED" | "REVOKED" | "EXPIRED";
+        InvitationSummary: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            /** @enum {string} */
+            role: "ADMIN" | "AGENT" | "VIEWER";
+            status: components["schemas"]["InvitationStatus"];
+            /**
+             * Format: date-time
+             * @description 7 days after the latest create or resend.
+             */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description False until the invitation email has been delivered. Never exposes a token. */
+            emailSent: boolean;
         };
         SessionInfo: {
             /** Format: uuid */
@@ -615,7 +721,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description An IP-level limit was exceeded. */
+        /** @description A rate limit was exceeded (an IP-level, per-account, per-inviter, per-company or per-recipient limit, depending on the operation). */
         RateLimited: {
             headers: {
                 "Retry-After": components["headers"]["RetryAfter"];
@@ -1174,6 +1280,128 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending invitations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationSummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The invitation, PENDING. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationSummary"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    resendInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitation after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    revokeInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
         };
     };
