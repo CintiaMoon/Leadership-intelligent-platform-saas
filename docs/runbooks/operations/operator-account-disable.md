@@ -1,13 +1,13 @@
 # Runbook: Operator account disable and session revocation
 
-- Status: Draft (updated 2026-10-23 for slice 003). The SQL file is executed against PostgreSQL by the integration test `OwnerAccountDisableProcedureTests` on every build. It has **not been rehearsed** in a deployed environment and there is no operator API yet. Do not rely on it for a real incident without a rehearsal.
+- Status: Draft (updated 2026-10-24 for slice 003). Both SQL files are executed against PostgreSQL by the integration tests `OwnerAccountDisableProcedureTests` and `OwnerAccountReversalProcedureTests` on every build. It has **not been rehearsed** in a deployed environment and there is no operator API yet. Do not rely on it for a real incident without a rehearsal.
 - Owner role: Security owner
 - Related: SPEC-AUTH AC-AUTH-07, SPEC-MEM (AC-MEM-14, AC-MEM-18), SPEC-OWN, D-22, D-54
 
 ## What happens when an account is disabled
 - The session filter checks the account status on every request. A `DISABLED` account is rejected at once, even before its sessions are deleted, and cannot log in. Deleting the sessions then frees the rows.
 - **Companies the account owns (D-54).** Each such company keeps exactly one Owner membership, which becomes `SUSPENDED` (the role stays `OWNER`), and is flagged with `company.ownership_resolution_at`. A suspended Owner has no access, nobody else holds an Owner-only permission, so company deletion, ownership transfer by the Owner, Admin promotion, plan changes and every other Owner-only operation are unavailable. Admins, Agents and Viewers keep working. The company stays like this until an audited, operator-assisted transfer to an active member (slice 005 and `operator-ownership-transfer.md`, still a stub).
-- **Companies where the account is only a member.** Their memberships stay `ACTIVE`; the account simply cannot use them while disabled.
+- **Companies where the account is only a member.** Their memberships stay `ACTIVE` by decision (D-141): the session filter and the account status already deny every tenant, re-enabling the account restores access, and the memberships keep using a plan seat.
 - The procedure writes audit rows with `actor_type = 'operator'`: `account.status.changed`, `membership.suspended` and `company.ownership_resolution.flagged` (reason `owner_account_disabled`). The operator is identified by the ticket you record, not by a user ID.
 
 ## Who may do it
@@ -36,17 +36,28 @@ Then confirm: the user's next request returns 401, a login attempt returns the s
 ## Revoke sessions without disabling (suspected stolen session)
 Run only the `DELETE FROM spring_session ...` statement (step 3 of the script). The user stays able to log in again. If the password may be known to the attacker, also require a password reset (the user can use the forgot-password page, which signs out every device).
 
-## Re-enabling
-`UPDATE app_user SET status = 'ACTIVE' WHERE email_normalized = '...';` Sessions are not restored; the user logs in again.
+## Undoing a mistaken disable (D-142)
+Use the reviewed reversal script. Do **not** re-enable the account with a plain `UPDATE`: that leaves an Owner membership suspended and the company flagged, and no application path can reactivate an Owner.
 
-**Re-enabling does not undo the company effects.** An Owner membership that the procedure suspended stays suspended and the company stays flagged. Returning the Owner, or transferring ownership, needs a decision by the security owner and a separate reviewed script; none exists yet. Do not improvise one with ad-hoc `UPDATE`s: the Owner invariant (exactly one Owner membership per company) is enforced by the database, and a mistake there is a data incident.
+```
+psql --single-transaction --set ON_ERROR_STOP=1 -v email=person@example.com -v ticket=SEC-124 \
+     -f docs/runbooks/operations/sql/reverse-account-disable.sql
+```
+
+`ticket` is the approval ticket of the reversal. In one transaction the script: checks the inputs (an unknown address or a malformed ticket stops it and commits nothing); locks the company rows (5-second timeout); restores each Owner membership to `ACTIVE` and clears its flag, with audit rows (`membership.reactivated`, `company.ownership_resolution.cleared`, reason `owner_account_restored`, ticket and database role); re-enables the account (`account.status.changed`); and prints a check. Sessions are not restored: the user logs in again.
+
+It restores an Owner membership only if all of these hold, so it cannot undo anything else:
+- the membership still has the Owner role (so no ownership transfer has happened since);
+- it is `SUSPENDED` and its company is still flagged;
+- the audit trail holds the operator suspension written by the disable script for exactly this membership.
+
+If the check shows a company still flagged, it was not restored (for example ownership was transferred): do not force it; follow the operator ownership transfer instead. Idempotent: a second run changes nothing.
 
 ## Gaps to close
 - There is no operator endpoint or operator identity; the audit rows carry the ticket and the database role instead of an operator ID. Add real operators in the slice that introduces them.
-- The transfer to an active member (slice 005) and the reversal above are not written.
-- Memberships of the disabled account in companies it does not own stay `ACTIVE`: they appear in member lists, count toward plan limits, and become usable again if the account is re-enabled. Decision D-141 (open).
-- A re-enabled Owner stays suspended and nobody can reactivate the membership (an Admin may not act on an Owner). Decision D-142 (open).
+- The operator transfer to an active member (slice 005, `operator-ownership-transfer.md`) is not written, and D-142 still has open questions: who verifies and approves, who may receive ownership, a company whose Owner was its only member, and whether the disable procedure may be used in production before that runbook is rehearsed.
+- Memberships of the disabled account in companies it does not own stay `ACTIVE`, appear in member lists and keep using a plan seat (D-141, decided).
 - Disabling does not clear `login_throttle` state; that is intended.
 
 ## Test record
-Automated: `OwnerAccountDisableProcedureTests` (runs the script file against PostgreSQL in every build). Manual rehearsal in a deployed environment: none yet. Record the date, the tester, and the result after the first rehearsal.
+Automated: `OwnerAccountDisableProcedureTests` and `OwnerAccountReversalProcedureTests` (run the script files against PostgreSQL in every build). Manual rehearsal in a deployed environment: none yet. Record the date, the tester, and the result after the first rehearsal.

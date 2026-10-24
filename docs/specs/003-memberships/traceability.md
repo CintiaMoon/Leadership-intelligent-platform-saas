@@ -77,13 +77,13 @@ Two read-only agents reviewed the merged slice and the operator procedure: a sec
 | Test names claimed more than they tested (leave); pending-deletion company state not covered over HTTP; timing assertion; NULL-vacuous regex | Code L3, L4, L5 | Fixed: Agent and suspended-member leave cases, `whileACompanyIsPendingDeletionNoMemberChangeIsAllowedToAnyone`, timing assertion replaced by an outcome assertion, regex made NULL-safe. Not changed: the storm test orders audit rows by timestamp and then a random ID, so a same-microsecond tie could theoretically flake it |
 | Stale comments and contract text (manager Javadoc, ErrorCode description, a 409 on leave that cannot happen), unused user lookup on remove and leave | Code L6, Info | Fixed |
 | The throttle slot of the denial audit is consumed before the insert, so a failed insert hides that denial for an hour; REAUTHENTICATION_REQUIRED is not audited | Security L1 | Accepted: both are logged (`log.error`) and rare; no new requirement invented |
-| Non-Owner memberships of a disabled account stay ACTIVE | Security L3 | **Open: D-141** (does not block closure) |
-| A re-enabled Owner stays suspended and cannot be reactivated | Security L4 | **Open: D-142** (blocks the slice 005 runbook) |
+| Non-Owner memberships of a disabled account stay ACTIVE | Security L3 | Decided (D-141, 2026-10-24): leave ACTIVE |
+| A re-enabled Owner stays suspended and cannot be reactivated | Security L4 | Partly decided (D-142, 2026-10-24): reversal script written and tested; the rest blocks the slice 005 runbook |
 | Owner leaving is refused through the matrix cell only; the `self` check in the rules is unreachable | Security L2 | Accepted: the early refusal now covers the Owner leaving explicitly, and the self check stays as a safeguard |
 
 ## Carried forward to later slices
 - Slice 005: repeat the ownership-transfer race through its own service (Phase 4 used a raw transaction); write and rehearse the operator transfer runbook (D-142); the transfer must lock the company row first.
-- Slice 006: replace `UnlimitedActiveMembers` with the plan-based limit (AC-MEM-17); decide whether memberships of DISABLED accounts count (D-141).
+- Slice 006: replace `UnlimitedActiveMembers` with the plan-based limit (AC-MEM-17); an ACTIVE membership of a DISABLED account uses a plan seat (D-141), so count it.
 - Slice 007: refuse company deletion while `ownership_resolution_at` is set (AC-MEM-18).
 - Platform: still no server-wide request body limit and no measured connection-pool headroom (the Phase 4 storm showed that a burst of 90 simultaneous requests is survivable only because the denial audit no longer needs a second connection).
 
@@ -99,8 +99,8 @@ All acceptance criteria that belong to this slice have tests. Exceptions: AC-MEM
 |---|---|---|
 | Independent security and code reviews | Done | Findings and dispositions are in the Phase 5 section |
 | D-137 (no rate limit for Owners and Admins) | Accepted risk (signed off 2026-10-23) | Agents and Viewers are refused before any lock; Owners' and Admins' changes are audited and serialized but not throttled |
-| D-141 memberships of a disabled account | Open | Needs a decision; does not block closure |
-| D-142 recovery of a re-enabled Owner | Open | Needs a decision; blocks the slice 005 runbook |
+| D-141 memberships of a disabled account | Done | Decided 2026-10-24: leave ACTIVE, reversible, a plan seat is used (slice 006 must count them) |
+| D-142 recovery of a re-enabled Owner | Partly decided | The reversal script is written and tested (`OwnerAccountReversalProcedureTests`, 6, with mutation checks on its two safety conditions); the operator transfer, the single-member company and the production gate are still open and block the slice 005 runbook |
 | Operator procedure in a deployed environment, with `psql` | Accepted risk (signed off 2026-10-23) | The test runs the same statements through JDBC; the runbook stays Draft until one rehearsal is recorded. Owed: before the procedure is used in production |
 | V12 lock behaviour on a large `audit_event` table | Accepted risk (signed off 2026-10-23) | The migration comment overstates; apply in a quiet period (D-129 note) |
 | Deletion guard on `ownership_resolution_at` (AC-MEM-18) | Carried forward | Slice 007 |
@@ -110,3 +110,8 @@ All acceptance criteria that belong to this slice have tests. Exceptions: AC-MEM
 | Connection-pool headroom, request body size limit | Accepted risk (signed off 2026-10-23) | Not measured or configured (platform decisions) |
 | Storm test audit ordering by timestamp then random ID | Accepted risk (signed off 2026-10-23) | A same-microsecond tie could flake it in theory |
 | Closure sign-off | Done | Slice 003 closed by the user on 2026-10-23, with D-141 and D-142 still open |
+
+## Follow-up (2026-10-24): D-141 and D-142
+- D-141 decided (leave ACTIVE; reversible; a plan seat is used). No code change.
+- D-142 item 1 decided and built: `reverse-account-disable.sql` restores the Owner membership and clears the flag only when the membership is still the Owner role, is SUSPENDED in a flagged company, and the audit trail holds the operator suspension for it. `OwnerAccountReversalProcedureTests` (6): full round trip including the Owner working again after logging in; idempotent; after a (simulated) ownership transfer nothing is restored and the company stays flagged; an Owner suspended by hand is never restored; an unknown address or a bad ticket commits nothing; an account that owns nothing is only enabled. Mutation checks: removing the audit-trail condition and removing the Owner-role condition each make a test fail. New audit event `company.ownership_resolution.cleared` added to the catalogue.
+- Not run: the script with real `psql` or in a deployed environment. `./mvnw verify` ran 419 tests with 0 failures and 2 skipped after this follow-up.

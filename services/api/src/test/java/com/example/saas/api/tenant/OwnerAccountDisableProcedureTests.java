@@ -1,9 +1,7 @@
 package com.example.saas.api.tenant;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -67,23 +65,9 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 		});
 	}
 
-	/** The runbook's statements with the psql variable replaced; comments dropped; one statement per element. */
+	/** The runbook's statements with the psql variables replaced and the comments dropped. */
 	private static List<String> statements(String email, String ticket) throws IOException {
-		StringBuilder current = new StringBuilder();
-		List<String> out = new ArrayList<>();
-		for (String line : Files.readAllLines(SCRIPT)) {
-			if (line.strip().startsWith("--")) {
-				continue;
-			}
-			current.append(line.replace(":'email'", "'" + email.replace("'", "''") + "'")
-				.replace(":'ticket'", "'" + ticket.replace("'", "''") + "'")).append('\n');
-			if (line.stripTrailing().endsWith(";")) {
-				out.add(current.toString());
-				current.setLength(0);
-			}
-		}
-		assertThat(current.toString().strip()).as("the script ends with a complete statement").isEmpty();
-		return out;
+		return RunbookSql.statements(SCRIPT, java.util.Map.of("email", email, "ticket", ticket));
 	}
 
 	/** Runs the script in one transaction, as psql --single-transaction does. */
