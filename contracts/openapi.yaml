@@ -3,7 +3,7 @@ info:
   title: SaaS Platform API
   version: 0.1.0
   description: |
-    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001), SPEC-TEN (slice 002) and SPEC-MEM (slice 003) operations are defined so far;
+    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001), SPEC-TEN (slice 002), SPEC-MEM (slice 003) and SPEC-INV (slice 004, management operations) operations are defined so far;
     each further endpoint is added with its approved feature spec (docs/api/contract-guidelines.md).
 
     Conventions
@@ -29,6 +29,8 @@ tags:
     description: Company creation and reading (SPEC-TEN).
   - name: Members
     description: Member list, role changes, suspension, removal and leaving (SPEC-MEM).
+  - name: Invitations
+    description: Inviting people to a company, listing, resending and revoking invitations (SPEC-INV).
 paths:
   /api/v1/auth/csrf:
     get:
@@ -648,6 +650,176 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/companies/{companyId}/invitations:
+    post:
+      tags: [Invitations]
+      operationId: createInvitation
+      summary: Invite someone to the company
+      description: |
+        Requires the "Invite new members" permission (Owner and Admin). An Owner may invite Admin, Agent or Viewer; an
+        Admin only Agent or Viewer; nobody can invite an Owner (a bad request). Inviting an **Admin** needs a login or
+        step-up within the last 10 minutes (403 `REAUTHENTICATION_REQUIRED`). The invitation is valid for 7 days; it
+        is rejected (409) if the address already belongs to an ACTIVE or SUSPENDED member or already has a pending,
+        unexpired invitation (resend it instead). Creating is not limited by the company's remaining plan capacity.
+        The invitation email is sent after the request commits; until then `emailSent` is false and the invitation cannot
+        be accepted. The response never contains a token. Limits: 20 per inviter per hour, 50 per company per day and
+        3 sends per recipient address per 24 hours, resends included, counted before the request is validated; an
+        unavailable counter store returns 503 (fail closed).
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: The invitation, PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationSummary'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags: [Invitations]
+      operationId: listInvitations
+      summary: List the pending invitations
+      description: |
+        Requires the "View member list" permission (Owner and Admin). Lists the company's PENDING invitations that have
+        not expired, newest first. Revoked, accepted and expired invitations are not listed.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The pending invitations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvitationSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/companies/{companyId}/invitations/{invitationId}/resend:
+    post:
+      tags: [Invitations]
+      operationId: resendInvitation
+      summary: Send an invitation again
+      description: |
+        Requires the "Revoke or resend invitations" permission, and only for roles the caller may invite (an Admin cannot
+        resend an Admin invitation). The earlier token stops working at once, in the same transaction; a new token is
+        minted when the new email is delivered, and the 7 days start again. A pending invitation that has run past its
+        expiry can be resent. An invitation that is not pending returns 409. Resending an Admin invitation needs a login
+        or step-up within the last 10 minutes. Counts toward the send limits (see `createInvitation`).
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The invitation after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/companies/{companyId}/invitations/{invitationId}:
+    delete:
+      tags: [Invitations]
+      operationId: revokeInvitation
+      summary: Revoke an invitation
+      description: |
+        Requires the "Revoke or resend invitations" permission, and only for roles the caller may invite. Takes effect
+        at once: the token stops working in the same transaction. An invitation that is not pending returns 409.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   securitySchemes:
     bffCredential:
@@ -854,6 +1026,46 @@ components:
         self:
           type: boolean
           description: True for the caller's own membership.
+    CreateInvitationRequest:
+      type: object
+      required: [email, role]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          description: The address to invite. Matched on its normalized form.
+        role:
+          type: string
+          enum: [ADMIN, AGENT, VIEWER]
+          description: The role the person receives on accepting. Owner cannot be invited.
+    InvitationStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, REVOKED, EXPIRED]
+    InvitationSummary:
+      type: object
+      required: [id, email, role, status, expiresAt, createdAt, emailSent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, AGENT, VIEWER]
+        status:
+          $ref: '#/components/schemas/InvitationStatus'
+        expiresAt:
+          type: string
+          format: date-time
+          description: 7 days after the latest create or resend.
+        createdAt:
+          type: string
+          format: date-time
+        emailSent:
+          type: boolean
+          description: False until the invitation email has been delivered. Never exposes a token.
     SessionInfo:
       type: object
       required: [userId, email, displayName, emailVerified, lastAuthenticatedAt, expiresAt]
@@ -1003,7 +1215,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     RateLimited:
-      description: An IP-level limit was exceeded.
+      description: A rate limit was exceeded (an IP-level, per-account, per-inviter, per-company or per-recipient limit, depending on the operation).
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'

@@ -10,7 +10,7 @@ import com.example.saas.api.tenant.application.CompanyNotFoundException;
  * shortened forms such as {@code 1-1-1-1-1}, which would give one resource many URLs. Anything else is "not found",
  * like an unknown ID, so a malformed path reveals nothing.
  */
-final class PathIds {
+public final class PathIds {
 
 	private static final Pattern CANONICAL_UUID = Pattern
 		.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
@@ -18,7 +18,7 @@ final class PathIds {
 	private PathIds() {
 	}
 
-	static UUID parse(String raw) {
+	public static UUID parse(String raw) {
 		if (raw == null || !CANONICAL_UUID.matcher(raw).matches()) {
 			throw new CompanyNotFoundException();
 		}
