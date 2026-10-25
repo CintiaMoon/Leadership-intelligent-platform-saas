@@ -58,7 +58,7 @@ test("two people using the app at once never see each other's pages, and a page 
   const foreign = await sessionA.page.request.get(`/companies/${b.companyId}`);
   const missing = await sessionA.page.request.get(`/companies/${randomUUID()}`);
   expect(foreign.status()).toBe(missing.status());
-  const text = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  const text = (html: string) => html.replace(/<|>/g, " ").replace(/\s+/g, " ");
   expect(text(await foreign.text())).toBe(text(await missing.text()));
   expect(await foreign.text()).not.toContain(b.companyName);
 
