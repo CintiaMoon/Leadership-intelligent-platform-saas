@@ -41,10 +41,11 @@ test("sign in lands on My companies; creating a company opens it and the list sh
 
   await createCompany(page, "Acme Labs");
 
-  await expect(page).toHaveURL(/\/companies\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/companies\/[0-9a-f-]{36}\/members$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Acme Labs");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Owner");
-  await expect(page.getByText("Company home is coming")).toBeVisible();
+  // An Owner goes straight to Members (D-168); the Owner cannot leave.
+  await expect(page.getByRole("heading", { name: "Members (1)" })).toBeVisible();
   await expect(page.getByText("Transfer ownership first.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Leave company" })).toHaveCount(0);
   await expectNoSeriousA11yViolations(page);
@@ -76,7 +77,7 @@ test("a company name is shown as text, and a bad name is refused with a field er
   const markup = '<b>bold</b> & "quotes"';
   await page.getByLabel("Company name").fill(markup);
   await page.getByRole("button", { name: "Create company" }).click();
-  await expect(page).toHaveURL(/\/companies\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/companies\/[0-9a-f-]{36}\/members$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(markup);
   expect(await page.locator("h1 b").count()).toBe(0);
 });
@@ -136,7 +137,7 @@ test("a company that is not yours, or not an id at all, shows the same calm page
   await createVerifiedAccount(page, owner);
   await signIn(page, owner, PASSWORD);
   await createCompany(page, "Private Co");
-  await expect(page).toHaveURL(/\/companies\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/companies\/[0-9a-f-]{36}\/members$/);
   const companyUrl = page.url();
   await context.clearCookies();
 
@@ -148,7 +149,7 @@ test("a company that is not yours, or not an id at all, shows the same calm page
   await signIn(page, stranger, PASSWORD);
   await expect(page).toHaveURL(/\/companies$/);
 
-  for (const path of [new URL(companyUrl).pathname, "/companies/not-a-uuid", "/companies/a%3Fb%3Dc", "/companies/..%2F..%2Fapi", "/companies/11111111-1111-4111-8111-111111111111"]) {
+  for (const path of [new URL(companyUrl).pathname, new URL(companyUrl).pathname.replace(/\/members$/, ""), "/companies/not-a-uuid", "/companies/a%3Fb%3Dc", "/companies/..%2F..%2Fapi", "/companies/11111111-1111-4111-8111-111111111111"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "This page is not available." })).toBeVisible();
     await expect(page.getByText("Private Co")).toHaveCount(0);
