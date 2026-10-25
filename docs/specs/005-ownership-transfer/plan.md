@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-OWN (slice 005)
 
-- Status: **Draft for approval (2026-10-25).** Nothing is implemented. Q-01 to Q-19 below are proposals, recorded as D-176 to D-194 (Proposed) in the register; approving the plan approves them, and approves SPEC-OWN with the amendments of Q-19.
+- Status: **Approved 2026-10-25: Q-01 to Q-19** (user: "I approve Q-01 to Q-19"), recorded as D-176 to D-194 in the register; this includes the SPEC-OWN amendments of Q-19 and the phase order of Q-01. Phase 0 and Phase 1 are done in one pull request; nothing else is implemented.
 - Spec: `docs/specs/005-ownership-transfer/spec.md` (SPEC-OWN, Draft; the decisions D-28 to D-32, D-43, D-54, D-64 inside it were decided 2026-10-16/17).
 - Related: SPEC-TEN (matrix, pending deletion), SPEC-MEM (membership rules, the ownership flag, D-135, D-141, D-142), SPEC-INV (the listener of slice 004), SPEC-AUTH (recent authentication, D-15, D-89), SPEC-DEL (slice 007, D-31, D-143), ADR-003 (outbox), ADR-005 (errors); D-125 and D-137 (locks, early refusal), D-164/D-165 (limits and email text patterns), D-172 (BFF allowlist).
 - Date: 2026-10-25. Written from the spec, the register and the code of slices 001 to 004 and F1; no code was changed.
@@ -107,7 +107,7 @@ Read-only security and code reviews, fixes, traceability, list of unrun checks, 
 ## 9. Checks to run
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint and the API-type drift check, web unit tests, typecheck, lint, build, Playwright, the CI jobs, `V14` validated on an empty database and on one with V1 to V13 data, the operator script run with real `psql`. Checks not run are listed in the traceability file.
 
-## 10. Approval needed
+## 10. Approval (done 2026-10-25)
 1. Approve Q-01 to Q-19 as written, or change any of them. Most worth a deliberate look: Q-06 (no decline, one new matrix row), Q-12 (a limit the spec does not have), Q-13 (the deletion half closes in slice 007), Q-15 (who runs which rehearsal).
 2. Approve SPEC-OWN with the amendments of Q-19 and the new SPEC-TEN matrix row.
 3. Approve the phase order and that each phase is its own PR.

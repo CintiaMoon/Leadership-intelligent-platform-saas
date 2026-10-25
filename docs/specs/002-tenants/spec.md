@@ -53,12 +53,15 @@ The matrix assumes Agents work with the product's core business records.
 | Assign or revoke Admin role | Yes | No | No | No |
 | Transfer company ownership | Yes | No | No | No |
 | Cancel ownership transfer | Yes (the initiator) | No | No | No |
+| Accept ownership transfer | Yes | Yes | Yes | Yes |
 | Manage company settings | Yes | Yes | No | No |
 | Manage plans and entitlements | Yes | View only | No | No |
 | View plan and entitlements | Yes | Yes | No | No |
 | Request company deletion | Yes | No | No | No |
 | Cancel pending company deletion | Yes | No | No | No |
 | Permanently delete company data | System process | System process | System process | System process |
+
+Accept ownership transfer is identity-based, like leaving the company: every role has the row, and the service allows only the member named as the recipient of a pending transfer (SPEC-OWN, D-181).
 
 ### Role boundaries
 - Owner: full control over the company, its membership, plan, ownership, and lifecycle. A company always has exactly one active Owner (D-43, decided 2026-10-16), except while it is flagged for ownership resolution after an operator disables the Owner's account (D-54).
