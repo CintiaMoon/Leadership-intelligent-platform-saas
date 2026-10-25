@@ -26,7 +26,7 @@ export type FormError = {
 
 export function describeFailure(
   failure: Failure,
-  context: "login" | "token" | "default" = "default",
+  context: "login" | "token" | "invitation" | "default" = "default",
 ): FormError {
   const code = failure.problem?.code;
   const fields: Record<string, string> = {};
@@ -42,10 +42,17 @@ export function describeFailure(
 function formMessage(
   failure: Failure,
   code: string | undefined,
-  context: "login" | "token" | "default",
+  context: "login" | "token" | "invitation" | "default",
 ): string {
   if (code === "INVALID_CREDENTIALS" && context === "login") {
     return "The email or password is incorrect, or the account can't sign in yet.";
+  }
+  if (context === "invitation" && code === "TOKEN_INVALID") {
+    return "This invitation link is invalid or has expired. Ask the person who invited you to send a new one.";
+  }
+  if (context === "invitation" && code === "CONFLICT") {
+    // The API answers both cases with the same code, so the text covers both (SPEC-INV Q-09).
+    return "You can't join this company with this invitation. You may already be a member, or the company may have reached its member limit. Ask an administrator.";
   }
   if (code === "TOKEN_INVALID") {
     return "This link is invalid or has expired. Request a new one.";

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, request as playwrightRequest, test as base, type Page } from "@playwright/test";
 
 const MAILPIT = process.env.E2E_MAILPIT_URL ?? "http://localhost:8025";
 
@@ -93,6 +93,47 @@ export async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+const WEB_URL = `http://localhost:${process.env.E2E_WEB_PORT ?? 3100}`;
+const API_URL = `http://localhost:${process.env.E2E_API_PORT ?? 18090}`;
+// The throwaway credential of playwright.config.ts; it protects nothing outside the E2E database.
+const BFF_CREDENTIAL = "e2e-only-bff-credential-".repeat(3);
+
+/**
+ * Creates a company as an existing, verified account and invites an address to it, calling the API the way a client
+ * with no screen yet would (the member and invitation pages are a later frontend slice). Returns the company name,
+ * which the invitation email carries. Uses the default (non-prod) cookie settings.
+ */
+export async function inviteByApi(
+  ownerEmail: string,
+  inviteeEmail: string,
+  role: "ADMIN" | "AGENT" | "VIEWER" = "VIEWER",
+): Promise<string> {
+  const octet = () => 1 + Math.floor(Math.random() * 254);
+  const api = await playwrightRequest.newContext({
+    baseURL: API_URL,
+    extraHTTPHeaders: {
+      "X-BFF-Credential": BFF_CREDENTIAL,
+      Origin: WEB_URL,
+      "X-Forwarded-For": `198.19.${octet()}.${octet()}`,
+    },
+  });
+  try {
+    const csrf = async () => ((await (await api.get("/api/v1/auth/csrf")).json()) as { token: string }).token;
+    const send = async (path: string, data: object) => {
+      const response = await api.post(path, { data, headers: { "X-CSRF-TOKEN": await csrf() } });
+      expect(response.ok(), `${path} answered ${response.status()}`).toBe(true);
+      return (await response.json()) as { id?: string };
+    };
+    await send("/api/v1/auth/login", { email: ownerEmail, password: PASSWORD });
+    const name = `Acme ${randomUUID().slice(0, 8)}`;
+    const company = await send("/api/v1/companies", { name });
+    await send(`/api/v1/companies/${company.id}/invitations`, { email: inviteeEmail, role });
+    return name;
+  } finally {
+    await api.dispose();
+  }
 }
 
 /** Fails on serious or critical accessibility violations. An automated scan does not prove a page is accessible. */

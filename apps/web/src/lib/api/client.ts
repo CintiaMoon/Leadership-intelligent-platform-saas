@@ -17,9 +17,11 @@ export type LoginBody = Body<"/api/v1/auth/login">;
 export type EmailBody = Body<"/api/v1/auth/verify-email/resend">;
 export type TokenBody = Body<"/api/v1/auth/verify-email">;
 export type ResetConfirmBody = Body<"/api/v1/auth/password-reset/confirm">;
+export type AcceptInvitationBody = Body<"/api/v1/invitations/accept">;
+export type CompanySummary = components["schemas"]["CompanySummary"];
 
 export type ApiResult =
-  | { ok: true; status: number }
+  | { ok: true; status: number; data: unknown }
   | { ok: false; status: number; problem: Problem | null; retryAfter: number | null };
 
 const BASE = "/api/auth";
@@ -72,7 +74,13 @@ export async function post(path: string, body?: object): Promise<ApiResult> {
     return unavailable();
   }
   if (response.ok) {
-    return { ok: true, status: response.status };
+    let data: unknown = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    return { ok: true, status: response.status, data };
   }
   let problem: Problem | null = null;
   try {

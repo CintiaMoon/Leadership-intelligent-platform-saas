@@ -10,6 +10,7 @@ const NO_STORE_PAGES = [
   "/forgot-password",
   "/reset-password",
   "/account",
+  "/invitations/accept",
 ];
 
 const nextConfig: NextConfig = {

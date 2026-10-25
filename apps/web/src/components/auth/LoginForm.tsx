@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { post } from "@/lib/api/client";
 import { describeFailure, type FormError } from "@/lib/api/messages";
+import { destinationAfterSignIn } from "@/components/invitations/invitationToken";
 
 import { Field, Notice, SubmitButton, TextLink } from "./ui";
 
@@ -17,7 +18,9 @@ const NOTICES: Record<string, { tone: "info" | "success"; text: string }> = {
 
 export function LoginForm() {
   const router = useRouter();
-  const notice = NOTICES[useSearchParams().get("notice") ?? ""];
+  const params = useSearchParams();
+  const notice = NOTICES[params.get("notice") ?? ""];
+  const next = params.get("next");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
 
@@ -34,7 +37,7 @@ export function LoginForm() {
       password: String(data.get("password") ?? ""),
     });
     if (result.ok) {
-      router.replace("/account");
+      router.replace(destinationAfterSignIn(next));
       router.refresh();
       return;
     }
