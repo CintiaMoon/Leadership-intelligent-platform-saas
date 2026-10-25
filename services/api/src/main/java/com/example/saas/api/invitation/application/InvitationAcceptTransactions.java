@@ -113,12 +113,14 @@ class InvitationAcceptTransactions {
 		return new AcceptedInvitation(companyId, company.getName(), invitation.getRole());
 	}
 
-	/** The inviter must still be an ACTIVE member who may hand out this role now (D-62, AC-INV-24). */
+	/** The inviter must still have an ACTIVE account and an ACTIVE membership that may hand out this role now (D-62, AC-INV-24). */
 	private boolean inviterMayStillGrant(UUID companyId, Invitation invitation, CompanyStatus companyStatus) {
 		Optional<Membership> inviter = memberships.findByCompanyIdAndUserIdAndStatus(companyId, invitation.getInvitedBy(),
 				MembershipStatus.ACTIVE);
 		return inviter.isPresent() && InvitationRules.mayGrant(inviter.get().getRole(), invitation.getRole())
-				&& CompanyPolicy.permits(inviter.get().getRole(), Permission.INVITE_MEMBERS, companyStatus, null);
+				&& CompanyPolicy.permits(inviter.get().getRole(), Permission.INVITE_MEMBERS, companyStatus, null)
+				// A disabled account keeps its memberships (D-141), so the account itself must be checked as well.
+				&& users.findById(invitation.getInvitedBy()).map(u -> u.getStatus() == UserAccount.Status.ACTIVE).orElse(false);
 	}
 
 	private Company lockedCompany(UUID companyId) {

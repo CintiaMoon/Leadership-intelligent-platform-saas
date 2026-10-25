@@ -343,9 +343,61 @@ class InvitationServiceTests extends AuthIntegrationTest {
 			.isInstanceOf(RateLimitedException.class);
 
 		assertThat(queuedEmails(invitation.id())).as("create and two resends sent").isEqualTo(3);
+		service.revoke(team.owner().session(), team.companyId(), invitation.id());
 		assertThatThrownBy(() -> service.create(team.admin().session(), team.companyId(), email, Role.AGENT))
-			.as("another invitation to the same address is limited too (or conflicts)")
-			.isInstanceOfAny(RateLimitedException.class, InvitationConflictException.class);
+			.as("with nothing pending, a new invitation to the same address is limited by the rate, not by a conflict")
+			.isInstanceOf(RateLimitedException.class);
+	}
+
+	@Test
+	void oneCompanyCannotUseUpAnotherCompanysAllowanceForTheSameAddress() {
+		Team first = team();
+		Team second = team();
+		String email = guest();
+		InvitationView invitation = service.create(first.owner().session(), first.companyId(), email, Role.AGENT);
+		service.resend(first.owner().session(), first.companyId(), invitation.id());
+		service.resend(first.owner().session(), first.companyId(), invitation.id());
+		assertThatThrownBy(() -> service.resend(first.owner().session(), first.companyId(), invitation.id()))
+			.isInstanceOf(RateLimitedException.class);
+
+		InvitationView other = service.create(second.owner().session(), second.companyId(), email, Role.VIEWER);
+
+		assertThat(other.id()).as("the other company can still invite the same address (D-164)").isNotNull();
+		assertThat(queuedEmails(other.id())).isEqualTo(1);
+	}
+
+	@Test
+	void aCeilingAcrossAllCompaniesStopsMassMailingToOneAddress() {
+		Team team = team();
+		String email = guest();
+		for (int i = 0; i < 10; i++) {
+			limiter.hit(InvitationRateLimits.PER_RECIPIENT_ANYWHERE, email);
+		}
+
+		assertThatThrownBy(() -> service.create(team.owner().session(), team.companyId(), email, Role.AGENT))
+			.isInstanceOf(RateLimitedException.class);
+		assertThat(count("SELECT count(*) FROM invitation WHERE company_id = ? AND email_normalized = ?", team.companyId(),
+				email)).isZero();
+	}
+
+	@Test
+	void requestsRefusedBeforeAnEmailIsQueuedDoNotUseUpTheRecipientAllowance() {
+		Team team = team();
+		String email = guest();
+		InvitationView first = service.create(team.owner().session(), team.companyId(), email, Role.AGENT);
+		for (int i = 0; i < 5; i++) {
+			assertThatThrownBy(() -> service.create(team.owner().session(), team.companyId(), email, Role.AGENT))
+				.as("already pending").isInstanceOf(InvitationConflictException.class);
+		}
+		service.revoke(team.owner().session(), team.companyId(), first.id());
+		InvitationView second = service.create(team.owner().session(), team.companyId(), email, Role.AGENT);
+		service.revoke(team.owner().session(), team.companyId(), second.id());
+		InvitationView third = service.create(team.owner().session(), team.companyId(), email, Role.AGENT);
+		service.revoke(team.owner().session(), team.companyId(), third.id());
+
+		assertThatThrownBy(() -> service.create(team.owner().session(), team.companyId(), email, Role.AGENT))
+			.as("only the three that queued an email were counted")
+			.isInstanceOf(RateLimitedException.class);
 	}
 
 	// ---- resend
@@ -485,16 +537,14 @@ class InvitationServiceTests extends AuthIntegrationTest {
 				catch (InvitationConflictException e) {
 					return "conflict";
 				}
-				catch (RateLimitedException e) {
-					return "limited";
-				}
 			});
 		}
 
 		List<String> results = Parallel.runAll(tasks);
 
 		assertThat(results.stream().filter("created"::equals).count()).isEqualTo(1);
-		assertThat(results).allMatch(r -> r.equals("created") || r.equals("conflict") || r.equals("limited"));
+		assertThat(results.stream().filter("conflict"::equals).count()).as("the allowance counts only the one that queued")
+			.isEqualTo(7);
 		assertThat(count("SELECT count(*) FROM invitation WHERE company_id = ? AND email_normalized = ?",
 				team.companyId(), email)).isEqualTo(1);
 		assertThat(queuedEmails(jdbc.queryForObject("SELECT id FROM invitation WHERE email_normalized = ?", UUID.class,

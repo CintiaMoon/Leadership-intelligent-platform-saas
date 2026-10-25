@@ -604,4 +604,54 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 		}
 	}
 
+	@Test
+	void anInvitersDisabledAccountMakesTheirPendingInvitationsUnusableEvenThoughTheMembershipRemains() throws Exception {
+		Company company = company();
+		String byAdminEmail = guest();
+		String byOwnerEmail = guest();
+		Issued byAdmin = issue(company, company.admin(), byAdminEmail, Role.AGENT);
+		Issued byOwner = issue(company, company.owner(), byOwnerEmail, Role.AGENT);
+		Person adminInvitee = person(byAdminEmail);
+		Person ownerInvitee = person(byOwnerEmail);
+		// The operator disable procedure changes the account and leaves non-owned memberships ACTIVE (D-141).
+		jdbc.update("UPDATE app_user SET status = 'DISABLED' WHERE id = ?", company.admin().userId());
+
+		assertThat(accept(adminInvitee, byAdmin.token()).getResponse().getStatus()).isEqualTo(422);
+		assertThat(status(byAdmin.invitationId())).isEqualTo("PENDING");
+		assertThat(liveMemberships(company.id(), adminInvitee.userId())).isZero();
+		assertThat(accept(ownerInvitee, byOwner.token()).getResponse().getStatus()).as("an active inviter's is unaffected")
+			.isEqualTo(200);
+	}
+
+	@Test
+	void anAcceptanceRacingTheRemovalOfTheInviteesExistingMembershipEndsInOneOfTwoSerialOrders() throws Exception {
+		for (int round = 0; round < 5; round++) {
+			Company company = company();
+			String email = guest();
+			Issued issued = issue(company, company.owner(), email, Role.AGENT);
+			Person invitee = person(email);
+			// The address became a member by another route after the invitation was sent.
+			seat(company.id(), invitee.userId(), "VIEWER", "ACTIVE");
+			UUID seatId = jdbc.queryForObject("SELECT id FROM membership WHERE company_id = ? AND user_id = ?", UUID.class,
+					company.id(), invitee.userId());
+			String csrf = api.sessionCsrf(invitee.cookie(), freshIp());
+			String ownerCsrf = api.sessionCsrf(company.owner().cookie(), freshIp());
+			Callable<Integer> acceptTask = () -> api.send(HttpMethod.POST, ACCEPT, json("token", issued.token()),
+					invitee.cookie(), csrf, freshIp()).getResponse().getStatus();
+			Callable<Integer> removeTask = () -> api.send(HttpMethod.DELETE,
+					"/api/v1/companies/" + company.id() + "/members/" + seatId, null, company.owner().cookie(), ownerCsrf,
+					freshIp()).getResponse().getStatus();
+
+			List<Integer> results = Parallel.runAll(List.of(acceptTask, removeTask));
+
+			assertThat(results.get(1)).as("the removal always succeeds (round %d)", round).isIn(200, 204);
+			assertThat(results.get(0)).isIn(200, 409);
+			assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND user_id = ? "
+					+ "AND status IN ('ACTIVE', 'SUSPENDED')", company.id(), invitee.userId()))
+				.as("never two live memberships; one only if the acceptance came after the removal")
+				.isEqualTo(results.get(0) == 200 ? 1 : 0);
+			assertThat(status(issued.invitationId())).isEqualTo(results.get(0) == 200 ? "ACCEPTED" : "PENDING");
+		}
+	}
+
 }

@@ -1,9 +1,9 @@
 # Implementation Plan: SPEC-INV (slice 004)
 
-- Status: **Approved 2026-10-24: Q-01 to Q-20** (user: "Q-1 to Q-20 approved"), recorded as D-144 to D-163 in the register (Q-NN maps to D-(143+NN)). SPEC-INV was approved the same day with its amendments. **The phase order was approved on 2026-10-24** (user: "I approve"); Phase 0 is done and Phase 1 is in progress. Nothing is implemented.
+- Status: **Approved 2026-10-24: Q-01 to Q-20** (user: "Q-1 to Q-20 approved"), recorded as D-144 to D-163 in the register (Q-NN maps to D-(143+NN)); the phase order was approved the same day. Phases 0 to 5 are implemented and merged; Phase 6 (review and closure) changed three decisions, recorded as D-164 to D-167 (2026-10-25). The text below is the plan as approved.
 - Spec: `docs/specs/004-invitations/spec.md` (SPEC-INV, Draft)
 - Related: SPEC-TEN (matrix, pending deletion), SPEC-MEM (membership rules, member limit hook), SPEC-AUTH (verified email, token pattern, fragment links), SPEC-PLAN (member limit), ADR-003 (outbox), ADR-004 (rate limiting), ADR-005 (errors); decisions D-24 to D-27, D-38, D-43, D-44, D-48, D-52, D-55, D-62, D-63, D-93, D-100, D-125, D-127, D-134, D-138
-- Date: 2026-10-24. Written from the spec, the register and the slice 001 to 003 code; no code was changed.
+- Date: 2026-10-24. Written from the spec, the register and the slice 001 to 003 code; no code was changed when it was written.
 
 ## 1. Readiness check (CLAUDE.md workflow step 1)
 | Item | State | Action |

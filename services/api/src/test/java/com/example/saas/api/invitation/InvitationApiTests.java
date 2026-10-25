@@ -314,17 +314,19 @@ class InvitationApiTests extends AuthIntegrationTest {
 			assertThat(send(who, HttpMethod.POST, base + "/" + seeded + "/resend", null).getResponse().getStatus())
 				.as("%s resends", role).isEqualTo(mayManage ? 200 : 403);
 		}
-		for (Role role : new Role[] { Role.AGENT, Role.VIEWER, Role.ADMIN }) {
-			int expected = role == Role.ADMIN ? 204 : 403;
-			assertThat(send(team.person(role), HttpMethod.DELETE, base + "/" + seeded, null).getResponse().getStatus())
-				.as("%s revokes", role).isEqualTo(expected);
-			if (role == Role.ADMIN) {
-				break;
-			}
+		for (Role role : Role.values()) {
+			// Each role revokes an invitation of its own, so one revoke does not hide the next.
+			UUID target = created(team.person(Role.OWNER), team.companyId(), "AGENT");
+			assertThat(send(team.person(role), HttpMethod.DELETE, base + "/" + target, null).getResponse().getStatus())
+				.as("%s revokes", role).isEqualTo(role == Role.OWNER || role == Role.ADMIN ? 204 : 403);
 		}
-		assertThat(invite(outsider, team.companyId(), guest(), "VIEWER").getResponse().getStatus()).isEqualTo(404);
-		assertThat(api.get(base, outsider.cookie(), freshIp()).getResponse().getStatus()).isEqualTo(404);
-		assertThat(send(outsider, HttpMethod.DELETE, base + "/" + seeded, null).getResponse().getStatus()).isEqualTo(404);
+		assertThat(invite(outsider, team.companyId(), guest(), "VIEWER").getResponse().getStatus()).as("outsider creates")
+			.isEqualTo(404);
+		assertThat(api.get(base, outsider.cookie(), freshIp()).getResponse().getStatus()).as("outsider lists").isEqualTo(404);
+		assertThat(send(outsider, HttpMethod.POST, base + "/" + seeded + "/resend", null).getResponse().getStatus())
+			.as("outsider resends").isEqualTo(404);
+		assertThat(send(outsider, HttpMethod.DELETE, base + "/" + seeded, null).getResponse().getStatus())
+			.as("outsider revokes").isEqualTo(404);
 	}
 
 	@Test

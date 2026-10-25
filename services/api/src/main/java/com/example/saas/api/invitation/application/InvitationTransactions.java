@@ -18,7 +18,6 @@ import com.example.saas.api.invitation.domain.InvitationRules.Decision;
 import com.example.saas.api.invitation.domain.InvitationStatus;
 import com.example.saas.api.invitation.persistence.Invitation;
 import com.example.saas.api.invitation.persistence.InvitationRepository;
-import com.example.saas.api.ratelimit.RateLimiter;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.security.RecentAuthentication;
 import com.example.saas.api.tenant.application.CompanyLocks;
@@ -32,7 +31,6 @@ import com.example.saas.api.tenant.persistence.MembershipRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import static com.example.saas.api.auth.application.AuthRateLimits.requireWithin;
 
 /**
  * The transactions behind {@link InvitationService}. Each one locks the company row first, then the invitation (D-125,
@@ -58,8 +56,6 @@ class InvitationTransactions {
 
 	private final RecentAuthentication recentAuthentication;
 
-	private final RateLimiter rateLimiter;
-
 	private final OutboxRepository outbox;
 
 	private final AuditLog audit;
@@ -67,14 +63,13 @@ class InvitationTransactions {
 	private final Clock clock;
 
 	InvitationTransactions(CompanyLocks companyLocks, InvitationLocks invitationLocks, MembershipRepository memberships,
-			InvitationRepository invitations, RecentAuthentication recentAuthentication, RateLimiter rateLimiter,
+			InvitationRepository invitations, RecentAuthentication recentAuthentication,
 			OutboxRepository outbox, AuditLog audit, Clock clock) {
 		this.companyLocks = companyLocks;
 		this.invitationLocks = invitationLocks;
 		this.memberships = memberships;
 		this.invitations = invitations;
 		this.recentAuthentication = recentAuthentication;
-		this.rateLimiter = rateLimiter;
 		this.outbox = outbox;
 		this.audit = audit;
 		this.clock = clock;
@@ -122,8 +117,6 @@ class InvitationTransactions {
 		if (invitation.getStatus() != InvitationStatus.PENDING) {
 			throw new InvitationConflictException();
 		}
-		// The address is read from the invitation, so the recipient limit is applied here, under the lock.
-		requireWithin(rateLimiter.hit(InvitationRateLimits.PER_RECIPIENT, invitation.getEmailNormalized()), clock);
 		Instant now = clock.instant();
 		invitation.reissue(now, now.plus(LIFETIME));
 		invitations.saveAndFlush(invitation);

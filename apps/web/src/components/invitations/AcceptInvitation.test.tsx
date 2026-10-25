@@ -150,6 +150,31 @@ test("when throttled the token is kept so the person can try again", async () =>
   expect((screen.getByRole("button", { name: "Accept invitation" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
+test("a reply that cannot be read still tells the person they joined, as a success", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    String(url).includes("/csrf")
+      ? Response.json({ headerName: "X-CSRF-TOKEN", token: "csrf-token" })
+      : new Response("not json", { status: 200 }),
+  );
+  openLink();
+  render(<AcceptInvitation signedIn />);
+  fireEvent.click(await screen.findByRole("button", { name: "Accept invitation" }));
+
+  expect((await screen.findByRole("status")).textContent).toBe("You joined the company.");
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+});
+
+test("an error with no text of its own still shows a message", async () => {
+  respond(400, { ...problem("VALIDATION_FAILED", 400), errors: [{ field: "token", code: "REQUIRED" }] });
+  openLink();
+  render(<AcceptInvitation signedIn />);
+  fireEvent.click(await screen.findByRole("button", { name: "Accept invitation" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("Something went wrong. Please try again.");
+  expect(window.sessionStorage.getItem(STORAGE_KEY)).toBe(TOKEN);
+});
+
 test("an ended session sends the person to sign in again and back", async () => {
   respond(401, problem("UNAUTHENTICATED", 401));
   openLink();

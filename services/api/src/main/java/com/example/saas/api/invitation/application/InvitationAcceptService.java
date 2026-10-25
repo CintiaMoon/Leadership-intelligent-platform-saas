@@ -1,6 +1,7 @@
 package com.example.saas.api.invitation.application;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 
 import com.example.saas.api.auth.application.TokenInvalidException;
@@ -48,7 +49,7 @@ public class InvitationAcceptService {
 	 */
 	public AcceptedInvitation accept(UUID userId, String token, String clientKey) {
 		if (token == null || token.isBlank()) {
-			throw new ValidationFailedException(java.util.List.of(new FieldProblem("token", "REQUIRED")));
+			throw new ValidationFailedException(List.of(new FieldProblem("token", "REQUIRED")));
 		}
 		requireWithin(rateLimiter.current(InvitationRateLimits.FAILED_ACCEPT_PER_IP, clientKey), clock);
 		try {

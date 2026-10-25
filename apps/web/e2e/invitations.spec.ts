@@ -12,7 +12,7 @@ import {
   waitForMail,
 } from "./support";
 
-const SUBJECT = "You have been invited to join";
+const SUBJECT = "You have been invited to a workspace";
 
 /** An owner with a company who has invited the given address; returns the company name and the emailed link. */
 async function invitation(page: import("@playwright/test").Page, inviteeEmail: string) {
