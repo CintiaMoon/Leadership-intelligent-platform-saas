@@ -5,8 +5,8 @@ import { mayManageMembers } from "@/lib/memberActions";
 import { RoleBadge } from "./CompanyList";
 
 /**
- * The top of every company page (D-169): the company, the person's role, and the tab row. Only Members exists for now;
- * Plan, Settings and Ownership are added by their slices. Agents and Viewers have no tabs.
+ * The top of every company page (D-169): the company, the person's role, and the tab row (Members and Pending
+ * invitations; Plan, Settings and Ownership are added by their slices). Agents and Viewers have no tabs.
  */
 export function CompanyHeader({
   companyId,
@@ -17,7 +17,7 @@ export function CompanyHeader({
   companyId: string;
   name: string;
   role: string;
-  active?: "members";
+  active?: "members" | "invitations";
 }) {
   return (
     <div className="border-b border-line">
@@ -36,6 +36,15 @@ export function CompanyHeader({
             }`}
           >
             Members
+          </Link>
+          <Link
+            href={`/companies/${companyId}/invitations`}
+            aria-current={active === "invitations" ? "page" : undefined}
+            className={`-mb-px border-b-2 pb-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              active === "invitations" ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"
+            }`}
+          >
+            Pending invitations
           </Link>
         </nav>
       ) : (

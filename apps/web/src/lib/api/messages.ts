@@ -26,7 +26,7 @@ export type FormError = {
 
 export function describeFailure(
   failure: Failure,
-  context: "login" | "token" | "invitation" | "company" | "default" = "default",
+  context: "login" | "token" | "invitation" | "invite" | "company" | "default" = "default",
 ): FormError {
   const code = failure.problem?.code;
   const fields: Record<string, string> = {};
@@ -42,7 +42,7 @@ export function describeFailure(
 function formMessage(
   failure: Failure,
   code: string | undefined,
-  context: "login" | "token" | "invitation" | "company" | "default",
+  context: "login" | "token" | "invitation" | "invite" | "company" | "default",
 ): string {
   if (code === "INVALID_CREDENTIALS" && context === "login") {
     return "The email or password is incorrect, or the account can't sign in yet.";
@@ -53,6 +53,13 @@ function formMessage(
   if (context === "invitation" && code === "CONFLICT") {
     // The API answers both cases with the same code, so the text covers both (SPEC-INV Q-09).
     return "You can't join this company with this invitation. You may already be a member, or the company may have reached its member limit. Ask an administrator.";
+  }
+  if (context === "invite" && code === "CONFLICT") {
+    // Already a member and already invited are the same code on purpose (SPEC-INV); the text covers both.
+    return "This address is already a member or already has a pending invitation. Check Members and Pending invitations.";
+  }
+  if (context === "invite" && (code === "RATE_LIMITED" || failure.status === 429)) {
+    return waitMessage("You have sent too many invitations.", failure.retryAfter);
   }
   if (context === "company" && (failure.status === 403 || failure.status === 404)) {
     return "That is not available to you. Reload the page and try again.";
