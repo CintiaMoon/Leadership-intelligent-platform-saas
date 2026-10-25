@@ -1,7 +1,7 @@
 # Frontend slice F1 traceability
 
 - Plan: `f1-plan.md` (approved 2026-10-25). Decisions: D-168 to D-175.
-- Status by phase: F1-1 and F1-2 done (below). F1-3 to F1-5 not started.
+- Status by phase: F1-1 to F1-3 done (below). F1-4 and F1-5 not started.
 
 ## Phase F1-1: BFF operations and browser client (no UI)
 **What changed**
@@ -57,3 +57,34 @@
 - Playwright 19 of 19 passed against the real API jar, the built web app, PostgreSQL and Mailpit (datasource override in `docs/runbooks/operations/invitations.md`).
 - Mutation checks, both caught and restored: Owner guard on Leave; UUID check on the company page.
 - Not run: `./mvnw verify` (no backend change; once at the end of F1), contract lint and type-drift check (contract unchanged), the production-cookie E2E variant, other browsers, CI, keyboard-only and screen-reader passes beyond axe and the dialog focus checks (planned for F1-5).
+
+## Phase F1-3: Members tab and the password dialog (P2 members, P4)
+**What changed**
+- `/companies/[companyId]/members`: server reads the company and the member list; Owners and Admins only (Agents, Viewers and anybody else get the same "not available" page). Each member shows name, address, role, status, join date and "(you)" for the caller. Dates are formatted on the server so both sides print the same text.
+- Actions come from `lib/memberActions.ts`, which mirrors the matrix and `MembershipChanges`: nobody gets controls on themselves or the Owner; an Admin only acts on Agents and Viewers and can only assign those two roles; a suspended member can only be reactivated or removed; a company that is not ACTIVE is read-only. The API still decides every request.
+- Change role (a select, sent at once), suspend and remove (each asks first, naming the person; remove says "They will need a new invitation to rejoin."), reactivate (at once). After every answer the list is read again. A 409 says the member changed in the meantime; a 403 or 404 says it is not available any more; 429 and 503 use the wait messages; a 401 goes to sign in.
+- Step-up (D-174): a 403 `REAUTHENTICATION_REQUIRED` opens "Confirm your password"; on success the same request is sent once more, on Cancel it is dropped, a wrong password shows the sign-in message and keeps the dialog, and a second refusal is never prompted again. The password is sent only to the step-up operation and the field is cleared on every close.
+- Company page: Owners and Admins are redirected to Members (D-168); Agents and Viewers still see the placeholder with Leave. `CompanyHeader` renders the name, the role and the tab row (Members only; none for Agents and Viewers). Leave is on the Members page (the Admin's button, the Owner's note).
+- Deviation from the brief: a role select and plain buttons instead of a "row menu", which avoids building an ARIA menu; same actions, same confirmations.
+- E2E helpers: `apiLogin` and `makeTeam` build an Owner and members with distinct names through real invitations (API calls, not the BFF).
+
+**Evidence**
+| Claim | Test |
+|---|---|
+| Who gets which controls (Owner, Admin, suspended, self, Owner row, removed, Agent, Viewer, unknown role, pending deletion) | `memberActions.test.ts`; mutation check (Admin restriction removed) fails it and a rendering test |
+| Rows show the details and `(you)`; controls match the caller; text only, never markup; tabs only for those who manage members | `members.test.tsx` |
+| Change role, suspend, remove, reactivate send exactly one request with the right method, path and body; confirmations name the person; Cancel sends nothing | `members.test.tsx` |
+| 409, 403/404, 429/503 and 401 handling | `members.test.tsx` |
+| Step-up: the request order is request, step-up, same request; wrong password keeps the dialog and does not retry; Cancel drops the action and clears the field; no second prompt; the password appears in no other request | `members.test.tsx`; mutation check (second prompt allowed) fails it |
+| Real stack: an Owner changes a role, suspends (Escape cancels first, Cancel focused), reactivates and removes; counts and statuses update; own row has no controls | `e2e/members.spec.ts` |
+| Real stack: an Admin has no controls on the Owner or another Admin and only Agent and Viewer to assign, can leave and then the company is "not available"; an Agent sees the placeholder, no tabs, and Members is "not available" | `e2e/members.spec.ts` |
+| Real stack: a member removed in another window is explained when the stale page acts, and the list refreshes | `e2e/members.spec.ts` |
+| Axe: Members page (Owner, Admin) and the open confirmation, no serious or critical violations | `e2e/members.spec.ts` |
+| Screenshots at 360, 768 and 1280 px reviewed (Owner, suspended, Admin); one fix: the role badge was shown next to a select with the same value, so it now shows only on rows without a select | `test-results/f1-3/*.png` (not committed) |
+
+## Checks run (F1-3)
+- Vitest 105 passed (10 files), `npm run typecheck`, `npm run lint`, `npm run build`: clean.
+- Playwright 22 of 22 passed against the real API jar, the built web app, PostgreSQL and Mailpit, on servers started by Playwright (datasource override in `docs/runbooks/operations/invitations.md`).
+- Mutation checks, both caught and restored: Admin restriction in `memberActions`; the guard against a second password prompt.
+- **One failure I could not explain:** the first run of the new members spec showed Next's "This page couldn't load" on the Members page in one test (and ran into the 60 s limit in the others). It did not reproduce in four later runs of the same flows, including against servers I started by hand and watched, and I did not capture the server log of the failing run. The test timeout was raised to 180 s because building a team takes about 20 s. Treat it as an unexplained flake to watch in CI.
+- Not run: the stale-login step-up against a real session (a session cannot be made 10 minutes old inside a test; the unit tests cover the sequence and `e2e/bff-companies.spec.ts` covers the step-up operation itself), `./mvnw verify` (no backend change; once at the end of F1), contract lint and type-drift check (contract unchanged), the production-cookie E2E variant, other browsers, CI.

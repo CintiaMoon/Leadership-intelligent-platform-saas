@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, request as playwrightRequest, test as base, type Page } from "@playwright/test";
+import { expect, request as playwrightRequest, test as base, type APIRequestContext, type APIResponse, type Page } from "@playwright/test";
 
 const MAILPIT = process.env.E2E_MAILPIT_URL ?? "http://localhost:8025";
 
@@ -81,8 +81,8 @@ export async function signUp(page: Page, email: string, password = PASSWORD, nam
 }
 
 /** Signs up and confirms the address through the emailed link. */
-export async function createVerifiedAccount(page: Page, email: string, password = PASSWORD) {
-  await signUp(page, email, password);
+export async function createVerifiedAccount(page: Page, email: string, password = PASSWORD, name = "Alex Morgan") {
+  await signUp(page, email, password, name);
   const link = linkIn(await waitForMail(email, "Verify your email"), "verify-email");
   await page.goto(link);
   await expect(page.getByText("Your email address is verified.")).toBeVisible();
@@ -141,4 +141,69 @@ export async function expectNoSeriousA11yViolations(page: Page) {
   const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze();
   const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+}
+
+export type ApiClient = {
+  send(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, data?: object): Promise<APIResponse>;
+  dispose(): Promise<void>;
+};
+
+/** A signed-in client of the API itself (not the BFF), for setting up data a test needs. Default cookie names only. */
+export async function apiLogin(email: string, password = PASSWORD): Promise<ApiClient> {
+  const octet = () => 1 + Math.floor(Math.random() * 254);
+  const context: APIRequestContext = await playwrightRequest.newContext({
+    baseURL: API_URL,
+    extraHTTPHeaders: {
+      "X-BFF-Credential": BFF_CREDENTIAL,
+      Origin: WEB_URL,
+      "X-Forwarded-For": `198.19.${octet()}.${octet()}`,
+    },
+  });
+  const csrf = async () => ((await (await context.get("/api/v1/auth/csrf")).json()) as { token: string }).token;
+  const client: ApiClient = {
+    send: async (method, path, data) =>
+      method === "GET"
+        ? context.get(path)
+        : context.fetch(path, { method, data: data ?? {}, headers: { "X-CSRF-TOKEN": await csrf() } }),
+    dispose: () => context.dispose(),
+  };
+  const login = await client.send("POST", "/api/v1/auth/login", { email, password });
+  expect(login.ok(), `login answered ${login.status()}`).toBe(true);
+  return client;
+}
+
+export type Team = {
+  ownerEmail: string;
+  companyId: string;
+  companyName: string;
+  /** Display name and address of each member that was added, by role. */
+  members: Record<"ADMIN" | "AGENT" | "VIEWER", { name: string; email: string } | undefined>;
+};
+
+/**
+ * An Owner with a company and one member of each requested role, all with verified accounts and distinct names.
+ * Members join through a real invitation (created by the Owner, accepted by the member), all through the API.
+ */
+export async function makeTeam(page: Page, roles: ("ADMIN" | "AGENT" | "VIEWER")[]): Promise<Team> {
+  const ownerEmail = uniqueEmail();
+  await createVerifiedAccount(page, ownerEmail, PASSWORD, "Olivia Owner");
+  const owner = await apiLogin(ownerEmail);
+  const companyName = `Team ${randomUUID().slice(0, 8)}`;
+  const company = (await (await owner.send("POST", "/api/v1/companies", { name: companyName })).json()) as { id: string };
+  const members: Team["members"] = { ADMIN: undefined, AGENT: undefined, VIEWER: undefined };
+  const names = { ADMIN: "Bo Admin", AGENT: "Cy Agent", VIEWER: "Di Viewer" };
+  for (const role of roles) {
+    const email = uniqueEmail();
+    await createVerifiedAccount(page, email, PASSWORD, names[role]);
+    const invited = await owner.send("POST", `/api/v1/companies/${company.id}/invitations`, { email, role });
+    expect(invited.status(), `invite ${role}`).toBe(201);
+    const link = linkIn(await waitForMail(email, "You have been invited to a workspace"), "invitations/accept");
+    const member = await apiLogin(email);
+    const accepted = await member.send("POST", "/api/v1/invitations/accept", { token: link.split("#token=")[1] });
+    expect(accepted.status(), `accept ${role}`).toBe(200);
+    await member.dispose();
+    members[role] = { name: names[role], email };
+  }
+  await owner.dispose();
+  return { ownerEmail, companyId: company.id, companyName, members };
 }
