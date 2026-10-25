@@ -1,6 +1,6 @@
 # Plan: frontend slice F1 (company navigation, members, invitations)
 
-- Status: **Draft for approval (2026-10-25).** Nothing is implemented. The four design questions were answered by the user on 2026-10-25 (D-168 to D-171); everything marked "Proposed" below needs approval before work starts.
+- Status: **Approved 2026-10-25** (user: "approved"): D-172 to D-175, the phase order F1-1 to F1-5 with one PR each, and the landing pages (Agents and Viewers on the placeholder page; the accept page and sign in end on My companies). D-168 to D-171 were decided the same day. F1-1 is implemented; F1-2 onward are not.
 - Brief: `docs/design/members-and-invitations/README.md` (pages P2 to P6; P1 is built). Origin: D-163 / plan Q-20 of slice 004.
 - Specs and APIs it uses (all merged, contract unchanged): SPEC-TEN (create and list companies, get company), SPEC-MEM (members), SPEC-INV (invitations), SPEC-AUTH (step-up, AC-AUTH-14, 22). Related: D-92, D-93, D-102, D-132, D-163.
 - Date: 2026-10-25. Written from the brief, the OpenAPI contract and the current `apps/web` code.
@@ -87,7 +87,5 @@ P2 and P3: AC-INV-01, 13, 15, 16, 17, 21, 23, 26 (the warning part waits for sli
 ## 9. Checks to run
 Vitest, typecheck, lint, `next build`, Playwright (including axe and screenshots), contract lint and the type-drift check (they must show no change), and `./mvnw verify` once at the end to prove the backend is untouched. Not run by the assistant unless listed in the traceability.
 
-## 10. Approval needed
-1. Approve D-172 to D-175 (or change them).
-2. Approve the phase order F1-1 to F1-5 and that each phase is its own PR.
-3. Confirm that "Open" for an Agent or Viewer lands on the "Company home is coming" page (D-168) and that the accept page and sign in should now end on My companies.
+## 10. Approval
+All three items were approved on 2026-10-25.
