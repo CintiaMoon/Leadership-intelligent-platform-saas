@@ -33,15 +33,15 @@ public class AuthEmails {
 	}
 
 	/**
-	 * The invitation email (SPEC-INV, D-155). It carries the company name as plain text, the role and the expiry, and no
-	 * text chosen by the inviter (no name, no address), because it goes to an address nobody has proven they own. The
-	 * token is in the fragment.
+	 * The invitation email (SPEC-INV, D-155, D-165). The subject is fixed, because the company name is chosen by any
+	 * verified user and the message goes to an address nobody has proven they own. The name appears only in the body, in
+	 * quotes, with a line saying we do not vouch for it. No inviter name or address. The token is in the fragment.
 	 */
 	public EmailMessage invitation(String to, String companyName, String role, java.time.Instant expiresAt, String token) {
-		return new EmailMessage(to, "You have been invited to join " + companyName, """
+		return new EmailMessage(to, "You have been invited to a workspace", """
 				Hello,
 
-				You have been invited to join \"%s\" as %s. To accept, sign in (or create an account with this email address), then open this link before %s:
+				You have been invited to join a workspace named \"%s\" as %s. The name was chosen by the person who created it; we do not vouch for it. To accept, sign in (or create an account with this email address), then open this link before %s:
 
 				%s/invitations/accept#token=%s
 

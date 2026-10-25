@@ -89,8 +89,10 @@ class InvitationDeliveryTests extends AuthIntegrationTest {
 		drainOutbox();
 
 		EmailMessage message = mail.sentTo(email).get(0);
-		assertThat(message.subject()).isEqualTo("You have been invited to join Acme Labs");
-		assertThat(message.body()).contains("\"Acme Labs\"", "as viewer", "before ", "(UTC)");
+		assertThat(message.subject()).as("fixed: the company name is chosen by whoever created the company (D-165)")
+			.isEqualTo("You have been invited to a workspace")
+			.doesNotContain("Acme");
+		assertThat(message.body()).contains("\"Acme Labs\"", "as viewer", "before ", "(UTC)", "we do not vouch for it");
 		assertThat(message.body() + message.subject()).as("no inviter name or address (D-155)")
 			.doesNotContain(seed.ownerName(), seed.ownerEmail(), "Olivia");
 	}

@@ -18,7 +18,7 @@ import {
 /** What happened after the person pressed a button. `attempt` ties it to the link that was open at the time. */
 type Outcome =
   | { kind: "joining"; attempt: number }
-  | { kind: "joined"; attempt: number; company: CompanySummary }
+  | { kind: "joined"; attempt: number; company: CompanySummary | null }
   | { kind: "refused"; attempt: number; message: string }
   | { kind: "retry"; attempt: number; message: string };
 
@@ -26,6 +26,8 @@ const BUTTON =
   "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-base font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:h-[29px] sm:text-xs";
 const PRIMARY = `${BUTTON} bg-ink text-page transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60`;
 const SECONDARY = `${BUTTON} border border-line bg-panel text-ink hover:bg-surface`;
+
+const FALLBACK = "Something went wrong. Please try again.";
 
 const INVALID =
   "This invitation link is invalid or has expired. Ask the person who invited you to send a new one.";
@@ -67,11 +69,8 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
     const result = await post("invitations/accept", { token });
     if (result.ok) {
       clearInvitationToken();
-      setOutcome(
-        isCompany(result.data)
-          ? { kind: "joined", attempt, company: result.data }
-          : { kind: "refused", attempt, message: "You joined the company." },
-      );
+      // The invitation is used up either way; if the reply cannot be read the person is still told they joined.
+      setOutcome({ kind: "joined", attempt, company: isCompany(result.data) ? result.data : null });
       return;
     }
     const code = result.problem?.code;
@@ -85,7 +84,7 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
       router.replace(`/login?notice=expired&next=${INVITATION_NEXT}`);
       return;
     }
-    setOutcome({ kind: "retry", attempt, message: describeFailure(result, "invitation").form ?? "" });
+    setOutcome({ kind: "retry", attempt, message: describeFailure(result, "invitation").form || FALLBACK });
   }
 
   function decline() {
@@ -109,7 +108,9 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
     return (
       <>
         <Notice tone="success">
-          You joined {current.company.name} as {roleLabel(current.company.role)}.
+          {current.company
+            ? `You joined ${current.company.name} as ${roleLabel(current.company.role)}.`
+            : "You joined the company."}
         </Notice>
         <TextLink href="/account" className="text-xs">
           Go to my profile

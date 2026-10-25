@@ -662,9 +662,10 @@ paths:
         is rejected (409) if the address already belongs to an ACTIVE or SUSPENDED member or already has a pending,
         unexpired invitation (resend it instead). Creating is not limited by the company's remaining plan capacity.
         The invitation email is sent after the request commits; until then `emailSent` is false and the invitation cannot
-        be accepted. The response never contains a token. Limits: 20 per inviter per hour, 50 per company per day and
-        3 sends per recipient address per 24 hours, resends included, counted before the request is validated; an
-        unavailable counter store returns 503 (fail closed).
+        be accepted. The response never contains a token. Limits, resends included: 20 per inviter per hour and 50 per
+        company per day, counted before the request is validated; and, for the recipient address, 3 per company and 10
+        across all companies per 24 hours, counted only for requests that succeed (a request refused as a conflict or
+        as invalid does not use them up). An unavailable counter store returns 503 (fail closed).
       security:
         - bffCredential: []
           sessionCookie: []
@@ -1118,7 +1119,10 @@ components:
           format: date-time
         emailSent:
           type: boolean
-          description: False until the invitation email has been delivered. Never exposes a token.
+          description: |
+            False until a link has been issued for the invitation, which happens when the email is prepared for sending.
+            It does not prove that the email reached the recipient (a send that later fails permanently still reads true).
+            Never exposes a token.
     AcceptInvitationRequest:
       type: object
       required: [token]

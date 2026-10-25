@@ -28,6 +28,14 @@ public interface InvitationRepository extends Repository<Invitation, UUID> {
 
 	List<Invitation> findByCompanyIdAndStatusOrderByCreatedAtDesc(UUID companyId, InvitationStatus status);
 
+	/** The pending invitations that have not expired at {@code now}, newest first. */
+	List<Invitation> findByCompanyIdAndStatusAndExpiresAtAfterOrderByCreatedAtDesc(UUID companyId, InvitationStatus status,
+			java.time.Instant now);
+
+	/** The normalized address of one of the company's invitations, as a plain value (no entity before the lock). */
+	@Query("select i.emailNormalized from Invitation i where i.companyId = :companyId and i.id = :id")
+	Optional<String> findEmailNormalizedByCompanyIdAndId(@Param("companyId") UUID companyId, @Param("id") UUID id);
+
 	Optional<Invitation> findByCompanyIdAndEmailNormalizedAndStatus(UUID companyId, String emailNormalized,
 			InvitationStatus status);
 
