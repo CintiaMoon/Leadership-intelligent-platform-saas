@@ -1,6 +1,6 @@
 # SPEC-INV Traceability (implementation status)
 
-- Updated: 2026-10-25, after the Phase 6 reviews and fixes. Every criterion is Verified except AC-INV-12 and AC-INV-26, which are mechanisms that close in slice 006. Closure is waiting for the product owner's sign-off (see the end of this file).
+- Updated: 2026-10-25, after the Phase 6 reviews and fixes. Every criterion is Verified except AC-INV-12 and AC-INV-26, which are mechanisms that close in slice 006. **Slice 004 was signed off by the product owner on 2026-10-25** (see Closure at the end of this file).
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL), and for AC-INV-20 and the accept flow, in the web unit tests and Playwright.
 - Plan: `plan.md`. Decisions: D-144 to D-163. Spec approved 2026-10-24 with AC-INV-27 to AC-INV-29 added.
 
@@ -136,4 +136,14 @@ Two read-only reviews were run by separate agents that had no write tools and ra
 - The members and invitations pages (frontend slice F1) do not exist; invitations are managed through the API or Postman until then.
 
 ### Closure
-All acceptance criteria of SPEC-INV are Verified except AC-INV-12 and AC-INV-26, which close in slice 006. Slice 004 is ready for the product owner's sign-off.
+All acceptance criteria of SPEC-INV are Verified except AC-INV-12 and AC-INV-26, which close in slice 006.
+
+**The user signed off the closure on 2026-10-25** (answering "yes" to "Do you sign off slice 004 with those accepted?"), with these accepted and carried items, each of which stays a gate where noted:
+- AC-INV-12 and AC-INV-26: mechanism only; closed in slice 006 with the real plan-based member limit.
+- The per-IP failed-accept throttle can block an office for the rest of the hour (D-166), with the deployment requirements in `docs/runbooks/operations/invitations.md` (explicit `CLIENT_IP_SOURCE`, no query-string logging at the edge, email tracking off) as a gate for enabling invitations in a shared environment.
+- Look-alike text is still possible in the email body (D-165 residual); plus-addresses are not collapsed (D-55).
+- Invitation addresses are retained until slice 007's purge and the legal review (D-100, D-162).
+- A token can stay in `sessionStorage` after sign-out: carried to frontend slice F1.
+- The older delivery event that can mint a token after a newer resend (the newer delivery replaces it).
+- Not run: the delivery-versus-suspension race, the outbox's behaviour under repeated lock timeouts, the throttle with IPv6 or without `X-Forwarded-For`, the production-cookie E2E variant, other browsers, the CI jobs and any pool load test.
+- The members and invitations pages (frontend slice F1) do not exist; invitations are managed through the API or Postman until then.
