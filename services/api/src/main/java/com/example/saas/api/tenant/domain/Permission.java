@@ -23,6 +23,7 @@ public enum Permission {
 	ASSIGN_OR_REVOKE_ADMIN("Assign or revoke Admin role", true),
 	TRANSFER_OWNERSHIP("Transfer company ownership", true),
 	CANCEL_OWNERSHIP_TRANSFER("Cancel ownership transfer", true),
+	ACCEPT_OWNERSHIP_TRANSFER("Accept ownership transfer", true),
 	MANAGE_SETTINGS("Manage company settings", true),
 	MANAGE_PLANS("Manage plans and entitlements", true),
 	VIEW_PLAN("View plan and entitlements", false),

@@ -148,6 +148,11 @@ class PermissionRoutesController {
 		return Map.of("role", company.role().name());
 	}
 
+	@GetMapping("/api/v1/companies/{companyId}/test/accept-ownership-transfer")
+	Map<String, String> acceptOwnershipTransfer(@Authorized(Permission.ACCEPT_OWNERSHIP_TRANSFER) AuthorizedCompany company) {
+		return Map.of("role", company.role().name());
+	}
+
 	@GetMapping("/api/v1/companies/{companyId}/test/manage-settings")
 	Map<String, String> manageSettings(@Authorized(Permission.MANAGE_SETTINGS) AuthorizedCompany company) {
 		return Map.of("role", company.role().name());

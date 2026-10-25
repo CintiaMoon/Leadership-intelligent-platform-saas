@@ -1,9 +1,9 @@
 # Ownership Transfer Specification
 
 - ID: SPEC-OWN
-- Status: Draft
+- Status: Approved 2026-10-25 with the amendments AC-OWN-18 to AC-OWN-23 (plan Q-19, D-194)
 - Requirements: OWN-001 through OWN-005
-- Note: decisions marked "Decided 2026-10-16" were approved by the user from the decision-register suggestions. The spec stays Draft until the product owner approves the full baseline.
+- Note: decisions marked "Decided 2026-10-16" were approved by the user from the decision-register suggestions. The plan of 2026-10-25 (`plan.md`, D-176 to D-194) answers the open points and adds AC-OWN-18 to AC-OWN-23.
 
 ## Objective
 Transfer company ownership only after explicit acceptance by an eligible recipient, without races that violate company invariants.
@@ -56,14 +56,20 @@ Do not call email or other external providers inside the database transaction.
 - AC-OWN-16: An overdue transfer is treated as EXPIRED when read and is rejected for acceptance even if the periodic sweep has not run; the sweep later marks it EXPIRED.
 - AC-OWN-17: Transfer notifications (initiation, acceptance, cancellation, expiry) are enqueued through the outbox and contain no token or other secret.
 - AC-OWN-15: Completing a transfer is rejected if, at completion time, the company is not ACTIVE or the transfer's initiator is no longer the active Owner.
+- AC-OWN-18: When an operator has disabled the Owner's account, the Owner of the flagged company can be changed only by the audited operator transfer script of the runbook (D-142, D-54): it requires a ticket, an ACTIVE Admin (or a named ACTIVE member) with an ACTIVE account and a verified email as recipient, demotes the old Owner to a suspended Admin, promotes the recipient, clears the flag, cancels a pending transfer, writes an audit event with the ticket and the database role, and queues notices that do not go to the old Owner's address. It is tested on PostgreSQL, and every safety condition is covered by a test that fails when the condition is removed.
+- AC-OWN-19: The recipient must be an ACTIVE member of the company with an ACTIVE account and a verified email, at initiation and again at acceptance under the lock. A membership that is not in the company is not found.
+- AC-OWN-20: At most 5 transfers can be initiated per company per 24 hours; a refused request does not use up the allowance; the limit fails closed when its store is unavailable.
+- AC-OWN-21: Completing a transfer revokes the previous Owner's pending invitations for roles an Admin cannot grant (slice 004), in the same transaction.
+- AC-OWN-22: Only the initiator and the recipient can read a transfer; anybody else, including other members and members of other companies, is told it does not exist.
+- AC-OWN-23: A pending transfer can be cancelled for a deletion request through a hook that writes an audit entry and queues the cancellation notices; the deletion request itself is slice 007.
 
 ## Traceability
 | Requirement | Acceptance criteria |
 |---|---|
-| OWN-001 | AC-OWN-01, AC-OWN-08, AC-OWN-09, AC-OWN-11 |
-| OWN-002 | AC-OWN-02, AC-OWN-12 |
-| OWN-003 | AC-OWN-04, AC-OWN-05, AC-OWN-10, AC-OWN-13, AC-OWN-15 |
-| OWN-004 | AC-OWN-03, AC-OWN-07, AC-OWN-14, AC-OWN-16 |
+| OWN-001 | AC-OWN-01, AC-OWN-08, AC-OWN-09, AC-OWN-11, AC-OWN-19, AC-OWN-20 |
+| OWN-002 | AC-OWN-02, AC-OWN-12, AC-OWN-22 |
+| OWN-003 | AC-OWN-04, AC-OWN-05, AC-OWN-10, AC-OWN-13, AC-OWN-15, AC-OWN-18, AC-OWN-21 |
+| OWN-004 | AC-OWN-03, AC-OWN-07, AC-OWN-14, AC-OWN-16, AC-OWN-23 |
 | OWN-005 | AC-OWN-05, AC-OWN-06, AC-OWN-17 |
 
 ## Tests
