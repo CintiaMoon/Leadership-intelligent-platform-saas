@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CompanyHeader } from "@/components/companies/CompanyHeader";
+import { InviteButton } from "@/components/invitations/InviteButton";
 import { LeaveCompany } from "@/components/companies/LeaveCompany";
 import { MembersList, type MemberRow } from "@/components/companies/MembersList";
 import { NotAvailable } from "@/components/companies/NotAvailable";
@@ -55,9 +56,14 @@ export default async function MembersPage({ params }: { params: Promise<{ compan
   return (
     <>
       <CompanyHeader companyId={company.id} name={company.name} role={company.role} active="members" />
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-serif text-base text-ink">Members ({rows.length})</h2>
-        <LeaveCompany companyId={company.id} companyName={company.name} role={company.role} />
+      <div className="mt-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-serif text-base text-ink">Members ({rows.length})</h2>
+          <div className="mt-2">
+            <LeaveCompany companyId={company.id} companyName={company.name} role={company.role} />
+          </div>
+        </div>
+        <InviteButton companyId={company.id} callerRole={company.role} companyStatus={company.status} />
       </div>
       <div className="mt-3">
         <MembersList

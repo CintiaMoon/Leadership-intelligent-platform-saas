@@ -15,6 +15,11 @@ const SHOTS = "test-results/f1-3";
 // Each test first builds a team of real accounts (sign-up, verification mail, invitation mail), which takes a while.
 test.describe.configure({ timeout: 180_000 });
 
+/** The live region that currently has a message (the page has one for the list and one for the invite button). */
+function notice(page: Page) {
+  return page.getByRole("status").filter({ hasText: /\S/ });
+}
+
 function row(page: Page, name: string) {
   return page.getByRole("listitem").filter({ hasText: name });
 }
@@ -52,7 +57,7 @@ test("an Owner manages members: change role, suspend, reactivate, remove", async
 
   // Change a role (no password needed: the sign-in was just now).
   await row(page, "Cy Agent").getByRole("combobox", { name: "Role of Cy Agent" }).selectOption("VIEWER");
-  await expect(page.getByRole("status")).toHaveText("Cy Agent is now a viewer.");
+  await expect(notice(page)).toHaveText("Cy Agent is now a viewer.");
   await expect(row(page, "Cy Agent").getByRole("combobox")).toHaveValue("VIEWER");
 
   // Suspend: asks first, names the person.
@@ -65,14 +70,14 @@ test("an Owner manages members: change role, suspend, reactivate, remove", async
   await expect(dialog).toBeHidden();
   await row(page, "Di Viewer").getByRole("button", { name: "Suspend Di Viewer" }).click();
   await dialog.getByRole("button", { name: "Suspend" }).click();
-  await expect(page.getByRole("status")).toHaveText("Di Viewer was suspended.");
+  await expect(notice(page)).toHaveText("Di Viewer was suspended.");
   await expect(row(page, "Di Viewer")).toContainText("Suspended");
   await expect(row(page, "Di Viewer").getByRole("combobox")).toHaveCount(0);
   await shots(page, "members-suspended");
 
   // Reactivate keeps the role.
   await row(page, "Di Viewer").getByRole("button", { name: "Reactivate Di Viewer" }).click();
-  await expect(page.getByRole("status")).toHaveText("Di Viewer was reactivated.");
+  await expect(notice(page)).toHaveText("Di Viewer was reactivated.");
   await expect(row(page, "Di Viewer")).toContainText("Active");
   await expect(row(page, "Di Viewer").getByRole("combobox")).toHaveValue("VIEWER");
 
@@ -83,7 +88,7 @@ test("an Owner manages members: change role, suspend, reactivate, remove", async
   await removeDialog.getByRole("button", { name: "Remove" }).click();
   await expect(page.getByRole("heading", { name: "Members (3)" })).toBeVisible();
   await expect(row(page, "Bo Admin")).toHaveCount(0);
-  await expect(page.getByRole("status")).toHaveText("Bo Admin was removed.");
+  await expect(notice(page)).toHaveText("Bo Admin was removed.");
 });
 
 test("an Admin has fewer controls, an Agent cannot open Members, and an Admin can leave", async ({ page, context }) => {
@@ -143,7 +148,7 @@ test("a row that changed since the page loaded is explained and the list refresh
   await row(page, "Cy Agent").getByRole("button", { name: "Suspend Cy Agent" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Suspend" }).click();
 
-  await expect(page.getByRole("status")).toContainText("changed in the meantime");
+  await expect(notice(page)).toContainText("changed in the meantime");
   await expect(row(page, "Cy Agent")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Members (1)" })).toBeVisible();
 });

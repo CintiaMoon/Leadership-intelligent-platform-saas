@@ -1,7 +1,7 @@
 # Frontend slice F1 traceability
 
 - Plan: `f1-plan.md` (approved 2026-10-25). Decisions: D-168 to D-175.
-- Status by phase: F1-1 to F1-3 done (below). F1-4 and F1-5 not started.
+- Status by phase: F1-1 to F1-4 done (below). F1-5 (review and closure) not started.
 
 ## Phase F1-1: BFF operations and browser client (no UI)
 **What changed**
@@ -88,3 +88,30 @@
 - Mutation checks, both caught and restored: Admin restriction in `memberActions`; the guard against a second password prompt.
 - **One failure I could not explain:** the first run of the new members spec showed Next's "This page couldn't load" on the Members page in one test (and ran into the 60 s limit in the others). It did not reproduce in four later runs of the same flows, including against servers I started by hand and watched, and I did not capture the server log of the failing run. The test timeout was raised to 180 s because building a team takes about 20 s. Treat it as an unexplained flake to watch in CI.
 - Not run: the stale-login step-up against a real session (a session cannot be made 10 minutes old inside a test; the unit tests cover the sequence and `e2e/bff-companies.spec.ts` covers the step-up operation itself), `./mvnw verify` (no backend change; once at the end of F1), contract lint and type-drift check (contract unchanged), the production-cookie E2E variant, other browsers, CI.
+
+## Phase F1-4: pending invitations tab and the invite dialog (P2 pending, P3)
+**What changed**
+- `/companies/[companyId]/invitations`: server reads the company and its pending invitations; Owners and Admins only (everyone else gets the "not available" page). Rows show address, role, expiry and "Sending" until a link has been issued. The list never has a token or a link, because the API does not return one. The tab row now has Members and Pending invitations.
+- Resend (at once) and Revoke (asks first, names the address). What is offered comes from `lib/invitationActions.ts`, which mirrors `InvitationRules`: an Owner may use every invitation, an Admin only those for Agents and Viewers, nobody in a company that is not ACTIVE. The API decides every request.
+- "Invite someone" (on Members and on Pending invitations): one address and one role the caller may give (Owner: Viewer, Agent, Admin; Admin: Viewer, Agent; the safest role is the default). An invalid address is a field error; a member or an existing invitation is one message (the API uses one code for both, on purpose); 429 says to wait; inviting an Admin with a stale login opens the password dialog over the form, keeps what was typed and sends once more. The capacity warning of the brief is not built: it needs the plan data of slice 006 (AC-INV-26).
+- `useActionRunner` now holds the shared handling of answers (success, 401, step-up retry, conflict, refusal, waiting messages); the Members list was moved onto it with its 18 tests unchanged.
+
+**Evidence**
+| Claim | Test |
+|---|---|
+| Owner and Admin may invite the roles above, nobody else; resend and revoke follow the same limit; a company that is not ACTIVE offers nothing | `invitationActions.test.ts`, `invitations.test.tsx`; mutation check (everything allowed) fails both |
+| Rows show address, role, expiry, "Sending" only until sent; the empty state; no token or link in the page; text only | `invitations.test.tsx` |
+| Resend sends one POST; revoke asks first, names the address, then sends one DELETE; Cancel sends nothing; 409 is explained and refreshes | `invitations.test.tsx` |
+| Resending an Admin invitation with a stale login: request, step-up, same request | `invitations.test.tsx` |
+| Invite dialog: roles by caller; trimmed address and role posted; closes and names the address with a link to the pending list (no link on that page); field error keeps the text; 409 and 429 messages; Admin invitation with a stale login keeps the form and sends once more; Cancel of the password dialog drops it and keeps the form; no second prompt; Cancel clears the form | `invitations.test.tsx`; mutation check (second prompt allowed) fails it |
+| Real stack: an Owner invites from the screen (invalid address, then a good one), reads the pending list, sees the same address refused with one message, the email arrives, Resend mails a new link, Revoke removes a row, the person joins with the newest link and appears in Members while the pending list is empty | `e2e/invitations-ui.spec.ts` |
+| Real stack: an Admin sees an Admin invitation without actions, can only pick Viewer or Agent, and can invite; an Agent has no Invite button and the invitations address is "not available" | `e2e/invitations-ui.spec.ts` |
+| Axe: pending list (Owner and Admin) and the invite dialog with an error, no serious or critical violations | `e2e/invitations-ui.spec.ts` |
+| Screenshots at 360, 768 and 1280 px reviewed (Owner, Admin, dialog at 360); no changes needed | `test-results/f1-4/*.png` (not committed) |
+
+## Checks run (F1-4)
+- Vitest 128 passed (12 files), `npm run typecheck`, `npm run lint`, `npm run build`: clean.
+- Playwright 25 of 25 passed against the real API jar, the built web app, PostgreSQL and Mailpit, on servers started by Playwright (datasource override in `docs/runbooks/operations/invitations.md`). Existing members tests needed a selector change: the Members page now has two live regions.
+- Mutation checks caught and restored: invitation actions (all allowed); the guard against a second password prompt in the invite dialog. A third (removing `.trim()` of the address) was not caught because an `<input type="email">` already strips surrounding spaces, so that trim is redundant defence and is not claimed as tested.
+- The unexplained one-off server error noted in F1-3 did not recur in the three full runs of this phase.
+- Not run: the stale-login step-up against a real session (cannot be aged in a test; unit tests cover the sequence), the capacity warning (waits for slice 006), `./mvnw verify` (no backend change; once at the end of F1), contract lint and type-drift check (contract unchanged), the production-cookie E2E variant, other browsers, CI.

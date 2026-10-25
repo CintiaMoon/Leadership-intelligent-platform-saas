@@ -1,13 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PasswordDialog } from "@/components/app/PasswordDialog";
+import { useActionRunner } from "@/components/app/useActionRunner";
 import { DANGER_BUTTON, SECONDARY_BUTTON } from "@/components/app/buttons";
-import { send, type ApiResult } from "@/lib/api/client";
-import { describeFailure } from "@/lib/api/messages";
+import { send } from "@/lib/api/client";
 import { memberActions } from "@/lib/memberActions";
 import { roleLabel } from "@/lib/roles";
 
@@ -25,7 +24,6 @@ export type MemberRow = {
 };
 
 type Confirm = { kind: "suspend" | "remove"; member: MemberRow };
-type Retry = { member: MemberRow; request: () => Promise<ApiResult>; success: string };
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: "Active", SUSPENDED: "Suspended" };
 
@@ -44,61 +42,19 @@ export function MembersList({
   companyStatus: string;
   members: MemberRow[];
 }) {
-  const router = useRouter();
-  const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const { notice, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("member");
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [confirmPending, setConfirmPending] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [retry, setRetry] = useState<Retry | null>(null);
 
   const base = `/api/companies/${companyId}/members`;
 
-  /** The text for a refusal, and whether the page should read the list again. */
-  function explain(result: Extract<ApiResult, { ok: false }>): { text: string; refresh: boolean } {
-    if (result.status === 403 || result.status === 404) {
-      return { text: "That is not available to you any more. The list was refreshed.", refresh: true };
-    }
-    if (result.status === 409) {
-      return { text: "This member changed in the meantime. The list was refreshed.", refresh: true };
-    }
-    return { text: describeFailure(result).form ?? "Something went wrong. Please try again.", refresh: false };
-  }
-
-  /** Runs one change. Returns true when the dialog that started it can close. */
-  async function run(member: MemberRow, request: () => Promise<ApiResult>, success: string, again = false) {
-    setBusy(member.id);
-    setNotice(null);
-    const result = await request();
-    setBusy(null);
-    if (result.ok) {
-      setNotice(success);
-      router.refresh();
-      return { done: true, error: null };
-    }
-    if (result.status === 401) {
-      router.replace("/login?notice=expired");
-      return { done: true, error: null };
-    }
-    if (result.status === 403 && result.problem?.code === "REAUTHENTICATION_REQUIRED" && !again) {
-      // Ask for the password, then send the same request once more (D-174).
-      setRetry({ member, request, success });
-      return { done: true, error: null };
-    }
-    const { text, refresh } = explain(result);
-    if (refresh) {
-      router.refresh();
-    }
-    setNotice(text);
-    return { done: refresh, error: text };
-  }
-
   function changeRole(member: MemberRow, role: string) {
-    void run(member, () => send("PATCH", `${base}/${member.id}`, { role }), `${member.displayName} is now ${article(role)} ${role.toLowerCase()}.`);
+    void run(member.id, () => send("PATCH", `${base}/${member.id}`, { role }), `${member.displayName} is now ${article(role)} ${role.toLowerCase()}.`);
   }
 
   function reactivate(member: MemberRow) {
-    void run(member, () => send("POST", `${base}/${member.id}/reactivate`), `${member.displayName} was reactivated.`);
+    void run(member.id, () => send("POST", `${base}/${member.id}/reactivate`), `${member.displayName} was reactivated.`);
   }
 
   async function confirmed() {
@@ -110,21 +66,13 @@ export function MembersList({
     setConfirmError(null);
     const outcome =
       kind === "suspend"
-        ? await run(member, () => send("POST", `${base}/${member.id}/suspend`), `${member.displayName} was suspended.`)
-        : await run(member, () => send("DELETE", `${base}/${member.id}`), `${member.displayName} was removed.`);
+        ? await run(member.id, () => send("POST", `${base}/${member.id}/suspend`), `${member.displayName} was suspended.`)
+        : await run(member.id, () => send("DELETE", `${base}/${member.id}`), `${member.displayName} was removed.`);
     setConfirmPending(false);
     if (outcome.done) {
       setConfirm(null);
     } else {
       setConfirmError(outcome.error);
-    }
-  }
-
-  async function reauthenticated() {
-    const pending = retry;
-    setRetry(null);
-    if (pending) {
-      await run(pending.member, pending.request, pending.success, true);
     }
   }
 
@@ -238,7 +186,7 @@ export function MembersList({
           : "They will lose access immediately. You can reactivate them later."}
       </ConfirmDialog>
 
-      <PasswordDialog open={retry !== null} onConfirmed={() => void reauthenticated()} onCancel={() => setRetry(null)} />
+      <PasswordDialog open={reauthOpen} onConfirmed={() => void reauthenticated()} onCancel={cancelReauth} />
     </>
   );
 }
