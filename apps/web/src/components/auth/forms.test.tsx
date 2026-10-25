@@ -47,7 +47,7 @@ test("login sends the CSRF header, then goes to the account page", async () => {
   fill("Password", "a password");
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-  await waitFor(() => expect(replace).toHaveBeenCalledWith("/account"));
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/companies"));
   const [csrfUrl] = fetchMock.mock.calls[0];
   expect(csrfUrl).toBe("/api/auth/csrf/pre-login");
   const [, init] = fetchMock.mock.calls[1];

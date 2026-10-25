@@ -89,7 +89,7 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
 
   function decline() {
     clearInvitationToken();
-    router.push("/account");
+    router.push("/companies");
   }
 
   if (current?.kind === "refused") {
@@ -97,8 +97,8 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
       <>
         <Notice tone="error">{current.message}</Notice>
         {signedIn ? (
-          <TextLink href="/account" className="text-xs">
-            Go to my profile
+          <TextLink href="/companies" className="text-xs">
+            Go to my companies
           </TextLink>
         ) : null}
       </>
@@ -112,8 +112,8 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
             ? `You joined ${current.company.name} as ${roleLabel(current.company.role)}.`
             : "You joined the company."}
         </Notice>
-        <TextLink href="/account" className="text-xs">
-          Go to my profile
+        <TextLink href="/companies" className="text-xs">
+          Go to my companies
         </TextLink>
       </>
     );

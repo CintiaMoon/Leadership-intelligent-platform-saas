@@ -1,41 +1,13 @@
 import type { Metadata } from "next";
-import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
 
-import { LogoMark } from "@/components/auth/ui";
-import { SignOutButton } from "@/components/auth/SignOutButton";
-import { loadConfig, loadSession, type SessionInfo } from "@/lib/server/bff";
+import type { SessionInfo } from "@/lib/server/bff";
+import { requireSession } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Profile" };
 
-export default function AccountPage() {
-  return (
-    <div className="min-h-dvh bg-page">
-      <header className="flex h-[50px] items-center justify-between border-b border-line px-4">
-        <div className="flex items-center gap-2.5">
-          <LogoMark />
-          <span className="font-serif text-base leading-none text-ink">Helm</span>
-        </div>
-      </header>
-      <main className="mx-auto max-w-[1070px] px-4 py-8 sm:px-8">
-        <Suspense fallback={<p className="text-xs text-muted">Loading your profile…</p>}>
-          <Profile />
-        </Suspense>
-      </main>
-    </div>
-  );
-}
-
-async function Profile() {
-  // Reading the request first keeps this out of the prerendered shell; the config is only needed per request.
-  const incoming = await headers();
-  const config = loadConfig();
-  const hadCookie = (await cookies()).has(config.sessionCookie);
-  const session = await loadSession(incoming, config);
-  if (!session) {
-    redirect(hadCookie ? "/login?notice=expired" : "/login");
-  }
+export default async function AccountPage() {
+  // The shell shows the header; the profile reads the session itself.
+  const { session } = await requireSession();
   return <ProfileView session={session} />;
 }
 
@@ -64,7 +36,6 @@ function ProfileView({ session }: { session: SessionInfo }) {
           <h1 className="mt-1 font-serif text-[32px] leading-9 text-ink">Profile</h1>
           <p className="mt-1.5 text-[11px] text-muted">Your identity and sign-in status.</p>
         </div>
-        <SignOutButton />
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[348px_1fr]">

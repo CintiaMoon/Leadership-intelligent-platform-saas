@@ -11,6 +11,8 @@ const NO_STORE_PAGES = [
   "/reset-password",
   "/account",
   "/invitations/accept",
+  "/companies",
+  "/companies/:path*",
 ];
 
 const nextConfig: NextConfig = {

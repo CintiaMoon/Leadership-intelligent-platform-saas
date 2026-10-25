@@ -61,6 +61,9 @@ test("signup, email verification, login, profile and logout", async ({ page, con
   await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
+  // Signing in lands on My companies; the person's name in the header opens the profile.
+  await expect(page).toHaveURL(/\/companies$/);
+  await page.getByRole("link", { name: "Alex Morgan" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
   await expect(page.getByText("Alex Morgan").first()).toBeVisible();
@@ -124,7 +127,7 @@ test("password reset: neutral request, policy check, one-time link, sessions rev
   const other = await browser.newContext();
   const otherPage = await other.newPage();
   await signIn(otherPage, email, PASSWORD);
-  await expect(otherPage).toHaveURL(/\/account$/);
+  await expect(otherPage).toHaveURL(/\/companies$/);
 
   // Unknown and known addresses look the same.
   const neutral = "If an account exists for this address, we have sent password reset instructions.";
@@ -170,7 +173,7 @@ test("password reset: neutral request, policy check, one-time link, sessions rev
   await signIn(page, email, PASSWORD);
   await expect(alertIn(page)).toContainText("email or password is incorrect");
   await signIn(page, email, NEW_PASSWORD);
-  await expect(page).toHaveURL(/\/account$/);
+  await expect(page).toHaveURL(/\/companies$/);
 
   await page.goto(link);
   await page.getByLabel("New password").fill("yet another passphrase 99!");
@@ -213,6 +216,8 @@ test("the profile page has no serious accessibility violations", async ({ page }
   const email = uniqueEmail();
   await createVerifiedAccount(page, email);
   await signIn(page, email, PASSWORD);
+  await expect(page).toHaveURL(/\/companies$/);
+  await page.getByRole("link", { name: "Alex Morgan" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expectNoSeriousA11yViolations(page);
 });

@@ -19,7 +19,7 @@ test("the company operations work through the BFF against the real API, and noth
   const email = uniqueEmail();
   await createVerifiedAccount(page, email);
   await signIn(page, email, PASSWORD);
-  await expect(page).toHaveURL(/\/account$/);
+  await expect(page).toHaveURL(/\/companies$/);
 
   // Create a company (POST /api/companies has no path segments).
   const created = await bff(page, "POST", "/api/companies", { name: "BFF Co" });
