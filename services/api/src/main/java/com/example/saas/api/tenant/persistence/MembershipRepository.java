@@ -55,6 +55,19 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 	@Query("select m from Membership m where m.companyId = :companyId and m.id = :id")
 	Optional<Membership> lockByCompanyIdAndId(@Param("companyId") UUID companyId, @Param("id") UUID id);
 
+	/**
+	 * {@code SELECT ... FOR UPDATE} on the live (ACTIVE or SUSPENDED) memberships of these users in the company, in ID
+	 * order, after the company row (D-32, D-182). The same order every time keeps two transactions that lock two
+	 * memberships from deadlocking. Call it before the memberships have been read in the transaction, so they are loaded
+	 * fresh.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select m from Membership m where m.companyId = :companyId and m.userId in :userIds and m.status in "
+			+ "(com.example.saas.api.tenant.domain.MembershipStatus.ACTIVE, "
+			+ "com.example.saas.api.tenant.domain.MembershipStatus.SUSPENDED) order by m.id")
+	List<Membership> lockLiveByCompanyIdAndUserIds(@Param("companyId") UUID companyId,
+			@Param("userIds") java.util.Collection<UUID> userIds);
+
 	/** The company's members with their names, oldest first. Bounded by the {@code Pageable}. */
 	@Query("select new com.example.saas.api.tenant.persistence.MemberRow(m.id, u.id, u.displayName, u.emailOriginal, "
 			+ "m.role, m.status, m.createdAt) from Membership m join UserAccount u on u.id = m.userId "

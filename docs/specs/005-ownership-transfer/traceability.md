@@ -1,35 +1,35 @@
 # SPEC-OWN Traceability (implementation status)
 
-- Updated: 2026-10-25, after Phase 1 (schema and persistence).
+- Updated: 2026-10-25, after Phase 2 (rules, service, sweep, notifications).
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL); for the frontend, in the web unit tests and Playwright.
 - Plan: `plan.md` (approved 2026-10-25, Q-01 to Q-19, D-176 to D-194). Spec approved the same day with AC-OWN-18 to AC-OWN-23 added.
-- Phases: 0 and 1 done (this file); 2 (service, sweep, notifications), 3 (contract and API), 4 (operator transfer), 5 (frontend), 6 (review and closure) not started.
+- Phases: 0, 1 and 2 done; 3 (contract and API), 4 (operator transfer), 5 (frontend), 6 (review and closure) not started. "Verified at the service" means proven through the service against PostgreSQL; the real HTTP proof (roles, status codes, CSRF, cross-company IDs) is Phase 3.
 
 | AC | Status | Planned | Evidence so far |
 |---|---|---|---|
-| AC-OWN-01 | Pending | Phases 2, 3 | |
-| AC-OWN-02 | Pending | Phases 2, 3 | |
-| AC-OWN-03 | Pending | Phase 2 | The terminal states cannot change again at the entity level (`everyWayToEndATransferWritesAValidRowAndAFinishedTransferCannotChangeAgain`); the service test comes in Phase 2 |
-| AC-OWN-04 | Pending | Phase 2 | Database side: one pending row per company under 8 simultaneous inserts (`simultaneousInitiationsLeaveExactlyOnePendingTransfer`) |
-| AC-OWN-05 | Partly | Phase 2 | Database side: demote then promote in one transaction leaves exactly one Owner; promote first is refused; a demotion alone cannot commit (`OwnershipTransferSchemaTests`, three tests, with the existing V10 index and trigger). The service-level proof comes in Phase 2 |
-| AC-OWN-06 | Pending | Phase 2 | |
-| AC-OWN-07 | Pending | Phases 2, 3 | |
-| AC-OWN-08 | Pending | Phase 2 | |
-| AC-OWN-09 | Pending | Phase 2; second half in slice 007 | |
-| AC-OWN-10 | Partly | Phase 2 | Database side as for AC-OWN-04 (`aSecondPendingTransferForTheSameCompanyIsRefusedButAnotherCompanyOrAFinishedOneIsFine`); the refused second initiation through the service comes in Phase 2 |
-| AC-OWN-11 | Pending | Phases 2, 3 | |
-| AC-OWN-12 | Pending | Phases 2, 3 | |
-| AC-OWN-13 | Pending | Phase 2 | |
-| AC-OWN-14 | Partly | Phase 2 | The entity treats a transfer as overdue exactly at its 7-day expiry and not before (`aTransferIsOverdueExactlyAtItsExpiryAndReadsAsExpiredBeforeTheSweep`, `anInitiatedTransferIsPendingForSevenDaysAndRoundTripsThroughTheRepository`) |
-| AC-OWN-15 | Pending | Phase 2 | |
-| AC-OWN-16 | Partly | Phase 2 | Reading an overdue pending transfer as EXPIRED without writing is the entity's `effectiveStatus` (same test as AC-OWN-14); the rejection of acceptance and the sweep come in Phase 2 |
-| AC-OWN-17 | Pending | Phases 2, 4 | |
-| AC-OWN-18 | Pending | Phase 4 | |
-| AC-OWN-19 | Pending | Phase 2 | |
-| AC-OWN-20 | Pending | Phase 2 | |
-| AC-OWN-21 | Pending | Phase 2 | |
-| AC-OWN-22 | Partly | Phases 2, 3 | A transfer of another company is not found by ID or by lock (`aTransferOfAnotherCompanyIsNotFoundByIdOrByLock`); the "only the parties can read" rule comes in Phases 2 and 3 |
-| AC-OWN-23 | Pending | Phase 2 | |
+| AC-OWN-01 | Verified at the service | Phase 3 (HTTP matrix) | `OwnershipTransferServiceTests.everyoneButTheOwnerIsRefusedBeforeAnyLockAndBeforeAnythingIsCounted` (Admin, Agent and Viewer refused while the company lock is held elsewhere, so they never queued; no transfer created), `anOutsiderAndTheOwnerOfAnotherCompanyAreToldTheCompanyDoesNotExist`, `theOwnerInitiatesAPendingTransferThatChangesNothingYetAndQueuesOneEmailForTheRecipient`; mutation check: removing the early refusal fails the first two |
+| AC-OWN-02 | Verified at the service | Phase 3 (HTTP) | `OwnershipTransferServiceTests.onlyTheNamedRecipientCanAcceptAndEveryoneElseIsToldItDoesNotExist` (the initiator, an Agent, a Viewer, a stranger, and the right person in another company are all told it does not exist), `theRecipientAcceptsTheOldOwnerBecomesAnAdminAndExactlyOneOwnerRemains`; mutation check: removing the recipient check in both layers fails the first (each layer alone is redundant by design) |
+| AC-OWN-03 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.aSecondAcceptanceOfTheSameTransferIsRefused`, `anAcceptanceAtTheExpiryIsRefusedEvenThoughTheSweepHasNotRun`, `OwnershipTransferConcurrencyTests.eightSimultaneousAcceptancesOfOneTransferCompleteItExactlyOnce` (1 success, 7 refusals, one completion audit, two emails) |
+| AC-OWN-04 | Verified at the service | Phase 3 | `OwnershipTransferConcurrencyTests.eightSimultaneousAcceptancesOfOneTransferCompleteItExactlyOnce`, `simultaneousInitiationsToDifferentMembersLeaveExactlyOnePendingTransfer`, `anAcceptanceRacingACancellationEndsInOneOfTwoSerialOrders` (6 rounds), `anAcceptanceRacingTheSuspensionOfTheRecipientEndsInOneOfTwoSerialOrders` (6 rounds), `anInitiationRacingTheSweepExpiresTheOverdueTransferOnceAndCreatesTheNewOne` (5 rounds), and `OwnershipTransferAndAccountDisableTests` (6 rounds against the operator's own SQL); every one checks exactly one Owner and one of the two serial outcomes |
+| AC-OWN-05 | Verified at the service | Phase 3 | Every concurrency test checks `owners()` is exactly 1 afterwards; completion demotes, flushes, promotes, flushes (mutation check: without the separate flush four tests fail); the database side is in `OwnershipTransferSchemaTests` (Phase 1); rollback after both role changes: `OwnershipTransferAtomicityTests.aFailureAfterBothRoleChangesRollsBackTheOwnershipTheTransferTheEventsAndTheInvitationRevocation` |
+| AC-OWN-06 | Partly (service) | Phases 2, 4 | Audit and outbox rows are written in the transaction, and a failure after the writes rolls everything back (`OwnershipTransferAtomicityTests`, 4 tests). Events carry identifiers only, use idempotency keys, and the handler builds the same text from stored state each time. **Not tested:** an explicit redelivery of the same outbox event |
+| AC-OWN-07 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.theInitiatorCancelsAndACancelledTransferCanNoLongerBeAccepted`, `onlyTheInitiatingOwnerCancelsAndOthersAreRefusedOrToldItDoesNotExist`, `anOverdueTransferCannotBeCancelledAndStaysPendingUntilTheSweep` |
+| AC-OWN-08 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.aRecipientMustBeAnotherActiveMemberOfThisCompanyWithAUsableAccount` (at initiation: suspended, removed, disabled account, unverified email), `aRecipientWhoStoppedBeingAnActiveMemberOrWhoseAccountIsUnusableCannotAccept` (at acceptance); mutation check: removing the recheck under the lock fails it |
+| AC-OWN-09 | Partly (service) | Phase 2; second half in slice 007 | `OwnershipTransferServiceTests.aCompanyBeingDeletedCannotStartATransfer`, `aDeletionRequestCancelsThePendingTransferWithAnAuditEntryAndEmails`, `theDeletionHookRecordsAnOverdueTransferAsExpiredAndNeedsATransaction`. The deletion request itself that calls the hook is slice 007 |
+| AC-OWN-10 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.aSecondTransferWhileOneIsPendingIsRefusedButAFinishedOneDoesNotBlock`, `anOverdueTransferIsEndedByTheNextInitiationInsteadOfBlockingIt` (mutation check: an overdue transfer that blocks fails it), `OwnershipTransferConcurrencyTests.simultaneousInitiationsToDifferentMembersLeaveExactlyOnePendingTransfer`, and the database side in `OwnershipTransferSchemaTests` |
+| AC-OWN-11 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.initiatingNeedsALoginWithinTheLastTenMinutes` (nothing is created) |
+| AC-OWN-12 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.acceptingNeedsALoginWithinTheLastTenMinutes` (nothing changes) |
+| AC-OWN-13 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.theRecipientAcceptsTheOldOwnerBecomesAnAdminAndExactlyOneOwnerRemains`, `aRecipientWhoIsAnAgentOrAViewerBecomesTheOwnerToo` |
+| AC-OWN-14 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.anAcceptanceAtTheExpiryIsRefusedEvenThoughTheSweepHasNotRun` (valid 1 ms before the 7 days, refused at them; mutation check: accepting an overdue transfer fails it), `theSweepExpiresOverdueTransfersOnceAndLeavesTheRestAlone` |
+| AC-OWN-15 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.aCompanyThatIsBeingDeletedOrWhoseOwnerIsNoLongerActiveCannotCompleteATransfer` (pending deletion; a flagged company with a suspended Owner; mutation check: dropping the initiator check fails it), `OwnershipTransferAndAccountDisableTests` (acceptance racing the operator procedure) |
+| AC-OWN-16 | Verified at the service | Phase 3 | `OwnershipTransferServiceTests.anAcceptanceAtTheExpiryIsRefusedEvenThoughTheSweepHasNotRun` (the stored status is still PENDING, readers see EXPIRED, acceptance is refused), `theSweepExpiresOverdueTransfersOnceAndLeavesTheRestAlone` (expired once, audited, two emails, a second run changes nothing) |
+| AC-OWN-17 | Verified at the service | Phases 3, 4 (operator emails) | `OwnershipTransferServiceTests.theEmailsAreFixedTextWithTheCompanyNameInTheBodyOnlyAndNoSecretOrPersonName` (fixed subjects, name only in the body and in quotes, no person name, no token, the outbox payload holds no address and is scrubbed once sent), `anEmailAboutAStateTheTransferHasLeftIsNotSentAndNeitherIsOneToADisabledAccount` |
+| AC-OWN-18 | Pending | Phase 4 |  |
+| AC-OWN-19 | Verified at the service | Phase 3 | Same tests as AC-OWN-08; a membership ID that is not in this company is not found (`aRecipientMustBeAnotherActiveMemberOfThisCompanyWithAUsableAccount`) |
+| AC-OWN-20 | Verified at the service (fail-closed not exercised here) | Phase 3 (429 over HTTP) | `OwnershipTransferServiceTests.noMoreThanFiveTransfersCanBeInitiatedPerCompanyPerDayAndRefusedRequestsDoNotCount` (the sixth is limited; refused requests did not use the allowance; mutation check: never counting fails it), `OwnershipTransferAtomicityTests.aFailureAfterTheTransferRowWasWrittenLeavesNoTransferNoEventAndNoUsedAllowance`. The unavailable-store case uses the same limiter as invitations and is not repeated |
+| AC-OWN-21 | Verified at the service | - | `OwnershipTransferServiceTests.completionRevokesTheOldOwnersPendingInvitationsForRolesAnAdminCannotGrantAndKeepsTheRest` (the Admin invitation is revoked, the Agent one stays; mutation check: not calling the listeners fails it), and the rollback test above |
+| AC-OWN-22 | Verified at the service | Phase 3 (HTTP) | `OwnershipTransferServiceTests.onlyTheInitiatorAndTheRecipientCanReadATransfer` (an Agent, a Viewer, another company's Owner and a stranger get 404 for the current transfer and for one by ID), `whenNothingIsPendingThereIsNothingToRead`, and the cancel and accept tests above |
+| AC-OWN-23 | Verified at the service | Slice 007 calls it | `OwnershipTransferServiceTests.aDeletionRequestCancelsThePendingTransferWithAnAuditEntryAndEmails`, `theDeletionHookRecordsAnOverdueTransferAsExpiredAndNeedsATransaction` |
 
 ## Phase 0 and 1 evidence (not tied to one AC)
 - Phase 0: D-176 to D-194 are Approved in the register; SPEC-OWN is Approved with AC-OWN-18 to AC-OWN-23 and its traceability table updated; SPEC-TEN's matrix has the "Accept ownership transfer" row. **Deviation from the plan:** the plan put the matrix row and its parity test in Phase 3. `SpecMatrixParityTest` ties the spec's table to the `Permission` enum, so adding the row to the spec requires `Permission.ACCEPT_OWNERSHIP_TRANSFER` and its `CompanyPolicy` row in the same change; both are here, with a test route in `PermissionRoutesController` (one route per permission). The permission is not used by any endpoint yet.
@@ -41,3 +41,17 @@
 - `OwnershipTransferSchemaTests`: 17 tests, 0 failures. `MigrationV14OnExistingDataTest`: passed (V1 to V13 data with a company, memberships and an invitation is kept, the new table starts empty, every constraint is validated, the unique index and all five indexes exist).
 - `./mvnw verify` in `services/api`: 538 tests (520 before this phase), 0 failures, 0 errors, 2 skipped (the same two as before), BUILD SUCCESS. This includes `SpecMatrixParityTest`, `CompanyPolicyTest`, `TenantRepositoryScopeTest` and `TenantIsolationTests` with the new permission.
 - Not run: the web build, Playwright and contract checks (no contract or frontend change in this phase), the CI jobs.
+
+## Phase 2 evidence (not tied to one AC)
+- `TransferRules` (pure): refused-whatever-the-role, recipient eligibility, and the preconditions of completion in the order of the spec (`TransferRulesTest`, 9 tests).
+- `OwnershipTransferService` (everything before any lock: outsider 404, early refusal of other roles, 404 for a non-recipient, recent authentication, the initiation limit read before and counted after the commit) and `OwnershipTransferTransactions` (initiate, cancel, accept, expire, deletion hook, reads; company row, then transfer, then the two memberships in ID order, loaded fresh by `lockLiveByCompanyIdAndUserIds`).
+- `OwnershipTransferSweep` (hourly, `app.ownership.sweep-interval`): lists overdue pending transfers as plain values and expires each in its own transaction that locks the company first and re-checks.
+- Four outbox event types with handlers (`OwnershipTransferEmails`), `AuthEmails.ownershipTransfer` (fixed subjects, the company name only in the body), `OwnershipConflictException` mapped to 409 `CONFLICT`.
+- Mutation checks (each fails at least one test, each restored): demote and promote not flushed one at a time (4 tests); recipient eligibility not rechecked at acceptance; initiator need not still be the active Owner; an overdue transfer can be accepted; no early refusal before the locks (2 tests); the initiation allowance never counted; the old Owner's invitations not revoked; an overdue pending transfer blocks a new one; the recipient check removed in both layers. The recipient check removed in only one layer is not caught, by design: the service checks before the locks and the transaction checks again under them.
+- Test lesson: the test database is shared by every test, so the sweep also expires other tests' overdue transfers; the sweep tests look at their own transfers, not at a count.
+
+## Checks run (Phase 2)
+- `./mvnw verify` in `services/api`: 585 tests, 0 failures, 0 errors, 2 skipped (the same two as before), BUILD SUCCESS.
+- New: `TransferRulesTest` 9, `OwnershipTransferServiceTests` 28, `OwnershipTransferConcurrencyTests` 5, `OwnershipTransferAtomicityTests` 4, `OwnershipTransferAndAccountDisableTests` 1.
+- Not run: the web build, Playwright and contract checks (no contract or frontend change in this phase), the CI jobs.
+- Not covered yet: the endpoints, CSRF and the real HTTP role matrix (Phase 3); the operator script (Phase 4); the explicit redelivery of an outbox event for AC-OWN-06.
