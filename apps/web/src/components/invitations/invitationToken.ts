@@ -35,7 +35,7 @@ export function clearInvitationToken(): void {
   }
 }
 
-/** Where to go after signing in: back to the accept page when the person came from an invitation, otherwise the profile. */
+/** Where to go after signing in: back to the accept page when the person came from an invitation, otherwise My companies. */
 export function destinationAfterSignIn(next: string | null): string {
-  return next === INVITATION_NEXT ? ACCEPT_PATH : "/account";
+  return next === INVITATION_NEXT ? ACCEPT_PATH : "/companies";
 }

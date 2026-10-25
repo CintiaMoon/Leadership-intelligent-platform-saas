@@ -191,7 +191,7 @@ test("Not now discards the token and leaves", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
 
   expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
-  expect(push).toHaveBeenCalledWith("/account");
+  expect(push).toHaveBeenCalledWith("/companies");
 });
 
 test("the page works when session storage is unavailable", async () => {
@@ -217,10 +217,10 @@ test("sign in returns to the accept page only for the fixed invitation key", asy
   await waitFor(() => expect(replace).toHaveBeenCalledWith("/invitations/accept"));
   cleanup();
 
-  for (const next of ["https://evil.example", "/invitations/accept", "//evil.example", "/account"]) {
+  for (const next of ["https://evil.example", "/invitations/accept", "//evil.example", "/companies"]) {
     replace.mockReset();
     await signInWith(`?next=${encodeURIComponent(next)}`);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/account"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/companies"));
     cleanup();
   }
 });
