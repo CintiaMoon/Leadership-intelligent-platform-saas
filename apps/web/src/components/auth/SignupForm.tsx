@@ -1,15 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { post } from "@/lib/api/client";
 import { describeFailure, type FormError } from "@/lib/api/messages";
+import { INVITATION_NEXT } from "@/components/invitations/invitationToken";
 
 import { Field, Notice, SubmitButton } from "./ui";
 
 export function SignupForm() {
   const router = useRouter();
+  const invited = useSearchParams().get("next") === INVITATION_NEXT;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
 
@@ -37,6 +39,7 @@ export function SignupForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3.5" noValidate>
       {error?.form ? <Notice tone="error">{error.form}</Notice> : null}
+      {invited ? <Notice tone="info">Use the address the invitation was sent to.</Notice> : null}
       <Field
         label="Full name"
         name="displayName"

@@ -189,6 +189,54 @@ test("the client address is set by the edge, never taken from what the browser p
   expect(upstreamHeaders(new Headers(), config, { json: false }).has("x-forwarded-for")).toBe(false);
 });
 
+test("accepting an invitation reaches the API with the session, the CSRF token and the body, and nothing else", async () => {
+  fetchMock.mockResolvedValue(Response.json({ id: "c", name: "Acme", role: "VIEWER" }));
+  const response = await forward(
+    browserRequest("invitations/accept", {
+      method: "POST",
+      headers: {
+        origin: config.publicOrigin,
+        "content-type": "application/json",
+        "x-csrf-token": "tok",
+        cookie: "__Host-session=abc; __Host-csrf=c; analytics=1",
+      },
+      body: '{"token":"t"}',
+    }),
+    ["invitations", "accept"],
+    config,
+  );
+  expect(response.status).toBe(200);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("http://api.test/api/v1/invitations/accept");
+  expect(init.method).toBe("POST");
+  expect(init.body).toBe('{"token":"t"}');
+  const headers = init.headers as Headers;
+  expect(headers.get("cookie")).toBe("__Host-session=abc; __Host-csrf=c");
+  expect(headers.get("x-csrf-token")).toBe("tok");
+});
+
+test("the invitation token is not accepted in a path", async () => {
+  for (const path of [["invitations", "accept", "some-token"], ["invitations", "some-token"], ["invitations"]]) {
+    const response = await forward(
+      browserRequest(path.join("/"), {
+        method: "POST",
+        headers: { origin: config.publicOrigin, "content-type": "application/json" },
+        body: "{}",
+      }),
+      path,
+      config,
+    );
+    expect(response.status).toBe(404);
+  }
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("accepting an invitation is not available as a GET", async () => {
+  const response = await forward(browserRequest("invitations/accept"), ["invitations", "accept"], config);
+  expect(response.status).toBe(404);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
 test("an unknown CLIENT_IP_SOURCE stops the app instead of choosing a default", () => {
   expect(() => loadConfig({ BFF_CREDENTIAL: "x", CLIENT_IP_SOURCE: "header" } as unknown as NodeJS.ProcessEnv)).toThrow();
 });

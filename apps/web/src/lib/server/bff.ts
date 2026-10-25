@@ -61,6 +61,8 @@ const ROUTES: Record<string, string> = {
   "POST logout": "/api/v1/auth/logout",
   "POST password-reset/request": "/api/v1/auth/password-reset/request",
   "POST password-reset/confirm": "/api/v1/auth/password-reset/confirm",
+  // Needs the session and the session-bound CSRF token; the invitation token travels in the body only (AC-INV-18).
+  "POST invitations/accept": "/api/v1/invitations/accept",
 };
 
 const MAX_BODY_BYTES = 8 * 1024;
