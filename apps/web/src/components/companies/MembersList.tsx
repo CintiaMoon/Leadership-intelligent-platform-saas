@@ -8,7 +8,7 @@ import { useActionRunner } from "@/components/app/useActionRunner";
 import { DANGER_BUTTON, SECONDARY_BUTTON } from "@/components/app/buttons";
 import { send } from "@/lib/api/client";
 import { memberActions } from "@/lib/memberActions";
-import { roleLabel } from "@/lib/roles";
+import { roleLabel, withArticle } from "@/lib/roles";
 
 import { RoleBadge } from "./CompanyList";
 
@@ -42,7 +42,7 @@ export function MembersList({
   companyStatus: string;
   members: MemberRow[];
 }) {
-  const { notice, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("member");
+  const { notice, noticeRef, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("member", members);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [confirmPending, setConfirmPending] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export function MembersList({
   const base = `/api/companies/${companyId}/members`;
 
   function changeRole(member: MemberRow, role: string) {
-    void run(member.id, () => send("PATCH", `${base}/${member.id}`, { role }), `${member.displayName} is now ${article(role)} ${role.toLowerCase()}.`);
+    void run(member.id, () => send("PATCH", `${base}/${member.id}`, { role }), `${member.displayName} is now ${withArticle(role)}.`);
   }
 
   function reactivate(member: MemberRow) {
@@ -78,7 +78,7 @@ export function MembersList({
 
   return (
     <>
-      <div role="status" aria-live="polite" className={notice ? "mb-4" : ""}>
+      <div ref={noticeRef} tabIndex={-1} role="status" aria-live="polite" className={`outline-none ${notice ? "mb-4" : ""}`}>
         {notice ? <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink">{notice}</p> : null}
       </div>
       <ul className="flex flex-col gap-2" aria-label="Members">
@@ -115,9 +115,9 @@ export function MembersList({
                       <select
                         id={`role-${member.id}`}
                         value={member.role}
-                        disabled={rowBusy}
-                        onChange={(event) => changeRole(member, event.target.value)}
-                        className="h-10 rounded-md border border-line bg-panel px-2 text-base text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60 sm:h-[29px] sm:text-xs"
+                        aria-disabled={rowBusy || undefined}
+                        onChange={(event) => !rowBusy && changeRole(member, event.target.value)}
+                        className="h-10 rounded-md border border-line bg-panel px-2 text-base text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-disabled:opacity-60 sm:h-[29px] sm:text-xs"
                       >
                         <option value={member.role}>{roleLabel(member.role)}</option>
                         {actions.roles.map((role) => (
@@ -132,9 +132,9 @@ export function MembersList({
                     <button
                       type="button"
                       className={SECONDARY_BUTTON}
-                      disabled={rowBusy}
+                      aria-disabled={rowBusy || undefined}
                       aria-label={`Reactivate ${member.displayName}`}
-                      onClick={() => reactivate(member)}
+                      onClick={() => !rowBusy && reactivate(member)}
                     >
                       Reactivate
                     </button>
@@ -143,9 +143,9 @@ export function MembersList({
                     <button
                       type="button"
                       className={SECONDARY_BUTTON}
-                      disabled={rowBusy}
+                      aria-disabled={rowBusy || undefined}
                       aria-label={`Suspend ${member.displayName}`}
-                      onClick={() => setConfirm({ kind: "suspend", member })}
+                      onClick={() => !rowBusy && setConfirm({ kind: "suspend", member })}
                     >
                       Suspend
                     </button>
@@ -154,9 +154,9 @@ export function MembersList({
                     <button
                       type="button"
                       className={DANGER_BUTTON}
-                      disabled={rowBusy}
+                      aria-disabled={rowBusy || undefined}
                       aria-label={`Remove ${member.displayName}`}
-                      onClick={() => setConfirm({ kind: "remove", member })}
+                      onClick={() => !rowBusy && setConfirm({ kind: "remove", member })}
                     >
                       Remove
                     </button>
@@ -189,8 +189,4 @@ export function MembersList({
       <PasswordDialog open={reauthOpen} onConfirmed={() => void reauthenticated()} onCancel={cancelReauth} />
     </>
   );
-}
-
-function article(role: string): string {
-  return /^[AEIOU]/.test(role) ? "an" : "a";
 }

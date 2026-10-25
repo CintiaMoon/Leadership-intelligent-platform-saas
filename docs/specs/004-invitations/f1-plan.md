@@ -1,6 +1,6 @@
 # Plan: frontend slice F1 (company navigation, members, invitations)
 
-- Status: **Approved 2026-10-25** (user: "approved"): D-172 to D-175, the phase order F1-1 to F1-5 with one PR each, and the landing pages (Agents and Viewers on the placeholder page; the accept page and sign in end on My companies). D-168 to D-171 were decided the same day. F1-1 to F1-4 are implemented; F1-5 is not.
+- Status: **Approved 2026-10-25** (user: "approved"): D-172 to D-175, the phase order F1-1 to F1-5 with one PR each, and the landing pages (Agents and Viewers on the placeholder page; the accept page and sign in end on My companies). D-168 to D-171 were decided the same day. F1-1 to F1-5 are implemented; the closure is waiting for the product owner's sign-off.
 - Brief: `docs/design/members-and-invitations/README.md` (pages P2 to P6; P1 is built). Origin: D-163 / plan Q-20 of slice 004.
 - Specs and APIs it uses (all merged, contract unchanged): SPEC-TEN (create and list companies, get company), SPEC-MEM (members), SPEC-INV (invitations), SPEC-AUTH (step-up, AC-AUTH-14, 22). Related: D-92, D-93, D-102, D-132, D-163.
 - Date: 2026-10-25. Written from the brief, the OpenAPI contract and the current `apps/web` code.

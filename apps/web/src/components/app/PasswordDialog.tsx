@@ -1,16 +1,19 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { post } from "@/lib/api/client";
 import { describeFailure } from "@/lib/api/messages";
 
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./buttons";
+import { useModalDialog } from "./useModalDialog";
 
 /**
  * "Confirm your password" (P4, D-174): refreshes the login time for a sensitive action. The password lives only in
- * this field and is sent only to the step-up operation; it is cleared whenever the dialog closes. On success the caller
- * retries the action it started; on Cancel the action is dropped.
+ * this field and is sent only to the step-up operation; the field is cleared whenever the dialog closes and after a
+ * wrong password. On success the caller retries the action it started; on Cancel the action is dropped. A wrong
+ * password and an ended session are different answers: the first keeps the dialog, the second goes to sign in.
  */
 export function PasswordDialog({
   open,
@@ -21,8 +24,10 @@ export function PasswordDialog({
   onConfirmed: () => void;
   onCancel: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
+  const { ref, onClose } = useModalDialog(open);
   const formRef = useRef<HTMLFormElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const textId = useId();
   const fieldId = useId();
@@ -30,23 +35,6 @@ export function PasswordDialog({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) {
-      return;
-    }
-    if (open && !dialog.open) {
-      if (typeof dialog.showModal === "function") {
-        dialog.showModal();
-      } else {
-        dialog.setAttribute("open", "");
-      }
-    } else if (!open && dialog.open) {
-      if (typeof dialog.close === "function") {
-        dialog.close();
-      } else {
-        dialog.removeAttribute("open");
-      }
-    }
     if (!open) {
       formRef.current?.reset();
     }
@@ -62,12 +50,22 @@ export function PasswordDialog({
     setError(null);
     const result = await post("step-up", { password });
     setPending(false);
+    formRef.current?.reset();
     if (result.ok) {
-      formRef.current?.reset();
       onConfirmed();
       return;
     }
-    setError(describeFailure(result, "login").form);
+    if (result.status === 401 && result.problem?.code !== "INVALID_CREDENTIALS") {
+      // The session itself has ended: there is nothing to confirm a password against.
+      router.replace("/login?notice=expired");
+      return;
+    }
+    setError(
+      result.problem?.code === "INVALID_CREDENTIALS"
+        ? "That password is not correct."
+        : (describeFailure(result).form ?? "Something went wrong. Please try again."),
+    );
+    inputRef.current?.focus();
   }
 
   function cancel() {
@@ -80,6 +78,7 @@ export function PasswordDialog({
   return (
     <dialog
       ref={ref}
+      onClose={onClose}
       aria-labelledby={titleId}
       aria-describedby={textId}
       onCancel={(event) => {
@@ -99,6 +98,7 @@ export function PasswordDialog({
           Password
         </label>
         <input
+          ref={inputRef}
           id={fieldId}
           name="password"
           type="password"

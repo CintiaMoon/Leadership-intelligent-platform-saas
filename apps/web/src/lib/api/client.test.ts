@@ -79,6 +79,12 @@ test("no CSRF token, or a network failure, is reported as unavailable and nothin
   expect(await send("POST", "/api/companies", { name: "Acme" })).toMatchObject({ ok: false, status: 503 });
 });
 
+test("an ended session is reported as 401, not as an unavailable service, and nothing is sent", async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 401 }));
+  expect(await send("PATCH", "/api/companies/x/members/y", { role: "AGENT" })).toMatchObject({ ok: false, status: 401 });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 test("authentication posts still use the pre-login token where they did before", async () => {
   answer(200, {});
   await post("login", { email: "a@example.com", password: "p" });

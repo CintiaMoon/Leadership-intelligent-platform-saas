@@ -2,9 +2,10 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import { loadConfig, loadSession, type BffConfig, type SessionInfo } from "./bff";
+import { UUID, loadConfig, loadSession, type BffConfig, type SessionInfo } from "./bff";
 
-export const COMPANY_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+/** A company id in an address is only used if it is exactly one UUID. */
+export const COMPANY_ID = UUID;
 
 /**
  * The signed-in user for a server-rendered page, or a redirect to sign in. The layout and the page both call it;

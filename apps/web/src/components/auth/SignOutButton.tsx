@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { clearInvitationToken } from "@/components/invitations/invitationToken";
 import { post } from "@/lib/api/client";
 
 export function SignOutButton() {
@@ -14,6 +15,8 @@ export function SignOutButton() {
       return;
     }
     setPending(true);
+    // A token kept for an invitation belongs to the person who opened the link, not to whoever uses this tab next.
+    clearInvitationToken();
     // Whatever the result, the person leaves: a 401 only means the session had already ended.
     await post("logout");
     router.replace("/login");

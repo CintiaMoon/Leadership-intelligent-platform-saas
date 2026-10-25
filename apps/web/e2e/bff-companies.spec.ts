@@ -71,3 +71,45 @@ test("without a session the company operations are refused by the API", async ({
   const response = await bff(page, "POST", "/api/companies", { name: "No Session Co" });
   expect([401, 403]).toContain(response.status());
 });
+
+test("odd paths, methods and override headers never reach the API through the BFF", async ({ page }) => {
+  await page.goto("/login");
+  const id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const csrf = (await (await page.request.get("/api/auth/csrf/pre-login")).json()) as { token: string };
+  const headers = { origin: ORIGIN, "x-csrf-token": csrf.token, "content-type": "application/json" };
+
+  // A real operation, signed out: the API answers (401 or 403). The near misses must never get that far.
+  const real = await page.request.fetch(`/api/companies/${id}/leave`, { method: "POST", headers, data: {} });
+  expect([401, 403]).toContain(real.status());
+
+  const nearMisses = [
+    `/api/companies/${id}/leave/extra`,
+    `/api/companies/${id}%2Fleave`,
+    `/api/companies/%2e%2e/${id}/leave`,
+    `/api/companies/${id}/%2e%2e/leave`,
+    `/api/companies/${id}/LEAVE`,
+    `/api/companies/${id}/members/${id}/promote`,
+    `/api/companies/${id}%00/leave`,
+    `/api/companies/not-a-uuid/leave`,
+  ];
+  for (const path of nearMisses) {
+    const response = await page.request.fetch(path, { method: "POST", headers, data: {}, maxRedirects: 0 });
+    expect([404, 405, 308, 400], `POST ${path}`).toContain(response.status());
+  }
+
+  // Method override headers change nothing: the request is still the POST it was.
+  const overridden = await page.request.fetch(`/api/companies/${id}/leave`, {
+    method: "POST",
+    headers: { ...headers, "x-http-method-override": "DELETE", "x-method-override": "DELETE" },
+    data: {},
+  });
+  expect(overridden.status()).toBe(real.status());
+
+  // Reads are not offered, HEAD gets no data, and OPTIONS lists no read method and has no body.
+  expect([404, 405]).toContain((await page.request.get(`/api/companies/${id}/members`)).status());
+  expect([404, 405]).toContain((await page.request.head(`/api/companies/${id}/members`)).status());
+  const options = await page.request.fetch(`/api/companies/${id}/members`, { method: "OPTIONS", headers: { origin: ORIGIN } });
+  expect(await options.text()).toBe("");
+  expect(options.headers()["allow"] ?? "").not.toMatch(/\bGET\b/);
+  expect([404, 405]).toContain((await page.request.put(`/api/companies/${id}/members/${id}`, { headers, data: {} })).status());
+});

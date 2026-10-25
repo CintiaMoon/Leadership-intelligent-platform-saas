@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { ApiResult } from "@/lib/api/client";
 import { describeFailure } from "@/lib/api/messages";
@@ -14,14 +14,42 @@ export type RunOutcome = { done: boolean; error: string | null };
  * Runs one change from a list page and handles every answer the same way (D-174, D-175): success says what happened
  * and reads the list again; a stale login asks for the password and sends the same request once more; a conflict or a
  * refusal explains and reads the list again; waiting messages come from the stable codes; a 401 goes to sign in.
+ *
+ * One change runs at a time: a second call while one is running does nothing, so a double click sends one request. The
+ * row stays marked busy until the list has been read again. Controls are marked `aria-disabled` rather than disabled
+ * (see the pages), so keyboard focus is not thrown to the page by a disabled control; when a row disappears and focus
+ * is lost, it moves to the message so a keyboard or screen-reader user lands on the result.
+ *
+ * @param items the rows on screen, only to notice when the list has been read again
  */
-export function useActionRunner(subject: "member" | "invitation") {
+export function useActionRunner(subject: "member" | "invitation", items: unknown) {
   const router = useRouter();
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [retry, setRetry] = useState<Retry | null>(null);
+  const [refreshing, startRefresh] = useTransition();
+  const running = useRef(false);
+  const [lastId, setLastId] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+    const active = document.activeElement;
+    if (!active || active === document.body) {
+      noticeRef.current?.focus();
+    }
+  }, [notice, items]);
 
   function explain(result: Extract<ApiResult, { ok: false }>): { text: string; refresh: boolean } {
+    const code = result.problem?.code;
+    if (code === "REAUTHENTICATION_REQUIRED") {
+      return { text: "Your password is needed again for this. Please confirm it and try once more.", refresh: false };
+    }
+    if (code === "CSRF_REJECTED") {
+      return { text: describeFailure(result).form ?? "Your request could not be verified. Reload the page.", refresh: false };
+    }
     if (result.status === 403 || result.status === 404) {
       return { text: "That is not available to you any more. The list was refreshed.", refresh: true };
     }
@@ -38,29 +66,38 @@ export function useActionRunner(subject: "member" | "invitation") {
     success: string,
     again = false,
   ): Promise<RunOutcome> {
-    setBusy(id);
+    if (running.current) {
+      return { done: false, error: null };
+    }
+    running.current = true;
+    setLastId(id);
+    setBusyId(id);
     setNotice(null);
-    const result = await request();
-    setBusy(null);
-    if (result.ok) {
-      setNotice(success);
-      router.refresh();
-      return { done: true, error: null };
+    try {
+      const result = await request();
+      if (result.ok) {
+        setNotice(success);
+        startRefresh(() => router.refresh());
+        return { done: true, error: null };
+      }
+      if (result.status === 401) {
+        router.replace("/login?notice=expired");
+        return { done: true, error: null };
+      }
+      if (result.status === 403 && result.problem?.code === "REAUTHENTICATION_REQUIRED" && !again) {
+        setRetry({ id, request, success });
+        return { done: true, error: null };
+      }
+      const { text, refresh } = explain(result);
+      if (refresh) {
+        startRefresh(() => router.refresh());
+      }
+      setNotice(text);
+      return { done: refresh, error: text };
+    } finally {
+      running.current = false;
+      setBusyId(null);
     }
-    if (result.status === 401) {
-      router.replace("/login?notice=expired");
-      return { done: true, error: null };
-    }
-    if (result.status === 403 && result.problem?.code === "REAUTHENTICATION_REQUIRED" && !again) {
-      setRetry({ id, request, success });
-      return { done: true, error: null };
-    }
-    const { text, refresh } = explain(result);
-    if (refresh) {
-      router.refresh();
-    }
-    setNotice(text);
-    return { done: refresh, error: text };
   }
 
   async function reauthenticated() {
@@ -73,7 +110,9 @@ export function useActionRunner(subject: "member" | "invitation") {
 
   return {
     notice,
-    busy,
+    noticeRef,
+    /** The row that is being changed or is waiting for the refreshed list, if any. */
+    busy: busyId ?? (refreshing ? lastId : null),
     run,
     reauthOpen: retry !== null,
     reauthenticated,

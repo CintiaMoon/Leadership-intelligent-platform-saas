@@ -92,7 +92,8 @@ const COMPANY_OPERATIONS: { method: string; shape: string[]; target: string }[] 
   { method: "DELETE", shape: ["{id}", "invitations", "{id}"], target: "/api/v1/companies/{0}/invitations/{1}" },
 ];
 
-const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+/** One canonical UUID, the only shape an id in a path may have. */
+export const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /** The API path for a company operation, or null if the method and path are not on the list. */
 export function companyTarget(method: string, path: string[]): string | null {
@@ -158,6 +159,43 @@ export function clientAddress(incoming: Headers, source: ClientIpSource): string
     candidate = incoming.get("x-forwarded-for")?.split(",").pop()?.trim();
   }
   return candidate && isIP(candidate) ? candidate : null;
+}
+
+/**
+ * The request body as text, or null if it is larger than `max` bytes. A body that declares itself too large is refused
+ * without reading it, and one that does not say is read only until it passes the limit, so an oversized body is never
+ * buffered whole (the origin check is not authentication, anyone can send a matching Origin).
+ */
+export async function readLimited(request: Request, max: number): Promise<string | null> {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) {
+    return null;
+  }
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return "";
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 /** The headers sent to the API: a fixed allowlist, never a copy of the browser's headers. */
@@ -227,10 +265,11 @@ export async function forward(
 
   let body: string | undefined;
   if (hasBody) {
-    body = await request.text();
-    if (new TextEncoder().encode(body).length > MAX_BODY_BYTES) {
+    const read = await readLimited(request, MAX_BODY_BYTES);
+    if (read === null) {
       return problem(413, "REQUEST_REJECTED", "Request too large");
     }
+    body = read;
   }
 
   let upstream: Response;
