@@ -53,22 +53,40 @@ async function csrfToken(preLogin: boolean): Promise<string | null> {
 }
 
 /**
- * POSTs JSON with a freshly issued CSRF token. The token is fetched per call so it is always current: the signed
- * double-submit token for operations that run before a session, the session-bound token for the rest.
+ * POSTs JSON to an authentication operation with a freshly issued CSRF token. The token is fetched per call so it is
+ * always current: the signed double-submit token for operations that run before a session, the session-bound token
+ * for the rest.
  */
 export async function post(path: string, body?: object): Promise<ApiResult> {
-  const token = await csrfToken(PRE_LOGIN.has(path));
+  return send("POST", `${BASE}/${path}`, body, PRE_LOGIN.has(path));
+}
+
+/**
+ * Sends a state-changing request to the BFF with the session-bound CSRF token (F1, D-172). `url` is a browser path
+ * such as `/api/companies/{id}/members/{id}`; the BFF only forwards the operations it lists. A DELETE carries no body.
+ */
+export async function send(
+  method: "POST" | "PATCH" | "DELETE",
+  url: string,
+  body?: object,
+  preLogin = false,
+): Promise<ApiResult> {
+  const token = await csrfToken(preLogin);
   if (!token) {
     return unavailable();
   }
+  const headers: Record<string, string> = { "X-CSRF-TOKEN": token };
+  if (method !== "DELETE") {
+    headers["Content-Type"] = "application/json";
+  }
   let response: Response;
   try {
-    response = await fetch(`${BASE}/${path}`, {
-      method: "POST",
+    response = await fetch(url, {
+      method,
       cache: "no-store",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": token },
-      body: JSON.stringify(body ?? {}),
+      headers,
+      body: method === "DELETE" ? undefined : JSON.stringify(body ?? {}),
     });
   } catch {
     return unavailable();

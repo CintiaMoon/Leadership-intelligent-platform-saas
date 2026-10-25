@@ -63,7 +63,60 @@ const ROUTES: Record<string, string> = {
   "POST password-reset/confirm": "/api/v1/auth/password-reset/confirm",
   // Needs the session and the session-bound CSRF token; the invitation token travels in the body only (AC-INV-18).
   "POST invitations/accept": "/api/v1/invitations/accept",
+  // Re-enter the password before a sensitive action (D-174).
+  "POST step-up": "/api/v1/auth/step-up",
 };
+
+/**
+ * The company operations the browser may reach under /api/companies (F1, D-172). Each is a method plus a path shape;
+ * `{id}` stands for exactly one canonical UUID and nothing else matches. Reads are not here: pages read on the server
+ * (D-173). Anything that is not listed, including every other method, is a 404.
+ */
+const COMPANY_OPERATIONS: { method: string; shape: string[]; target: string }[] = [
+  { method: "POST", shape: [], target: "/api/v1/companies" },
+  { method: "POST", shape: ["{id}", "leave"], target: "/api/v1/companies/{0}/leave" },
+  { method: "PATCH", shape: ["{id}", "members", "{id}"], target: "/api/v1/companies/{0}/members/{1}" },
+  { method: "DELETE", shape: ["{id}", "members", "{id}"], target: "/api/v1/companies/{0}/members/{1}" },
+  { method: "POST", shape: ["{id}", "members", "{id}", "suspend"], target: "/api/v1/companies/{0}/members/{1}/suspend" },
+  {
+    method: "POST",
+    shape: ["{id}", "members", "{id}", "reactivate"],
+    target: "/api/v1/companies/{0}/members/{1}/reactivate",
+  },
+  { method: "POST", shape: ["{id}", "invitations"], target: "/api/v1/companies/{0}/invitations" },
+  {
+    method: "POST",
+    shape: ["{id}", "invitations", "{id}", "resend"],
+    target: "/api/v1/companies/{0}/invitations/{1}/resend",
+  },
+  { method: "DELETE", shape: ["{id}", "invitations", "{id}"], target: "/api/v1/companies/{0}/invitations/{1}" },
+];
+
+const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/** The API path for a company operation, or null if the method and path are not on the list. */
+export function companyTarget(method: string, path: string[]): string | null {
+  for (const operation of COMPANY_OPERATIONS) {
+    if (operation.method !== method || operation.shape.length !== path.length) {
+      continue;
+    }
+    const ids: string[] = [];
+    const matches = operation.shape.every((part, index) => {
+      if (part !== "{id}") {
+        return part === path[index];
+      }
+      ids.push(path[index]);
+      return UUID.test(path[index]);
+    });
+    if (matches) {
+      return operation.target.replace(/\{(\d)\}/g, (_, index) => ids[Number(index)].toLowerCase());
+    }
+  }
+  return null;
+}
+
+/** Which family of operations a route handler serves: /api/auth/* or /api/companies/*. */
+export type OperationFamily = "auth" | "companies";
 
 const MAX_BODY_BYTES = 8 * 1024;
 const UPSTREAM_TIMEOUT_MS = 10_000;
@@ -147,14 +200,17 @@ export async function forward(
   request: Request,
   path: string[],
   config: BffConfig = loadConfig(),
+  family: OperationFamily = "auth",
 ): Promise<Response> {
   const key = `${request.method} ${path.join("/")}`;
-  const target = ROUTES[key];
+  const target = family === "auth" ? ROUTES[key] : companyTarget(request.method, path);
   if (!target) {
     return problem(404, "NOT_FOUND", "Not found");
   }
-  const hasBody = request.method === "POST";
-  if (hasBody) {
+  // Every method except GET changes state and gets the origin checks; POST and PATCH carry a JSON body.
+  const changesState = request.method !== "GET";
+  const hasBody = request.method === "POST" || request.method === "PATCH";
+  if (changesState) {
     // Only this site may send state-changing requests (D-75). A missing Origin is not accepted; browsers also
     // label every request with Sec-Fetch-Site, and anything but same-origin is refused.
     const fetchSite = request.headers.get("sec-fetch-site");
@@ -164,7 +220,7 @@ export async function forward(
     ) {
       return problem(403, "CSRF_REJECTED", "Request rejected");
     }
-    if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    if (hasBody && !request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
       return problem(415, "REQUEST_REJECTED", "Unsupported media type");
     }
   }

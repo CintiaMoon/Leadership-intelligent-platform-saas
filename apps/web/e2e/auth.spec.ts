@@ -187,7 +187,7 @@ test("the BFF refuses a state-changing request from another origin and unlisted 
   });
   expect(crossOrigin.status()).toBe(403);
 
-  const unlisted = await page.request.post("/api/auth/step-up", {
+  const unlisted = await page.request.post("/api/auth/sessions/revoke-all", {
     headers: { origin: new URL(page.url() === "about:blank" ? "http://localhost:3100" : page.url()).origin },
     data: {},
   });

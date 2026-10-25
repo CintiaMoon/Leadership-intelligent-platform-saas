@@ -58,8 +58,8 @@ test("upstream headers are an allowlist and carry the BFF credential", () => {
 
 test("an operation that is not on the allowlist is not forwarded", async () => {
   const response = await forward(
-    browserRequest("step-up", { method: "POST", headers: { origin: config.publicOrigin, "content-type": "application/json" } }),
-    ["step-up"],
+    browserRequest("sessions/revoke-all", { method: "POST", headers: { origin: config.publicOrigin, "content-type": "application/json" } }),
+    ["sessions", "revoke-all"],
     config,
   );
   expect(response.status).toBe(404);
@@ -239,4 +239,171 @@ test("accepting an invitation is not available as a GET", async () => {
 
 test("an unknown CLIENT_IP_SOURCE stops the app instead of choosing a default", () => {
   expect(() => loadConfig({ BFF_CREDENTIAL: "x", CLIENT_IP_SOURCE: "header" } as unknown as NodeJS.ProcessEnv)).toThrow();
+});
+
+// ---- company operations (F1, D-172)
+
+const C = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const M = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+const COMPANY_OPERATIONS: [string, string[], string][] = [
+  ["POST", [], "/api/v1/companies"],
+  ["POST", [C, "leave"], `/api/v1/companies/${C}/leave`],
+  ["PATCH", [C, "members", M], `/api/v1/companies/${C}/members/${M}`],
+  ["DELETE", [C, "members", M], `/api/v1/companies/${C}/members/${M}`],
+  ["POST", [C, "members", M, "suspend"], `/api/v1/companies/${C}/members/${M}/suspend`],
+  ["POST", [C, "members", M, "reactivate"], `/api/v1/companies/${C}/members/${M}/reactivate`],
+  ["POST", [C, "invitations"], `/api/v1/companies/${C}/invitations`],
+  ["POST", [C, "invitations", M, "resend"], `/api/v1/companies/${C}/invitations/${M}/resend`],
+  ["DELETE", [C, "invitations", M], `/api/v1/companies/${C}/invitations/${M}`],
+];
+
+function companyRequest(method: string, path: string[], extra: Record<string, string> = {}, body?: string) {
+  const hasBody = method === "POST" || method === "PATCH";
+  return new Request(`https://app.example.com/api/companies/${path.join("/")}`, {
+    method,
+    headers: {
+      origin: config.publicOrigin,
+      ...(hasBody ? { "content-type": "application/json" } : {}),
+      "x-csrf-token": "tok",
+      cookie: "__Host-session=abc; __Host-csrf=c; analytics=1",
+      ...extra,
+    },
+    body: hasBody ? (body ?? "{}") : undefined,
+  });
+}
+
+test.each(COMPANY_OPERATIONS)("%s /api/companies/%j reaches exactly %s", async (method, path, target) => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+  const response = await forward(companyRequest(method, path), path, config, "companies");
+
+  expect(response.status).toBe(204);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe(`http://api.test${target}`);
+  expect(init.method).toBe(method);
+  const headers = init.headers as Headers;
+  expect(headers.get("cookie")).toBe("__Host-session=abc; __Host-csrf=c");
+  expect(headers.get("x-csrf-token")).toBe("tok");
+  expect(headers.get("x-bff-credential")).toBe("credential-for-tests");
+});
+
+test("the step-up operation is on the auth list and nothing else is added there", async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  const response = await forward(
+    browserRequest("step-up", {
+      method: "POST",
+      headers: { origin: config.publicOrigin, "content-type": "application/json", "x-csrf-token": "tok" },
+      body: '{"password":"p"}',
+    }),
+    ["step-up"],
+    config,
+  );
+  expect(response.status).toBe(204);
+  expect(fetchMock.mock.calls[0][0]).toBe("http://api.test/api/v1/auth/step-up");
+});
+
+test("near misses are a 404 and never reach the API", async () => {
+  const misses: [string, string[]][] = [
+    ["POST", [C]],
+    ["POST", [C, "leave", "extra"]],
+    ["POST", ["not-a-uuid", "leave"]],
+    ["POST", [C.slice(1), "leave"]],
+    ["POST", [`${C}0`, "leave"]],
+    ["POST", [`${C}%2F..`, "leave"]],
+    ["POST", [`${C}/..`, "leave"]],
+    ["POST", ["..", "leave"]],
+    ["POST", ["", "leave"]],
+    ["PATCH", [C, "members"]],
+    ["PATCH", [C, "members", "not-a-uuid"]],
+    ["PATCH", [C, "invitations", M]],
+    ["DELETE", [C]],
+    ["DELETE", [C, "members", M, "suspend"]],
+    ["PUT", [C, "members", M]],
+    ["GET", [C, "members"]],
+    ["GET", []],
+    ["POST", [C, "members", M, "role"]],
+    ["POST", [C, "Members", M, "suspend"]],
+    ["POST", [C, "invitations", M, "accept"]],
+    ["DELETE", [C, "members", "{id}"]],
+  ];
+  for (const [method, path] of misses) {
+    const response = await forward(
+      new Request("https://app.example.com/api/companies/x", {
+        method,
+        headers: { origin: config.publicOrigin, "content-type": "application/json" },
+        body: method === "GET" ? undefined : "{}",
+      }),
+      path,
+      config,
+      "companies",
+    );
+    expect(response.status, `${method} ${JSON.stringify(path)}`).toBe(404);
+  }
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("an upper-case id is accepted and sent in lower case", async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  await forward(companyRequest("POST", [C.toUpperCase(), "leave"]), [C.toUpperCase(), "leave"], config, "companies");
+  expect(fetchMock.mock.calls[0][0]).toBe(`http://api.test/api/v1/companies/${C}/leave`);
+});
+
+test("PATCH and DELETE from another origin, or marked cross-site, never reach the API", async () => {
+  for (const method of ["PATCH", "DELETE"]) {
+    const path = method === "PATCH" ? [C, "members", M] : [C, "invitations", M];
+    const variants: Record<string, string>[] = [
+      { origin: "https://evil.example" },
+      { "sec-fetch-site": "cross-site" },
+      { "sec-fetch-site": "same-site" },
+    ];
+    for (const extra of variants) {
+      const response = await forward(companyRequest(method, path, extra), path, config, "companies");
+      expect(response.status, `${method} ${JSON.stringify(extra)}`).toBe(403);
+      expect((await response.json()).code).toBe("CSRF_REJECTED");
+    }
+    const noOrigin = new Request("https://app.example.com/api/companies/x", { method, body: method === "PATCH" ? "{}" : undefined, headers: method === "PATCH" ? { "content-type": "application/json" } : {} });
+    expect((await forward(noOrigin, path, config, "companies")).status).toBe(403);
+  }
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("a PATCH without a JSON content type is rejected, and an over-size body is too", async () => {
+  const path = [C, "members", M];
+  const text = await forward(companyRequest("PATCH", path, { "content-type": "text/plain" }), path, config, "companies");
+  expect(text.status).toBe(415);
+  const big = await forward(companyRequest("PATCH", path, {}, "x".repeat(9000)), path, config, "companies");
+  expect(big.status).toBe(413);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("a DELETE sends no body even if the browser attached one, and no query string", async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  const request = new Request(`https://app.example.com/api/companies/${C}/members/${M}?force=true`, {
+    method: "DELETE",
+    headers: { origin: config.publicOrigin, "content-type": "application/json", "x-csrf-token": "tok" },
+    body: '{"force":true}',
+  });
+
+  await forward(request, [C, "members", M], config, "companies");
+
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe(`http://api.test/api/v1/companies/${C}/members/${M}`);
+  expect(init.body).toBeUndefined();
+});
+
+test("problem bodies, Retry-After and the session cookie from the API pass back for company operations", async () => {
+  const upstream = new Response('{"code":"REAUTHENTICATION_REQUIRED"}', {
+    status: 403,
+    headers: { "Content-Type": "application/problem+json", "Retry-After": "5", "X-Internal": "secret" },
+  });
+  fetchMock.mockResolvedValue(upstream);
+  const path = [C, "members", M];
+
+  const response = await forward(companyRequest("PATCH", path), path, config, "companies");
+
+  expect(response.status).toBe(403);
+  expect(response.headers.get("retry-after")).toBe("5");
+  expect(response.headers.get("x-internal")).toBeNull();
+  expect(response.headers.get("cache-control")).toBe("no-store");
 });
