@@ -46,9 +46,11 @@ public class MembershipService {
 
 	private final Clock clock;
 
+	private final List<MembershipChangeListener> listeners;
+
 	MembershipService(MembershipChangeAuthorizer authorizer, MembershipRepository memberships,
 			UserAccountRepository users, AuditLog audit, RecentAuthentication recentAuthentication,
-			ActiveMemberLimit memberLimit, Clock clock) {
+			ActiveMemberLimit memberLimit, Clock clock, List<MembershipChangeListener> listeners) {
 		this.authorizer = authorizer;
 		this.memberships = memberships;
 		this.users = users;
@@ -56,6 +58,7 @@ public class MembershipService {
 		this.recentAuthentication = recentAuthentication;
 		this.memberLimit = memberLimit;
 		this.clock = clock;
+		this.listeners = listeners;
 	}
 
 	/** The ACTIVE and SUSPENDED members. The caller was already authorized for "View member list". */
@@ -78,6 +81,7 @@ public class MembershipService {
 		target.changeRole(newRole, clock.instant());
 		audit.recordChange("membership.role.changed", AuditLog.Actor.user, actor.userId(), "membership", target.getId(),
 				companyId, "success", null, before.name(), newRole.name());
+		notifyListeners(companyId, target, actor.userId());
 		return viewOf(target, actor.userId());
 	}
 
@@ -118,7 +122,17 @@ public class MembershipService {
 		target.changeStatus(newStatus, actor.userId(), now);
 		audit.recordChange(eventType, AuditLog.Actor.user, actor.userId(), "membership", target.getId(), companyId,
 				"success", null, before.name(), newStatus.name());
+		if (newStatus != MembershipStatus.ACTIVE) {
+			notifyListeners(companyId, target, actor.userId());
+		}
 		return target;
+	}
+
+	/** Inside the transaction, under the company lock (D-158). */
+	private void notifyListeners(UUID companyId, Membership member, UUID changedBy) {
+		for (MembershipChangeListener listener : listeners) {
+			listener.afterMembershipChange(companyId, member.getUserId(), member.getRole(), member.getStatus(), changedBy);
+		}
 	}
 
 	private MembershipChangeAuthorizer.Authorized authorize(AuthenticatedUser actor, UUID companyId,

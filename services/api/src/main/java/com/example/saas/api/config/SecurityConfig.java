@@ -75,6 +75,8 @@ class SecurityConfig {
 						"/api/v1/companies/*/invitations/*/resend")
 					.authenticated()
 				.requestMatchers(HttpMethod.DELETE, "/api/v1/companies/*/invitations/*").authenticated()
+				// Accepting an invitation needs a verified session; the address match is done by the service.
+				.requestMatchers(HttpMethod.POST, "/api/v1/invitations/accept").authenticated()
 				.anyRequest().denyAll())
 			.exceptionHandling(handling -> handling
 				.authenticationEntryPoint(handlers)

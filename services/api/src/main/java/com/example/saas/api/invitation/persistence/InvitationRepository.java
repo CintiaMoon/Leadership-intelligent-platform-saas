@@ -36,6 +36,14 @@ public interface InvitationRepository extends Repository<Invitation, UUID> {
 	@Query("select i from Invitation i where i.companyId = :companyId and i.id = :id")
 	Optional<Invitation> lockByCompanyIdAndId(@Param("companyId") UUID companyId, @Param("id") UUID id);
 
+	/** The ID of the company's pending invitation that holds this token hash, as a plain value (no entity before the lock). */
+	@Query("select i.id from Invitation i where i.companyId = :companyId and i.tokenHash = :tokenHash and i.status = "
+			+ "com.example.saas.api.invitation.domain.InvitationStatus.PENDING")
+	Optional<UUID> findIdByCompanyIdAndTokenHash(@Param("companyId") UUID companyId, @Param("tokenHash") String tokenHash);
+
+	/** The invitations a member created that are in this state, for revoking them when the member changes (D-62). */
+	List<Invitation> findByCompanyIdAndInvitedByAndStatus(UUID companyId, UUID invitedBy, InvitationStatus status);
+
 	/**
 	 * The company of the pending invitation that holds this token hash, as a plain value (no entity enters the
 	 * persistence context before the locks). An invitation has no company in the accept path: it is found by its token.
