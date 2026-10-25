@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { DANGER_BUTTON, PRIMARY_BUTTON, SECONDARY_BUTTON } from "./buttons";
+import { useModalDialog } from "./useModalDialog";
 
 /**
  * A confirmation in a native modal dialog: the browser traps focus, closes on Escape and returns focus to the control
@@ -32,34 +33,14 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
+  const { ref, onClose } = useModalDialog(open);
   const titleId = useId();
   const textId = useId();
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) {
-      return;
-    }
-    if (open && !dialog.open) {
-      // jsdom has no showModal; real browsers do.
-      if (typeof dialog.showModal === "function") {
-        dialog.showModal();
-      } else {
-        dialog.setAttribute("open", "");
-      }
-    } else if (!open && dialog.open) {
-      if (typeof dialog.close === "function") {
-        dialog.close();
-      } else {
-        dialog.removeAttribute("open");
-      }
-    }
-  }, [open]);
 
   return (
     <dialog
       ref={ref}
+      onClose={onClose}
       aria-labelledby={titleId}
       aria-describedby={textId}
       onCancel={(event) => {

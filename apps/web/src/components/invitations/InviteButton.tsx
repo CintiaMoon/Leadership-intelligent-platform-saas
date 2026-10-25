@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
 import { PasswordDialog } from "@/components/app/PasswordDialog";
+import { useModalDialog } from "@/components/app/useModalDialog";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "@/components/app/buttons";
 import { send, type ApiResult } from "@/lib/api/client";
 import { describeFailure, type FormError } from "@/lib/api/messages";
@@ -29,7 +30,6 @@ export function InviteButton({
 }) {
   const router = useRouter();
   const roles = invitableRoles(callerRole, companyStatus);
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const titleId = useId();
   const emailId = useId();
@@ -39,26 +39,7 @@ export function InviteButton({
   const [error, setError] = useState<FormError | null>(null);
   const [reauth, setReauth] = useState<{ email: string; role: string } | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) {
-      return;
-    }
-    if (open && !dialog.open) {
-      if (typeof dialog.showModal === "function") {
-        dialog.showModal();
-      } else {
-        dialog.setAttribute("open", "");
-      }
-    } else if (!open && dialog.open) {
-      if (typeof dialog.close === "function") {
-        dialog.close();
-      } else {
-        dialog.removeAttribute("open");
-      }
-    }
-  }, [open]);
+  const { ref: dialogRef, onClose } = useModalDialog(open);
 
   if (roles.length === 0) {
     return null;
@@ -139,7 +120,9 @@ export function InviteButton({
 
       <dialog
         ref={dialogRef}
+        onClose={onClose}
         aria-labelledby={titleId}
+        aria-describedby={`${titleId}-intro`}
         onCancel={(event) => {
           event.preventDefault();
           if (!pending) {
@@ -152,7 +135,7 @@ export function InviteButton({
           <h2 id={titleId} className="font-serif text-base text-ink">
             Invite someone
           </h2>
-          <p className="mt-1 text-[11px] leading-4 text-muted">
+          <p id={`${titleId}-intro`} className="mt-1 text-[11px] leading-4 text-muted">
             We email them a link that works for 7 days. They need an account with this address to accept.
           </p>
           <label htmlFor={emailId} className="mt-4 block text-[11px] font-semibold leading-4 text-ink">

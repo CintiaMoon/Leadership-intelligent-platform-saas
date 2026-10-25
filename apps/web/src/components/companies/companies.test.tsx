@@ -83,6 +83,17 @@ test("the header has the product name, My companies, the profile link with the p
   expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
 });
 
+test("signing out removes an invitation token kept in this tab", async () => {
+  window.sessionStorage.setItem("helm.invitation-token", "waiting-token");
+  respond(204);
+  render(<AppHeader displayName="Alex Morgan" />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+  expect(window.sessionStorage.getItem("helm.invitation-token")).toBeNull();
+});
+
 test("the not-available state says the same thing for every reason and links back", () => {
   render(<NotAvailable />);
   expect(screen.getByRole("heading", { name: "This page is not available." })).toBeTruthy();

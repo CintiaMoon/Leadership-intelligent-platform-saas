@@ -5,11 +5,10 @@ import { CompanyHeader } from "@/components/companies/CompanyHeader";
 import { LeaveCompany } from "@/components/companies/LeaveCompany";
 import { NotAvailable } from "@/components/companies/NotAvailable";
 import { mayManageMembers } from "@/lib/memberActions";
+import { withArticle } from "@/lib/roles";
 import { loadCompany } from "@/lib/server/company";
 
 export const metadata: Metadata = { title: "Company" };
-
-const article = (role: string) => (/^[AEIOU]/.test(role) ? "an" : "a");
 
 /**
  * The company page (D-168): there is no company home yet. Owners and Admins go straight to Members; everybody else sees
@@ -41,8 +40,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ compan
           Company home is coming
         </h2>
         <p className="mt-2 text-xs leading-[18px] text-muted">
-          There is nothing to open here yet. You are {article(company.role)} {company.role.toLowerCase()} of this
-          company.
+          There is nothing to open here yet. You are {withArticle(company.role)} of this company.
         </p>
         {company.status === "PENDING_DELETION" ? (
           <p className="mt-3 rounded-md border border-line px-3 py-2 text-xs text-ink">

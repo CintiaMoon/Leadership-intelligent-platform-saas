@@ -1,7 +1,7 @@
 # Frontend slice F1 traceability
 
 - Plan: `f1-plan.md` (approved 2026-10-25). Decisions: D-168 to D-175.
-- Status by phase: F1-1 to F1-4 done (below). F1-5 (review and closure) not started.
+- Status by phase: F1-1 to F1-5 done (below). Closure is waiting for the product owner's sign-off.
 
 ## Phase F1-1: BFF operations and browser client (no UI)
 **What changed**
@@ -62,7 +62,7 @@
 **What changed**
 - `/companies/[companyId]/members`: server reads the company and the member list; Owners and Admins only (Agents, Viewers and anybody else get the same "not available" page). Each member shows name, address, role, status, join date and "(you)" for the caller. Dates are formatted on the server so both sides print the same text.
 - Actions come from `lib/memberActions.ts`, which mirrors the matrix and `MembershipChanges`: nobody gets controls on themselves or the Owner; an Admin only acts on Agents and Viewers and can only assign those two roles; a suspended member can only be reactivated or removed; a company that is not ACTIVE is read-only. The API still decides every request.
-- Change role (a select, sent at once), suspend and remove (each asks first, naming the person; remove says "They will need a new invitation to rejoin."), reactivate (at once). After every answer the list is read again. A 409 says the member changed in the meantime; a 403 or 404 says it is not available any more; 429 and 503 use the wait messages; a 401 goes to sign in.
+- Change role (a select, sent at once), suspend and remove (each asks first, naming the person; remove says "They will need a new invitation to rejoin."), reactivate (at once). After every answer the list is read again. A 409 says the member changed in the meantime; a 403 or 404 says it is not available any more; 429 and 503 use the wait messages; a 401 goes to sign in. (F1-5 corrections: the 429 case had no test and now has one; a second `REAUTHENTICATION_REQUIRED` and a BFF `CSRF_REJECTED` now have their own messages instead of "not available".)
 - Step-up (D-174): a 403 `REAUTHENTICATION_REQUIRED` opens "Confirm your password"; on success the same request is sent once more, on Cancel it is dropped, a wrong password shows the sign-in message and keeps the dialog, and a second refusal is never prompted again. The password is sent only to the step-up operation and the field is cleared on every close.
 - Company page: Owners and Admins are redirected to Members (D-168); Agents and Viewers still see the placeholder with Leave. `CompanyHeader` renders the name, the role and the tab row (Members only; none for Agents and Viewers). Leave is on the Members page (the Admin's button, the Owner's note).
 - Deviation from the brief: a role select and plain buttons instead of a "row menu", which avoids building an ARIA menu; same actions, same confirmations.
@@ -115,3 +115,57 @@
 - Mutation checks caught and restored: invitation actions (all allowed); the guard against a second password prompt in the invite dialog. A third (removing `.trim()` of the address) was not caught because an `<input type="email">` already strips surrounding spaces, so that trim is redundant defence and is not claimed as tested.
 - The unexplained one-off server error noted in F1-3 did not recur in the three full runs of this phase.
 - Not run: the stale-login step-up against a real session (cannot be aged in a test; unit tests cover the sequence), the capacity warning (waits for slice 006), `./mvnw verify` (no backend change; once at the end of F1), contract lint and type-drift check (contract unchanged), the production-cookie E2E variant, other browsers, CI.
+
+## Phase F1-5: reviews, fixes and closure
+### Reviews
+Two read-only reviews by agents that had no write tools and ran no code, one for security and one for code and accessibility, of everything merged for F1. Their reports are model output, not approval. Neither found a Critical or High issue: no way to reach an API operation outside the ten listed, no origin or CSRF gap on any changing method, no cross-user caching, no markup injection, no password leak. I checked the claims I acted on against the code or by a test before changing anything.
+
+### Findings and what happened to each
+| Finding | Severity given | Outcome |
+|---|---|---|
+| The BFF read the whole body before checking the 8 KB limit (pre-existing; F1 added nine reachable paths) | Medium (security) | **Fixed.** A declared size over the limit is refused without reading; an undeclared body is read only until it passes the limit. 3 unit tests with streams, mutation check |
+| 401 does not go back to the same page; D-175 said it would | Medium (code), Info (security) | **Deviation recorded, D-175 corrected.** A returnTo for any page would add open-redirect surface; only the fixed `invitation` key exists. A person who is signed out mid-action lands on My companies |
+| Second `REAUTHENTICATION_REQUIRED`, or a BFF `CSRF_REJECTED`, was shown as "not available any more" | Medium | **Fixed**, with tests |
+| Focus lost when a focused control is disabled or its row disappears | Medium | **Fixed.** Controls use `aria-disabled` and ignore clicks instead of being disabled; when focus is lost after a change it moves to the message. Tests for both |
+| Escape pressed twice while a change runs can close the native dialog and leave the page thinking it is open | Medium (plausible) | **Fixed** by `useModalDialog` (reopens a dialog the browser closed while it is still wanted; shared by the three dialogs). Unit test, and a Playwright test with a slow removal |
+| The row could be clicked again before the list was read again; busy state was global | Low | **Fixed.** One change at a time, the row stays busy until the refresh finishes. Unit test (hook) and mutation check |
+| Invitation token kept in `sessionStorage` after sign-out (carried from slice 004) | Low | **Fixed.** Sign out clears it. Test and mutation check |
+| A wrong step-up password and an ended session looked the same, and the field was not cleared on error | Low | **Fixed.** A wrong password says so and clears the field; any other 401 goes to sign in |
+| An ended session while fetching the CSRF token showed "service busy" | Low/Info | **Fixed**: reported as 401 |
+| `readApi` allowed `%` and `//` in a path | Low | **Fixed**: only `/api/v1/` plus segments of letters, digits and hyphens. 11 refused shapes tested, mutation check |
+| Members page passed every API field to the browser; the invitations list "no token" test could not fail | Low | **Fixed.** Rows are built by named fields (`lib/rows.ts`); tests send tokens, hashes, links and user ids in the API answer and show they are dropped |
+| "Scheduled for deletion" notice unreachable; Members showed no actions and no reason | Low | **Fixed**: both tabs say so for a company that is not ACTIVE |
+| Expiry shown without the time | Low | **Fixed**: "Nov 1, 2026, 2:03 PM UTC" |
+| Duplicated dialog code, UUID regex, article helper, date formats | Low | **Fixed**: `useModalDialog`, one UUID, `withArticle`, `lib/dates.ts` |
+| Latent hazard: the layout checks the session, but layouts are not rendered again on navigation | Info | **Pinned by a test** that fails if a page under `(app)` does not check the session itself |
+| Claims in earlier traceability that tests did not support (429 on Members, password cleared on success and error, "failed role change keeps the select", the "old link stops working" comment) | Low | **Tests added** (or the claim corrected, above); the comment was removed |
+| Browser tabs show counts in the brief; the implementation puts them in the headings; "toast" is inline text; error states have no heading | Low | **Recorded as deviations**, not changed |
+| Dates in UTC | Low | Kept (server-side formatting avoids a mismatch); expiry now shows the time |
+| `aria-describedby` on the invite dialog | Nit | Fixed. Other nits (focus to the first field with an error, the spacer `div`) left |
+
+### New checks this phase
+- `logHygiene.test.ts`: no console output of any kind from any BFF operation (including step-up and accept, with secrets in bodies, cookies and error answers), from server reads, or anywhere in the server code (a scan of `lib/server`, `app` and `components`).
+- `e2e/keyboard.spec.ts`: every members and invitations action by keyboard alone (Enter, Space, arrows, Escape, Tab), focus visible, focus never reaches the page behind an open dialog, focus returned to the opener, Escape twice during a slow removal.
+- `e2e/isolation.spec.ts`: two signed-in people requesting the same pages at the same moment (12 interleaved requests) never see each other's company, name or address and every page is no-store; another person's company and a random id give the same status and text; after signing out, Back does not show the companies.
+- `e2e/bff-companies.spec.ts`: encoded slashes and dots, a NUL, a wrong case, an extra segment, method override headers, HEAD, OPTIONS, PUT and GET all fail to reach the API; a real operation signed out is answered by the API, the near misses are not.
+
+### Mutation checks this phase (each caught, each restored)
+Body limit removed; one-change-at-a-time guard removed (needed its own hook test, the page-level test did not catch it); sign out not clearing the invitation token; server read path check weakened; ended session treated as a wrong password.
+
+### Checks run (F1-5)
+- `./mvnw verify` in `services/api`, once for all of F1 (no backend change in F1): 520 tests, 0 failures, 0 errors, 2 skipped, BUILD SUCCESS.
+- Vitest 154 passed (17 files), `npm run typecheck`, `npm run lint`, `npm run build`: clean.
+- Playwright 29 of 29 passed, against the real API jar, the built web app, PostgreSQL and Mailpit, on servers started by Playwright (datasource override in `docs/runbooks/operations/invitations.md`).
+- Contract lint and type-drift check: not run, the contract did not change in F1.
+
+### Not run, or not covered
+- The step-up against a real session older than 10 minutes (a session cannot be aged inside a test; the unit tests cover the sequence and the operation itself is covered in `bff-companies.spec.ts`).
+- Screen-reader testing by a person, and automated checks beyond axe and the keyboard flows above; the production-cookie variant of the end-to-end suite, other browsers, CI, the capacity warning (waits for slice 006).
+- **A test of mine was wrong, found by CI:** the first CI run of this branch failed `isolation.spec.ts` (28 of 29 passed). It compared the raw HTML text of another person's company page with a random id's page; those differ on every request by the CSP nonce, chunk names and the streamed payload, and by a lot in CI. It passed on my machine by luck of timing. It now compares what the person sees (the status and the text of the page, rendered in the browser) and passed 3 of 3 locally. This was not an application fault.
+- **Two unexplained one-off failures**, neither reproduced: in F1-3 the Members page once showed Next's "This page couldn't load" in the first run of its spec; in F1-5 `invitations.spec.ts` ("another account gets the same answer...") once stayed on the sign-in page after submitting, then passed on 2 immediate reruns and in later full runs. No server log was captured for either. They are listed so CI results can be read with them in mind.
+
+### Accepted or carried
+- The deviations above; a signed-out person is not returned to the page they were on (D-175 corrected); the capacity warning and the stale-session step-up end-to-end test; `Plan`, `Settings` and `Ownership` tabs belong to slices 005 to 007.
+
+### Closure
+All of F1 (pages P2 to P6, with the deviations listed) is implemented and tested as above. Waiting for the product owner's sign-off.

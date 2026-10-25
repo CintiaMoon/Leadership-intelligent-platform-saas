@@ -407,3 +407,59 @@ test("problem bodies, Retry-After and the session cookie from the API pass back 
   expect(response.headers.get("x-internal")).toBeNull();
   expect(response.headers.get("cache-control")).toBe("no-store");
 });
+
+// ---- bounded request bodies (F1-5 security review)
+
+test("a body that declares itself too large is refused without being read", async () => {
+  let pulled = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled += 1;
+      controller.enqueue(new TextEncoder().encode("x".repeat(1024)));
+    },
+  });
+  const request = new Request("https://app.example.com/api/companies", {
+    method: "POST",
+    headers: { origin: config.publicOrigin, "content-type": "application/json", "content-length": String(500 * 1024 * 1024) },
+    body: stream,
+    // @ts-expect-error Node needs this for a streamed request body
+    duplex: "half",
+  });
+
+  const response = await forward(request, [], config, "companies");
+
+  expect(response.status).toBe(413);
+  expect(pulled).toBeLessThanOrEqual(1);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("a body that does not say how large it is is read only until it passes the limit", async () => {
+  let pulled = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled += 1;
+      controller.enqueue(new TextEncoder().encode("x".repeat(1024)));
+    },
+  });
+  const request = new Request("https://app.example.com/api/companies", {
+    method: "POST",
+    headers: { origin: config.publicOrigin, "content-type": "application/json" },
+    body: stream,
+    // @ts-expect-error Node needs this for a streamed request body
+    duplex: "half",
+  });
+
+  const response = await forward(request, [], config, "companies");
+
+  expect(response.status).toBe(413);
+  expect(pulled).toBeLessThan(40);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("a body exactly at the limit is accepted and one byte over is not", async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  const at = await forward(companyRequest("POST", [], {}, "x".repeat(8 * 1024)), [], config, "companies");
+  expect(at.status).toBe(204);
+  const over = await forward(companyRequest("POST", [], {}, "x".repeat(8 * 1024 + 1)), [], config, "companies");
+  expect(over.status).toBe(413);
+});

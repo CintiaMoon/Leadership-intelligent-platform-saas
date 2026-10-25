@@ -36,20 +36,26 @@ const PRE_LOGIN = new Set([
   "password-reset/confirm",
 ]);
 
-async function csrfToken(preLogin: boolean): Promise<string | null> {
+/** The token, or the status that explains why there is none (401: the session has ended). */
+async function csrfToken(preLogin: boolean): Promise<{ token: string } | { status: number }> {
   try {
     const response = await fetch(`${BASE}/${preLogin ? "csrf/pre-login" : "csrf"}`, {
       cache: "no-store",
       credentials: "same-origin",
     });
     if (!response.ok) {
-      return null;
+      return { status: response.status };
     }
     const body = (await response.json()) as components["schemas"]["CsrfToken"];
-    return body.token;
+    return { token: body.token };
   } catch {
-    return null;
+    return { status: 0 };
   }
+}
+
+function noToken(status: number): ApiResult {
+  // An ended session is reported as such, so the page can send the person to sign in instead of saying "busy".
+  return status === 401 ? { ok: false, status: 401, problem: null, retryAfter: null } : unavailable();
 }
 
 /**
@@ -71,11 +77,11 @@ export async function send(
   body?: object,
   preLogin = false,
 ): Promise<ApiResult> {
-  const token = await csrfToken(preLogin);
-  if (!token) {
-    return unavailable();
+  const issued = await csrfToken(preLogin);
+  if (!("token" in issued)) {
+    return noToken(issued.status);
   }
-  const headers: Record<string, string> = { "X-CSRF-TOKEN": token };
+  const headers: Record<string, string> = { "X-CSRF-TOKEN": issued.token };
   if (method !== "DELETE") {
     headers["Content-Type"] = "application/json";
   }

@@ -34,7 +34,7 @@ export function InvitationsList({
   companyStatus: string;
   invitations: InvitationRow[];
 }) {
-  const { notice, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("invitation");
+  const { notice, noticeRef, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("invitation", invitations);
   const [revoking, setRevoking] = useState<InvitationRow | null>(null);
   const [revokePending, setRevokePending] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function InvitationsList({
 
   return (
     <>
-      <div role="status" aria-live="polite" className={notice ? "mb-4" : ""}>
+      <div ref={noticeRef} tabIndex={-1} role="status" aria-live="polite" className={`outline-none ${notice ? "mb-4" : ""}`}>
         {notice ? <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink">{notice}</p> : null}
       </div>
       {invitations.length === 0 ? (
@@ -100,9 +100,9 @@ export function InvitationsList({
                       <button
                         type="button"
                         className={SECONDARY_BUTTON}
-                        disabled={rowBusy}
+                        aria-disabled={rowBusy || undefined}
                         aria-label={`Resend the invitation to ${invitation.email}`}
-                        onClick={() => resend(invitation)}
+                        onClick={() => !rowBusy && resend(invitation)}
                       >
                         Resend
                       </button>
@@ -111,9 +111,9 @@ export function InvitationsList({
                       <button
                         type="button"
                         className={DANGER_BUTTON}
-                        disabled={rowBusy}
+                        aria-disabled={rowBusy || undefined}
                         aria-label={`Revoke the invitation to ${invitation.email}`}
-                        onClick={() => setRevoking(invitation)}
+                        onClick={() => !rowBusy && setRevoking(invitation)}
                       >
                         Revoke
                       </button>

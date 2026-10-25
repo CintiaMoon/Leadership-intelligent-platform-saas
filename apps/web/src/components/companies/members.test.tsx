@@ -253,9 +253,10 @@ test("a wrong password shows the sign-in message, keeps the dialog and does not 
   fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "wrong password" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
-  expect((await within(dialog).findByRole("alert")).textContent).toMatch(/email or password is incorrect/);
+  expect((await within(dialog).findByRole("alert")).textContent).toBe("That password is not correct.");
   expect(calls()).toEqual([`PATCH ${base}/c3`, "POST /api/auth/step-up"]);
   expect(screen.getByRole("dialog", { name: "Confirm your password" })).toBeTruthy();
+  expect((within(dialog).getByLabelText("Password") as HTMLInputElement).value).toBe("");
 });
 
 test("cancelling the password dialog drops the action and clears the field", async () => {
@@ -286,7 +287,104 @@ test("if the password is accepted but the request still needs it, there is no se
   fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "right password" } });
   fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
-  await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/not available to you any more/));
+  await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/password is needed again/));
+  expect(screen.getByRole("status").textContent).not.toMatch(/not available/);
   expect(calls()).toEqual([`PATCH ${base}/c3`, "POST /api/auth/step-up", `PATCH ${base}/c3`]);
   expect(screen.queryByRole("dialog")).toBeNull();
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+// ---- review fixes (F1-5)
+
+test("a password refused for a reason other than being wrong means the session ended: go to sign in", async () => {
+  answer(`PATCH ${base}/c3`, { status: 403, body: problem("REAUTHENTICATION_REQUIRED", 403) });
+  answer("POST /api/auth/step-up", { status: 401, body: problem("UNAUTHENTICATED", 401) });
+  renderList("OWNER", [owner, agent]);
+
+  promote();
+  const dialog = await screen.findByRole("dialog", { name: "Confirm your password" });
+  fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "some password" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/login?notice=expired"));
+  expect(calls()).toEqual([`PATCH ${base}/c3`, "POST /api/auth/step-up"]);
+});
+
+test("the password field is empty after a successful confirmation too", async () => {
+  answer(`PATCH ${base}/c3`, { status: 403, body: problem("REAUTHENTICATION_REQUIRED", 403) }, { status: 200, body: {} });
+  answer("POST /api/auth/step-up", { status: 204 });
+  renderList("OWNER", [owner, agent]);
+  promote();
+  const dialog = await screen.findByRole("dialog", { name: "Confirm your password" });
+  const field = within(dialog).getByLabelText("Password") as HTMLInputElement;
+  fireEvent.change(field, { target: { value: "my password 123" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+  await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/is now an admin/));
+  expect(field.value).toBe("");
+});
+
+test("a request the BFF refuses as unverified says so, and does not claim the member is gone", async () => {
+  answer(`PATCH ${base}/c3`, { status: 403, body: problem("CSRF_REJECTED", 403) });
+  renderList("OWNER", [owner, agent]);
+  fireEvent.change(screen.getByRole("combobox", { name: "Role of Cy Dube" }), { target: { value: "VIEWER" } });
+  await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/could not be verified/));
+  expect(screen.getByRole("status").textContent).not.toMatch(/not available/);
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+test("the rate limit on Members says to wait", async () => {
+  answer(`POST ${base}/d4/reactivate`, { status: 429, body: problem("RATE_LIMITED", 429), headers: { "Retry-After": "120" } });
+  renderList("OWNER", [owner, suspended]);
+  fireEvent.click(screen.getByRole("button", { name: "Reactivate Di Eze" }));
+  await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Too many attempts.*2 minutes/));
+});
+
+test("a failed role change leaves the select showing the role the member still has", async () => {
+  answer(`PATCH ${base}/c3`, { status: 409, body: problem("CONFLICT", 409) });
+  renderList("OWNER", [owner, agent]);
+  const select = screen.getByRole("combobox", { name: "Role of Cy Dube" }) as HTMLSelectElement;
+
+  fireEvent.change(select, { target: { value: "ADMIN" } });
+
+  await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/changed in the meantime/));
+  expect(select.value).toBe("AGENT");
+});
+
+test("two quick clicks send one request, and the busy control stays focusable (aria-disabled, not disabled)", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  fetchMock.mockImplementation(async (url: string) => {
+    if (String(url).includes("/csrf")) {
+      return Response.json({ token: "csrf-token" });
+    }
+    await gate;
+    return new Response("{}", { status: 200 });
+  });
+  renderList("OWNER", [owner, suspended]);
+  const button = screen.getByRole("button", { name: "Reactivate Di Eze" });
+
+  button.focus();
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
+  expect((button as HTMLButtonElement).disabled).toBe(false);
+  expect(document.activeElement).toBe(button);
+  release();
+
+  await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Di Eze was reactivated."));
+  expect(calls()).toEqual([`POST ${base}/d4/reactivate`]);
+});
+
+test("when the row that had focus disappears after a change, focus moves to the message", async () => {
+  answer(`DELETE ${base}/c3`, { status: 204 });
+  const { rerender } = renderList("OWNER", [owner, agent]);
+  fireEvent.click(screen.getByRole("button", { name: "Remove Cy Dube" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove" }));
+  await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Cy Dube was removed."));
+
+  rerender(<MembersList companyId={COMPANY} callerRole="OWNER" companyStatus="ACTIVE" members={[owner]} />);
+
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("status")));
 });

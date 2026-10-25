@@ -51,7 +51,19 @@ test("an unreachable API is status 0", async () => {
 });
 
 test("only plain /api/v1/ paths are read", async () => {
-  for (const path of ["/api/auth/session", "/api/v1/../admin", "/api/v1/companies?x=1", "http://evil.example/api/v1/a"]) {
+  for (const path of [
+    "/api/auth/session",
+    "/api/v1/../admin",
+    "/api/v1/companies?x=1",
+    "http://evil.example/api/v1/a",
+    "/api/v1/companies/a%2Fb",
+    "/api/v1/companies/%2e%2e/admin",
+    "/api/v1//companies",
+    "/api/v1/companies/",
+    "/api/v1/companies/a.b",
+    "/api/v1/companies#x",
+    "/api/v1/",
+  ]) {
     await expect(readApi(new Headers(), path, config)).rejects.toThrow();
   }
   expect(fetchMock).not.toHaveBeenCalled();
