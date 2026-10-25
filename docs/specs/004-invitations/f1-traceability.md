@@ -1,7 +1,7 @@
 # Frontend slice F1 traceability
 
 - Plan: `f1-plan.md` (approved 2026-10-25). Decisions: D-168 to D-175.
-- Status by phase: F1-1 to F1-5 done (below). Closure is waiting for the product owner's sign-off.
+- Status by phase: F1-1 to F1-5 done (below). Frontend slice F1 was signed off by the product owner on 2026-10-25.
 
 ## Phase F1-1: BFF operations and browser client (no UI)
 **What changed**
@@ -168,4 +168,6 @@ Body limit removed; one-change-at-a-time guard removed (needed its own hook test
 - The deviations above; a signed-out person is not returned to the page they were on (D-175 corrected); the capacity warning and the stale-session step-up end-to-end test; `Plan`, `Settings` and `Ownership` tabs belong to slices 005 to 007.
 
 ### Closure
-All of F1 (pages P2 to P6, with the deviations listed) is implemented and tested as above. Waiting for the product owner's sign-off.
+All of F1 (pages P2 to P6, with the deviations listed) is implemented and tested as above.
+
+**The user signed off frontend slice F1 on 2026-10-25** ("I sign off frontend slice F1 with those accepted"), with these accepted items: the deviations from the brief (a role select and buttons instead of a row menu, one combined 409 message, counts in headings rather than tab labels, inline status text instead of a toast, error states without a heading, a 401 landing on My companies instead of the page the person was on, D-175 corrected); the capacity warning, which waits for slice 006; the Plan, Settings and Ownership tabs, which belong to slices 005 to 007; the two unexplained one-off failures listed above (no server log was captured for either); and what was not run (the step-up against a real session older than 10 minutes, screen-reader testing by a person, the production-cookie end-to-end variant, other browsers, load testing).
