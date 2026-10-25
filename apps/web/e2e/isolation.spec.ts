@@ -54,13 +54,20 @@ test("two people using the app at once never see each other's pages, and a page 
     expect(result.html, `${result.owner} ${result.path}`).not.toContain(other.email);
   }
 
-  // Another person's company, and an id that matches nothing, give the same page.
-  const foreign = await sessionA.page.request.get(`/companies/${b.companyId}`);
-  const missing = await sessionA.page.request.get(`/companies/${randomUUID()}`);
-  expect(foreign.status()).toBe(missing.status());
-  const text = (html: string) => html.replace(/<|>/g, " ").replace(/\s+/g, " ");
-  expect(text(await foreign.text())).toBe(text(await missing.text()));
-  expect(await foreign.text()).not.toContain(b.companyName);
+  // Another person's company, and an id that matches nothing, look the same to the person: same status, same words.
+  // (The raw HTML differs on every request by its nonce, chunk names and streamed payload, so the page is compared as
+  // the person sees it.)
+  const seen = async (path: string) => {
+    const response = await sessionA.page.goto(path);
+    await expect(sessionA.page.getByRole("heading", { level: 1 })).toBeVisible();
+    return { status: response?.status(), main: (await sessionA.page.locator("main").innerText()).replace(/\s+/g, " ").trim() };
+  };
+  const foreign = await seen(`/companies/${b.companyId}`);
+  const missing = await seen(`/companies/${randomUUID()}`);
+  expect(foreign.main).toContain("This page is not available.");
+  expect(foreign).toEqual(missing);
+  expect(foreign.main).not.toContain(b.companyName);
+  expect(await sessionA.page.content()).not.toContain(b.companyName);
 
   // After signing out, the Back button does not bring the person's companies back: the page is read again, without a session.
   await sessionA.page.goto("/companies");

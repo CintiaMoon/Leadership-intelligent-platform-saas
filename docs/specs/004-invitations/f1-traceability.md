@@ -161,6 +161,7 @@ Body limit removed; one-change-at-a-time guard removed (needed its own hook test
 ### Not run, or not covered
 - The step-up against a real session older than 10 minutes (a session cannot be aged inside a test; the unit tests cover the sequence and the operation itself is covered in `bff-companies.spec.ts`).
 - Screen-reader testing by a person, and automated checks beyond axe and the keyboard flows above; the production-cookie variant of the end-to-end suite, other browsers, CI, the capacity warning (waits for slice 006).
+- **A test of mine was wrong, found by CI:** the first CI run of this branch failed `isolation.spec.ts` (28 of 29 passed). It compared the raw HTML text of another person's company page with a random id's page; those differ on every request by the CSP nonce, chunk names and the streamed payload, and by a lot in CI. It passed on my machine by luck of timing. It now compares what the person sees (the status and the text of the page, rendered in the browser) and passed 3 of 3 locally. This was not an application fault.
 - **Two unexplained one-off failures**, neither reproduced: in F1-3 the Members page once showed Next's "This page couldn't load" in the first run of its spec; in F1-5 `invitations.spec.ts` ("another account gets the same answer...") once stayed on the sign-in page after submitting, then passed on 2 immediate reruns and in later full runs. No server log was captured for either. They are listed so CI results can be read with them in mind.
 
 ### Accepted or carried
