@@ -256,6 +256,9 @@ const COMPANY_OPERATIONS: [string, string[], string][] = [
   ["POST", [C, "invitations"], `/api/v1/companies/${C}/invitations`],
   ["POST", [C, "invitations", M, "resend"], `/api/v1/companies/${C}/invitations/${M}/resend`],
   ["DELETE", [C, "invitations", M], `/api/v1/companies/${C}/invitations/${M}`],
+  ["POST", [C, "ownership-transfers"], `/api/v1/companies/${C}/ownership-transfers`],
+  ["POST", [C, "ownership-transfers", M, "accept"], `/api/v1/companies/${C}/ownership-transfers/${M}/accept`],
+  ["POST", [C, "ownership-transfers", M, "cancel"], `/api/v1/companies/${C}/ownership-transfers/${M}/cancel`],
 ];
 
 function companyRequest(method: string, path: string[], extra: Record<string, string> = {}, body?: string) {
@@ -326,6 +329,16 @@ test("near misses are a 404 and never reach the API", async () => {
     ["POST", [C, "Members", M, "suspend"]],
     ["POST", [C, "invitations", M, "accept"]],
     ["DELETE", [C, "members", "{id}"]],
+    // Reads of a transfer are done on the server; only the three changes are open (D-192).
+    ["GET", [C, "ownership-transfer"]],
+    ["GET", [C, "ownership-transfers", M]],
+    ["POST", [C, "ownership-transfer"]],
+    ["POST", [C, "ownership-transfers", M]],
+    ["POST", [C, "ownership-transfers", M, "reject"]],
+    ["POST", [C, "ownership-transfers", "not-a-uuid", "accept"]],
+    ["POST", [C, "ownership-transfers", M, "accept", "extra"]],
+    ["DELETE", [C, "ownership-transfers", M]],
+    ["PATCH", [C, "ownership-transfers", M, "cancel"]],
   ];
   for (const [method, path] of misses) {
     const response = await forward(
