@@ -89,9 +89,16 @@ class OwnershipTransferConcurrencyTests extends OwnershipTestBase {
 			List<String> results = Parallel.runAll(List.of(accept, cancel));
 
 			boolean accepted = results.get(0).equals("ok");
-			assertThat(results.get(1)).as("round %d: exactly one of the two wins", round)
-				.isEqualTo(accepted ? "conflict" : "ok");
-			assertThat(results.get(0)).isIn("ok", "conflict");
+			// If the acceptance came first, the former Owner is an Admin when the cancellation runs: it is refused either
+			// as no longer allowed (403, the early check saw the new role) or as not pending (409, the check under the
+			// lock did). Both are the serial order "accept, then cancel"; which one depends on timing.
+			if (accepted) {
+				assertThat(results.get(1)).as("round %d", round).isIn("conflict", "PermissionDeniedException");
+			}
+			else {
+				assertThat(results.get(0)).as("round %d", round).isEqualTo("conflict");
+				assertThat(results.get(1)).isEqualTo("ok");
+			}
 			assertThat(owners(team.companyId())).isEqualTo(1);
 			assertThat(transferStatus(view.id())).isEqualTo(accepted ? "COMPLETED" : "CANCELLED");
 			assertThat(roleOf(team.companyId(), team.admin())).isEqualTo(accepted ? "OWNER:ACTIVE" : "ADMIN:ACTIVE");
