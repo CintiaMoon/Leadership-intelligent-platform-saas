@@ -42,7 +42,7 @@ class OperatorOwnershipTransferTests extends AuthIntegrationTest {
 	private static final Path TRANSFER = Path.of("..", "..", "docs", "runbooks", "operations", "sql",
 			"operator-ownership-transfer.sql");
 
-	private static final int TRANSFER_STATEMENTS = 18;
+	private static final int TRANSFER_STATEMENTS = 21;
 
 	@Autowired
 	private TransactionTemplate tx;
@@ -272,6 +272,23 @@ class OperatorOwnershipTransferTests extends AuthIntegrationTest {
 			.isInstanceOf(OwnershipConflictException.class);
 
 		assertThat(transfers.initiate(session(team.admin()), team.companyId(), team.otherAdminSeat()).id()).isNotNull();
+	}
+
+	@Test
+	void runOutsideASingleTransactionTheScriptStopsBeforeItWritesAnything() throws Exception {
+		Team team = team();
+		transfers.initiate(session(team.owner()), team.companyId(), team.agentSeat());
+		disable(team.owner());
+		String before = snapshot(team);
+		List<String> statements = RunbookSql.statements(TRANSFER, variables(team, team.admin(), "SEC-2", "no"));
+
+		// Each statement in its own transaction, as psql does without --single-transaction.
+		assertThatThrownBy(() -> statements.forEach(jdbc::execute)).isInstanceOf(DataAccessException.class)
+			.rootCause()
+			.hasMessageContaining("division by zero");
+
+		assertThat(snapshot(team)).as("nothing was written").isEqualTo(before);
+		assertThat(flagged(team.companyId())).isTrue();
 	}
 
 	@Test

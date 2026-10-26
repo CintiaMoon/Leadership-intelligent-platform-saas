@@ -20,7 +20,7 @@ test("a second change started while one is running does nothing, so a double sub
   });
 
   let first!: Promise<unknown>;
-  let second!: Promise<{ done: boolean; error: string | null }>;
+  let second!: Promise<{ done: boolean; error: string | null; succeeded: boolean }>;
   await act(async () => {
     first = result.current.run("m1", request, "done");
     second = result.current.run("m1", request, "done");
@@ -29,7 +29,7 @@ test("a second change started while one is running does nothing, so a double sub
   });
 
   expect(request).toHaveBeenCalledTimes(1);
-  expect(await second).toEqual({ done: false, error: null });
+  expect(await second).toEqual({ done: false, error: null, succeeded: false });
   expect(result.current.notice).toBe("done");
 });
 

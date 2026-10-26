@@ -112,7 +112,7 @@ class OwnershipTransferTransactions {
 			throw new ValidationFailedException(List.of(new FieldProblem("recipientMembershipId", "INVALID")));
 		}
 		UserAccount account = users.findById(recipient.getUserId()).orElse(null);
-		RecipientProblem problem = TransferRules.checkRecipient(false, recipient.getStatus(),
+		RecipientProblem problem = TransferRules.checkRecipient(recipient.getStatus(),
 				account != null && account.getStatus() == UserAccount.Status.ACTIVE,
 				account != null && account.isEmailVerified());
 		if (problem != RecipientProblem.NONE) {
@@ -172,9 +172,11 @@ class OwnershipTransferTransactions {
 				List.of(transfer.getInitiatedBy(), transfer.getRecipientId()));
 		Membership initiator = of(locked, transfer.getInitiatedBy());
 		Membership recipient = of(locked, transfer.getRecipientId());
-		UserAccount account = users.findById(transfer.getRecipientId()).orElse(null);
+		// The account row is locked too, after the memberships: a concurrent operator disable of the recipient (which
+		// does not lock this company unless the account owns it) either finishes first, and is seen here, or waits.
+		UserAccount account = users.lockSharedById(transfer.getRecipientId()).orElse(null);
 		RecipientProblem problem = recipient == null ? RecipientProblem.NOT_ACTIVE_MEMBER
-				: TransferRules.checkRecipient(false, recipient.getStatus(),
+				: TransferRules.checkRecipient(recipient.getStatus(),
 						account != null && account.getStatus() == UserAccount.Status.ACTIVE,
 						account != null && account.isEmailVerified());
 		CompletionRefusal refusal = TransferRules.completionRefusal(transfer.getStatus(), transfer.isOverdue(now),

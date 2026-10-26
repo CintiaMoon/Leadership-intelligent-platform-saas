@@ -8,7 +8,8 @@ import { describeFailure } from "@/lib/api/messages";
 
 type Retry = { id: string; request: () => Promise<ApiResult>; success: string };
 
-export type RunOutcome = { done: boolean; error: string | null };
+/** `done`: the dialog that started the change can close. `succeeded`: the change itself was made. */
+export type RunOutcome = { done: boolean; error: string | null; succeeded: boolean };
 
 /**
  * Runs one change from a list page and handles every answer the same way (D-174, D-175): success says what happened
@@ -70,7 +71,7 @@ export function useActionRunner(subject: "member" | "invitation" | "transfer", i
     again = false,
   ): Promise<RunOutcome> {
     if (running.current) {
-      return { done: false, error: null };
+      return { done: false, error: null, succeeded: false };
     }
     running.current = true;
     setLastId(id);
@@ -81,22 +82,22 @@ export function useActionRunner(subject: "member" | "invitation" | "transfer", i
       if (result.ok) {
         setNotice(success);
         startRefresh(() => router.refresh());
-        return { done: true, error: null };
+        return { done: true, error: null, succeeded: true };
       }
       if (result.status === 401) {
         router.replace("/login?notice=expired");
-        return { done: true, error: null };
+        return { done: true, error: null, succeeded: false };
       }
       if (result.status === 403 && result.problem?.code === "REAUTHENTICATION_REQUIRED" && !again) {
         setRetry({ id, request, success });
-        return { done: true, error: null };
+        return { done: true, error: null, succeeded: false };
       }
       const { text, refresh } = explain(result);
       if (refresh) {
         startRefresh(() => router.refresh());
       }
       setNotice(text);
-      return { done: refresh, error: text };
+      return { done: refresh, error: text, succeeded: false };
     } finally {
       running.current = false;
       setBusyId(null);

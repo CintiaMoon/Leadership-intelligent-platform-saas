@@ -35,7 +35,7 @@ public final class CompanyPolicy {
 		row(Permission.LEAVE_COMPANY, DENIED, ALLOWED, ALLOWED, ALLOWED);
 		row(Permission.ASSIGN_OR_REVOKE_ADMIN, ALLOWED, DENIED, DENIED, DENIED);
 		row(Permission.TRANSFER_OWNERSHIP, ALLOWED, DENIED, DENIED, DENIED);
-		// Only the initiator may cancel; that check belongs to slice 005.
+		// Only the initiator may cancel: OwnershipTransferTransactions.cancel checks that the caller started the transfer.
 		row(Permission.CANCEL_OWNERSHIP_TRANSFER, ALLOWED, DENIED, DENIED, DENIED);
 		// Identity-based like Leave: every role has the row, the service allows only the named recipient (D-181).
 		row(Permission.ACCEPT_OWNERSHIP_TRANSFER, ALLOWED, ALLOWED, ALLOWED, ALLOWED);

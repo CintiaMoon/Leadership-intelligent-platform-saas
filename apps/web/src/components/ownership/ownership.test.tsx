@@ -167,6 +167,19 @@ test("a refusal says the transfer changed; a limit and a busy service say to wai
   await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/busy right now/));
 });
 
+test("cancelling the password dialog keeps the member that was chosen", async () => {
+  answer(`POST ${base}`, { status: 403, body: problem("REAUTHENTICATION_REQUIRED", 403) });
+  renderPanel();
+  choose("c3");
+
+  const dialog = await screen.findByRole("dialog", { name: "Confirm your password" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect((screen.getByRole("combobox", { name: "New Owner" }) as HTMLSelectElement).value).toBe("c3");
+  expect(calls()).toEqual([`POST ${base}`]);
+});
+
 test("an ended session goes to sign in", async () => {
   answer(`POST ${base}`, { status: 401, body: problem("UNAUTHENTICATED", 401) });
   renderPanel();

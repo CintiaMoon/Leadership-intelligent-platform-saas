@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import com.example.saas.api.tenant.Parallel;
 import com.example.saas.api.tenant.application.MembershipService;
@@ -128,6 +130,8 @@ class OwnershipTransferConcurrencyTests extends OwnershipTestBase {
 			else {
 				// The suspension came first, so the recipient could not accept and nothing changed hands.
 				assertThat(results.get(1)).isEqualTo("ok");
+				assertThat(results.get(0)).as("refused as a missing recipient or under the lock")
+					.isIn("CompanyNotFoundException", "conflict");
 				assertThat(roleOf(team.companyId(), team.admin())).isEqualTo("ADMIN:SUSPENDED");
 				assertThat(roleOf(team.companyId(), team.owner())).isEqualTo("OWNER:ACTIVE");
 				assertThat(transferStatus(view.id())).isEqualTo("PENDING");
@@ -147,7 +151,9 @@ class OwnershipTransferConcurrencyTests extends OwnershipTestBase {
 
 			List<String> results = Parallel.runAll(List.of(initiate, expire));
 
-			assertThat(results.get(0)).as("round %d", round).isEqualTo("ok");
+			// Whichever of the two expires the old transfer, it is expired exactly once (the initiation expires an overdue
+			// transfer itself, so this does not prove the sweep ran first).
+			assertThat(results).as("round %d", round).containsExactly("ok", "ok");
 			assertThat(transferStatus(old.id())).isEqualTo("EXPIRED");
 			assertThat(audits("ownership.transfer.expired", team.companyId())).as("expired once").isEqualTo(1);
 			assertThat(events(OwnershipEvents.EXPIRED, old.id())).isEqualTo(2);
@@ -155,6 +161,56 @@ class OwnershipTransferConcurrencyTests extends OwnershipTestBase {
 					team.companyId())).isEqualTo(1);
 			assertThat(owners(team.companyId())).isEqualTo(1);
 		}
+	}
+
+	@Test
+	void anAcceptanceWaitsForARecipientAccountThatIsBeingDisabledAndThenIsRefused() throws Exception {
+		// The operator's disable procedure locks only the companies the account owns, so it does not queue behind the
+		// company lock the acceptance holds. The acceptance must therefore read the account under a lock (security
+		// review): it waits for the update in flight and sees the account disabled.
+		Team team = team();
+		TransferView view = service.initiate(session(team.owner()), team.companyId(), team.adminSeat());
+		CompletableFuture<String> accepted = new CompletableFuture<>();
+
+		tx.executeWithoutResult(status -> {
+			jdbc.queryForList("SELECT id FROM app_user WHERE id = ? FOR UPDATE", team.admin().userId());
+			CompletableFuture.runAsync(() -> accepted
+				.complete(outcome(() -> service.accept(session(team.admin()), team.companyId(), view.id()))));
+			// The test's lock timeout is short, so change the account as soon as the acceptance is seen waiting for it.
+			awaitABlockedSession();
+			assertThat(accepted.isDone()).as("the acceptance waits for the account row").isFalse();
+			jdbc.update("UPDATE app_user SET status = 'DISABLED' WHERE id = ?", team.admin().userId());
+		});
+
+		assertThat(accepted.get(20, TimeUnit.SECONDS)).isEqualTo("conflict");
+		assertThat(roleOf(team.companyId(), team.owner())).isEqualTo("OWNER:ACTIVE");
+		assertThat(roleOf(team.companyId(), team.admin())).isEqualTo("ADMIN:ACTIVE");
+		assertThat(owners(team.companyId())).isEqualTo(1);
+		assertThat(transferStatus(view.id())).isEqualTo("PENDING");
+	}
+
+	/**
+	 * Waits until another session is blocked on a row lock. The test holds the only lock in play, so the blocked session
+	 * is the one under test. (The statement text of a waiting session is not reliable enough to match on.)
+	 */
+	private void awaitABlockedSession() {
+		long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+		while (System.nanoTime() < deadline) {
+			Integer waiting = jdbc.queryForObject(
+					"SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid()",
+					Integer.class);
+			if (waiting != null && waiting > 0) {
+				return;
+			}
+			try {
+				Thread.sleep(10);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return;
+			}
+		}
+		throw new AssertionError("no session was blocked on a lock");
 	}
 
 }
