@@ -499,6 +499,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/companies/{companyId}/ownership-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a member to become the Owner
+         * @description Only the Owner may initiate (403 for everyone else; 404 for someone who is not an ACTIVE member), only while the
+         *     company is ACTIVE, and only with a login or step-up within the last 10 minutes (403
+         *     `REAUTHENTICATION_REQUIRED`). The recipient is named by the membership ID that Members lists. It must be a
+         *     membership of this company (otherwise 404), another person than the caller (400), ACTIVE, with an ACTIVE account
+         *     and a verified email (otherwise 409). Nothing changes hands until the recipient accepts. The transfer expires 7
+         *     days after it was initiated. At most one transfer is pending per company: a second one is 409, unless the pending
+         *     one is overdue, in which case it is marked expired first. At most 5 transfers can be initiated per company per 24
+         *     hours (429; a refused request does not use the allowance up; an unavailable counter store returns 503). The
+         *     recipient is emailed a link to the application; the email carries no token.
+         */
+        post: operations["initiateOwnershipTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/ownership-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The company's pending ownership transfer
+         * @description The company's PENDING transfer, for its initiator and its recipient only: everyone else, and every caller when
+         *     nothing is pending, gets 404 (a transfer is not revealed to anyone who is not a party). A transfer that ran past
+         *     its expiry is shown with status `EXPIRED` even before the periodic sweep has marked it; reading never changes
+         *     anything.
+         */
+        get: operations["getPendingOwnershipTransfer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/ownership-transfers/{transferId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One ownership transfer
+         * @description A transfer of this company in any state, for its initiator and its recipient only; 404 for everyone else and for
+         *     a transfer of another company. An overdue pending transfer is shown as `EXPIRED`.
+         */
+        get: operations["getOwnershipTransfer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/ownership-transfers/{transferId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept an ownership transfer
+         * @description Only the named recipient may accept (404 for anyone else), with a login or step-up within the last 10 minutes
+         *     (403 `REAUTHENTICATION_REQUIRED`). In one transaction the previous Owner becomes an Admin and the recipient
+         *     becomes the Owner, so the company has exactly one Owner membership at every moment. It is refused with 409 if the
+         *     transfer is not pending any more, is overdue, the company is not ACTIVE, the initiator is no longer the active
+         *     Owner, or the recipient is no longer an ACTIVE member with a usable account. The previous Owner's pending
+         *     invitations for roles an Admin cannot grant are revoked. The recipient's own role changes, so the response sets a
+         *     new session cookie and the old one stops working (AC-AUTH-23); fetch a new CSRF token afterwards. Both people are
+         *     emailed.
+         */
+        post: operations["acceptOwnershipTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/ownership-transfers/{transferId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a pending ownership transfer
+         * @description Only the Owner who initiated it may cancel (403 for other roles; 404 for anyone else). No recent login is
+         *     needed, because cancelling only withdraws a pending change. A transfer that is not pending, or is overdue, gives
+         *     409. Both people are emailed.
+         */
+        post: operations["cancelOwnershipTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -625,6 +746,38 @@ export interface components {
         AcceptInvitationRequest: {
             /** @description The raw token from the invitation link. Single use. Never logged. */
             token: string;
+        };
+        InitiateOwnershipTransferRequest: {
+            /**
+             * Format: uuid
+             * @description The membership, as Members lists it, of the ACTIVE member who is asked to become the Owner.
+             */
+            recipientMembershipId: string;
+        };
+        /** @enum {string} */
+        OwnershipTransferStatus: "PENDING" | "COMPLETED" | "CANCELLED" | "EXPIRED";
+        OwnershipTransfer: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["OwnershipTransferStatus"];
+            /** @description The display name of the Owner who started the transfer. No address, no user ID. */
+            initiatorName: string;
+            /** @description The display name of the member who was asked to become the Owner. */
+            recipientName: string;
+            youAreInitiator: boolean;
+            youAreRecipient: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description 7 days after the transfer was initiated.
+             */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description Present once the transfer is COMPLETED, CANCELLED or EXPIRED by the periodic sweep.
+             */
+            resolvedAt?: string;
         };
         SessionInfo: {
             /** Format: uuid */
@@ -1479,6 +1632,153 @@ export interface operations {
             409: components["responses"]["Conflict"];
             422: components["responses"]["TokenInvalid"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    initiateOwnershipTransfer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitiateOwnershipTransferRequest"];
+            };
+        };
+        responses: {
+            /** @description The transfer, PENDING. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransfer"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getPendingOwnershipTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending transfer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransfer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOwnershipTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+                transferId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransfer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acceptOwnershipTransfer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                transferId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfer, COMPLETED. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransfer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    cancelOwnershipTransfer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+                transferId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transfer, CANCELLED. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransfer"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["Unavailable"];
         };
     };
