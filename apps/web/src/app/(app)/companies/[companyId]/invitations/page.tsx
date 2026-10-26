@@ -5,9 +5,11 @@ import { NotAvailable } from "@/components/companies/NotAvailable";
 import { InvitationsList } from "@/components/invitations/InvitationsList";
 import { InviteButton } from "@/components/invitations/InviteButton";
 import { mayManageMembers } from "@/lib/memberActions";
+import { waitingForYou } from "@/lib/ownership";
 import { toInvitationRows } from "@/lib/rows";
 import { readApi } from "@/lib/server/api";
 import { loadCompany } from "@/lib/server/company";
+import { loadTransfer } from "@/lib/server/ownership";
 import { signInAgain } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Pending invitations" };
@@ -47,10 +49,17 @@ export default async function InvitationsPage({ params }: { params: Promise<{ co
     );
   }
   const rows = toInvitationRows(invitations.data);
+  const waiting = company.role !== "OWNER" && waitingForYou(await loadTransfer(incoming, config, company.id));
 
   return (
     <>
-      <CompanyHeader companyId={company.id} name={company.name} role={company.role} active="invitations" />
+      <CompanyHeader
+        companyId={company.id}
+        name={company.name}
+        role={company.role}
+        active="invitations"
+        requestWaiting={waiting}
+      />
       {company.status !== "ACTIVE" ? (
         <p className="mt-5 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink">
           This company is scheduled for deletion. Invitations cannot be changed.

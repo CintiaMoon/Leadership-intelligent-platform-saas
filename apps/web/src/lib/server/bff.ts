@@ -90,6 +90,18 @@ const COMPANY_OPERATIONS: { method: string; shape: string[]; target: string }[] 
     target: "/api/v1/companies/{0}/invitations/{1}/resend",
   },
   { method: "DELETE", shape: ["{id}", "invitations", "{id}"], target: "/api/v1/companies/{0}/invitations/{1}" },
+  // Ownership transfer (SPEC-OWN, D-192): start, accept and cancel. The pending transfer is read on the server.
+  { method: "POST", shape: ["{id}", "ownership-transfers"], target: "/api/v1/companies/{0}/ownership-transfers" },
+  {
+    method: "POST",
+    shape: ["{id}", "ownership-transfers", "{id}", "accept"],
+    target: "/api/v1/companies/{0}/ownership-transfers/{1}/accept",
+  },
+  {
+    method: "POST",
+    shape: ["{id}", "ownership-transfers", "{id}", "cancel"],
+    target: "/api/v1/companies/{0}/ownership-transfers/{1}/cancel",
+  },
 ];
 
 /** One canonical UUID, the only shape an id in a path may have. */

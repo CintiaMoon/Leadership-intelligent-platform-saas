@@ -6,19 +6,29 @@ import { RoleBadge } from "./CompanyList";
 
 /**
  * The top of every company page (D-169): the company, the person's role, and the tab row (Members and Pending
- * invitations; Plan, Settings and Ownership are added by their slices). Agents and Viewers have no tabs.
+ * invitations for Owners and Admins; Ownership for the Owner, and for anyone with an ownership request waiting; Plan and
+ * Settings are added by their slices). Agents and Viewers have no tabs unless a request is waiting for them.
  */
 export function CompanyHeader({
   companyId,
   name,
   role,
   active,
+  requestWaiting = false,
 }: {
   companyId: string;
   name: string;
   role: string;
-  active?: "members" | "invitations";
+  active?: "members" | "invitations" | "ownership";
+  /** An ownership request is waiting for this person to accept (D-192). */
+  requestWaiting?: boolean;
 }) {
+  const manages = mayManageMembers(role);
+  const ownership = role === "OWNER" || requestWaiting;
+  const tab = (current: string) =>
+    `-mb-px border-b-2 pb-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      active === current ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"
+    }`;
   return (
     <div className="border-b border-line">
       <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-muted">Company</p>
@@ -26,26 +36,35 @@ export function CompanyHeader({
         <span className="[overflow-wrap:anywhere]">{name}</span>
         <RoleBadge role={role} />
       </h1>
-      {mayManageMembers(role) ? (
+      {manages || ownership ? (
         <nav aria-label="Company" className="mt-4 flex gap-5">
-          <Link
-            href={`/companies/${companyId}/members`}
-            aria-current={active === "members" ? "page" : undefined}
-            className={`-mb-px border-b-2 pb-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-              active === "members" ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            Members
-          </Link>
-          <Link
-            href={`/companies/${companyId}/invitations`}
-            aria-current={active === "invitations" ? "page" : undefined}
-            className={`-mb-px border-b-2 pb-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-              active === "invitations" ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            Pending invitations
-          </Link>
+          {manages ? (
+            <>
+              <Link
+                href={`/companies/${companyId}/members`}
+                aria-current={active === "members" ? "page" : undefined}
+                className={tab("members")}
+              >
+                Members
+              </Link>
+              <Link
+                href={`/companies/${companyId}/invitations`}
+                aria-current={active === "invitations" ? "page" : undefined}
+                className={tab("invitations")}
+              >
+                Pending invitations
+              </Link>
+            </>
+          ) : null}
+          {ownership ? (
+            <Link
+              href={`/companies/${companyId}/ownership`}
+              aria-current={active === "ownership" ? "page" : undefined}
+              className={tab("ownership")}
+            >
+              Ownership
+            </Link>
+          ) : null}
         </nav>
       ) : (
         <div className="pb-4" />
