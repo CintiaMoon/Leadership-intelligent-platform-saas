@@ -51,6 +51,55 @@ public class AuthEmails {
 					.format(expiresAt) + " (UTC)", properties.publicBaseUrl(), token));
 	}
 
+	/**
+	 * The ownership transfer emails (SPEC-OWN, D-185). They go to members of the company, but the company name is still
+	 * text chosen by a user, so the subjects are fixed and the name appears only in the body, in quotes (the pattern of
+	 * D-165). No person's name, no secret: the link opens a page that needs a login and, to accept, a fresh password.
+	 */
+	public EmailMessage ownershipTransfer(String eventType, boolean toRecipient, String to, java.util.UUID companyId,
+			String companyName) {
+		String link = properties.publicBaseUrl() + "/companies/" + companyId + "/ownership";
+		return switch (eventType) {
+			case "OWNERSHIP_TRANSFER_INITIATED" -> new EmailMessage(to, "You were asked to become an Owner", """
+					Hello,
+
+					The Owner of the company \"%s\" has asked you to become its Owner. To accept, sign in and open this page within 7 days; you will be asked for your password again:
+
+					%s
+
+					If you were not expecting this, you can ignore this message. Nothing changes unless you accept.
+					""".formatted(companyName, link));
+			case "OWNERSHIP_TRANSFER_COMPLETED" -> new EmailMessage(to, "Ownership of a company was transferred", toRecipient ? """
+					Hello,
+
+					You are now the Owner of the company \"%s\".
+
+					%s
+					""".formatted(companyName, link) : """
+					Hello,
+
+					Ownership of the company \"%s\" was transferred. You are now an Admin of the company.
+
+					%s
+					""".formatted(companyName, link));
+			case "OWNERSHIP_TRANSFER_CANCELLED" -> new EmailMessage(to, "An ownership transfer was cancelled", """
+					Hello,
+
+					The ownership transfer for the company \"%s\" was cancelled. Nothing changed.
+
+					%s
+					""".formatted(companyName, link));
+			case "OWNERSHIP_TRANSFER_EXPIRED" -> new EmailMessage(to, "An ownership transfer expired", """
+					Hello,
+
+					The ownership transfer for the company \"%s\" expired without being accepted. Nothing changed.
+
+					%s
+					""".formatted(companyName, link));
+			default -> throw new IllegalArgumentException("Not an ownership transfer event");
+		};
+	}
+
 	public EmailMessage passwordReset(String to, String displayName, String token) {
 		return new EmailMessage(to, "Reset your password", """
 				Hello %s,

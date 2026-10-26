@@ -8,6 +8,7 @@ import com.example.saas.api.auth.application.TokenInvalidException;
 import com.example.saas.api.auth.domain.PasswordHashingBusyException;
 import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
 import com.example.saas.api.invitation.application.InvitationConflictException;
+import com.example.saas.api.tenant.ownership.application.OwnershipConflictException;
 import com.example.saas.api.security.ReauthenticationRequiredException;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.application.DenialAudit;
@@ -94,6 +95,11 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(MembershipConflictException.class)
 	ResponseEntity<Object> handleMembershipConflict(MembershipConflictException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem(ErrorCode.CONFLICT, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(OwnershipConflictException.class)
+	ResponseEntity<Object> handleOwnershipConflict(OwnershipConflictException ex, HttpServletRequest request) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem(ErrorCode.CONFLICT, request.getRequestURI()));
 	}
 
