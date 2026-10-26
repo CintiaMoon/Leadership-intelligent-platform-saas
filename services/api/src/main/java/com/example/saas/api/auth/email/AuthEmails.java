@@ -100,6 +100,29 @@ public class AuthEmails {
 		};
 	}
 
+	/**
+	 * The notice after an operator changed the Owner of a flagged company (SPEC-OWN, AC-OWN-18). It goes to the new Owner
+	 * and to the company's Admins, never to the previous Owner. Fixed subject, company name only in the body and quoted, no
+	 * person's name, no ticket.
+	 */
+	public EmailMessage ownershipOperatorTransfer(boolean toNewOwner, String to, java.util.UUID companyId,
+			String companyName) {
+		String link = properties.publicBaseUrl() + "/companies/" + companyId;
+		return new EmailMessage(to, "Ownership of a company was changed", toNewOwner ? """
+				Hello,
+
+				Following a request to our support team, you are now the Owner of the company \"%s\".
+
+				%s
+				""".formatted(companyName, link) : """
+				Hello,
+
+				Following a request to our support team, the Owner of the company \"%s\" was changed. If you did not expect this, contact support.
+
+				%s
+				""".formatted(companyName, link));
+	}
+
 	public EmailMessage passwordReset(String to, String displayName, String token) {
 		return new EmailMessage(to, "Reset your password", """
 				Hello %s,
