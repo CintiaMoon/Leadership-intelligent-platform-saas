@@ -18,6 +18,11 @@ public final class PathIds {
 	private PathIds() {
 	}
 
+	/** Whether the text is one canonical UUID; for IDs in a request body, which are 400 when malformed, not 404. */
+	public static boolean isCanonical(String raw) {
+		return raw != null && CANONICAL_UUID.matcher(raw).matches();
+	}
+
 	public static UUID parse(String raw) {
 		if (raw == null || !CANONICAL_UUID.matcher(raw).matches()) {
 			throw new CompanyNotFoundException();

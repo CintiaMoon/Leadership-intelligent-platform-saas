@@ -75,6 +75,13 @@ class SecurityConfig {
 						"/api/v1/companies/*/invitations/*/resend")
 					.authenticated()
 				.requestMatchers(HttpMethod.DELETE, "/api/v1/companies/*/invitations/*").authenticated()
+				// Ownership transfers (SPEC-OWN). Who may do what is decided per company by the service.
+				.requestMatchers(HttpMethod.GET, "/api/v1/companies/*/ownership-transfer",
+						"/api/v1/companies/*/ownership-transfers/*")
+					.authenticated()
+				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/ownership-transfers",
+						"/api/v1/companies/*/ownership-transfers/*/accept", "/api/v1/companies/*/ownership-transfers/*/cancel")
+					.authenticated()
 				// Accepting an invitation needs a verified session; the address match is done by the service.
 				.requestMatchers(HttpMethod.POST, "/api/v1/invitations/accept").authenticated()
 				.anyRequest().denyAll())
