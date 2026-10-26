@@ -6,7 +6,7 @@
 
 ## What happens when an account is disabled
 - The session filter checks the account status on every request. A `DISABLED` account is rejected at once, even before its sessions are deleted, and cannot log in. Deleting the sessions then frees the rows.
-- **Companies the account owns (D-54).** Each such company keeps exactly one Owner membership, which becomes `SUSPENDED` (the role stays `OWNER`), and is flagged with `company.ownership_resolution_at`. A suspended Owner has no access, nobody else holds an Owner-only permission, so company deletion, ownership transfer by the Owner, Admin promotion, plan changes and every other Owner-only operation are unavailable. Admins, Agents and Viewers keep working. The company stays like this until an audited, operator-assisted transfer to an active member (slice 005 and `operator-ownership-transfer.md`, still a stub).
+- **Companies the account owns (D-54).** Each such company keeps exactly one Owner membership, which becomes `SUSPENDED` (the role stays `OWNER`), and is flagged with `company.ownership_resolution_at`. A suspended Owner has no access, nobody else holds an Owner-only permission, so company deletion, ownership transfer by the Owner, Admin promotion, plan changes and every other Owner-only operation are unavailable. Admins, Agents and Viewers keep working. The company stays like this until an audited, operator-assisted transfer to an active member (`operator-ownership-transfer.md`, with its script).
 - **Companies where the account is only a member.** Their memberships stay `ACTIVE` by decision (D-141): the session filter and the account status already deny every tenant, re-enabling the account restores access, and the memberships keep using a plan seat.
 - The procedure writes audit rows with `actor_type = 'operator'`: `account.status.changed`, `membership.suspended` and `company.ownership_resolution.flagged` (reason `owner_account_disabled`). The operator is identified by the ticket you record, not by a user ID.
 
@@ -68,7 +68,7 @@ If the check shows a company still flagged, it was not restored (for example own
 
 ## Gaps to close
 - There is no operator endpoint or operator identity; the audit rows carry the ticket and the database role instead of an operator ID. Add real operators in the slice that introduces them.
-- The operator transfer to an active member (slice 005, `operator-ownership-transfer.md`) is decided (D-142) but not written or rehearsed. The purge guard for flagged companies (D-143) belongs to slice 007.
+- The operator transfer to an active member (slice 005, `operator-ownership-transfer.md`) is written and tested (D-142, `operator-ownership-transfer.md`) but not yet rehearsed on staging, which gates routine use of this procedure. The purge guard for flagged companies (D-143) belongs to slice 007.
 - Memberships of the disabled account in companies it does not own stay `ACTIVE`, appear in member lists and keep using a plan seat (D-141, decided).
 - Disabling does not clear `login_throttle` state; that is intended.
 
