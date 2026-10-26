@@ -7,7 +7,7 @@ import { ownershipView, toCandidates, waitingForYou } from "@/lib/ownership";
 import { toMemberRows } from "@/lib/rows";
 import { readApi } from "@/lib/server/api";
 import { loadCompany } from "@/lib/server/company";
-import { loadTransfer } from "@/lib/server/ownership";
+import { readTransfer } from "@/lib/server/ownership";
 import { signInAgain } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Ownership" };
@@ -33,7 +33,20 @@ export default async function OwnershipPage({ params }: { params: Promise<{ comp
     );
   }
   const { company, incoming, config } = loaded;
-  const transfer = await loadTransfer(incoming, config, company.id);
+  const read = await readTransfer(incoming, config, company.id);
+  if (read.kind === "error") {
+    // Not "nothing pending": showing the form to an Owner whose request exists, or "nothing is waiting" to its
+    // recipient, would be wrong on a transient failure.
+    return (
+      <>
+        <CompanyHeader companyId={company.id} name={company.name} role={company.role} active="ownership" />
+        <p role="alert" className="mt-5 max-w-[560px] rounded-xl border border-danger/50 bg-surface p-5 text-xs text-danger">
+          We could not load the ownership request. Reload the page to try again.
+        </p>
+      </>
+    );
+  }
+  const transfer = read.kind === "found" ? read.transfer : null;
   const mode = ownershipView(company.role, transfer);
 
   let candidates: ReturnType<typeof toCandidates> = [];

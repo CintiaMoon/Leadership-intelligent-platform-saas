@@ -29,17 +29,16 @@ class TransferRulesTest {
 	}
 
 	@Test
-	void aRecipientMustBeSomeoneElseWithAnActiveMembershipAndAUsableAccount() {
-		assertThat(TransferRules.checkRecipient(false, MembershipStatus.ACTIVE, true, true)).isEqualTo(RecipientProblem.NONE);
-		assertThat(TransferRules.checkRecipient(true, MembershipStatus.ACTIVE, true, true)).isEqualTo(RecipientProblem.SELF);
-		assertThat(TransferRules.checkRecipient(false, MembershipStatus.SUSPENDED, true, true))
+	void aRecipientMustHaveAnActiveMembershipAndAUsableAccount() {
+		assertThat(TransferRules.checkRecipient(MembershipStatus.ACTIVE, true, true)).isEqualTo(RecipientProblem.NONE);
+		assertThat(TransferRules.checkRecipient(MembershipStatus.SUSPENDED, true, true))
 			.isEqualTo(RecipientProblem.NOT_ACTIVE_MEMBER);
-		assertThat(TransferRules.checkRecipient(false, MembershipStatus.REMOVED, true, true))
+		assertThat(TransferRules.checkRecipient(MembershipStatus.REMOVED, true, true))
 			.isEqualTo(RecipientProblem.NOT_ACTIVE_MEMBER);
-		assertThat(TransferRules.checkRecipient(false, null, true, true)).isEqualTo(RecipientProblem.NOT_ACTIVE_MEMBER);
-		assertThat(TransferRules.checkRecipient(false, MembershipStatus.ACTIVE, false, true))
+		assertThat(TransferRules.checkRecipient(null, true, true)).isEqualTo(RecipientProblem.NOT_ACTIVE_MEMBER);
+		assertThat(TransferRules.checkRecipient(MembershipStatus.ACTIVE, false, true))
 			.as("account disabled").isEqualTo(RecipientProblem.ACCOUNT_NOT_USABLE);
-		assertThat(TransferRules.checkRecipient(false, MembershipStatus.ACTIVE, true, false))
+		assertThat(TransferRules.checkRecipient(MembershipStatus.ACTIVE, true, false))
 			.as("email not verified").isEqualTo(RecipientProblem.ACCOUNT_NOT_USABLE);
 	}
 
@@ -88,7 +87,7 @@ class TransferRulesTest {
 
 	@Test
 	void theRecipientMustStillBeEligible() {
-		for (RecipientProblem problem : new RecipientProblem[] { RecipientProblem.SELF, RecipientProblem.NOT_ACTIVE_MEMBER,
+		for (RecipientProblem problem : new RecipientProblem[] { RecipientProblem.NOT_ACTIVE_MEMBER,
 				RecipientProblem.ACCOUNT_NOT_USABLE }) {
 			assertThat(refusal(TransferStatus.PENDING, false, CompanyStatus.ACTIVE, Role.OWNER, MembershipStatus.ACTIVE, problem))
 				.as(problem.name()).isEqualTo(CompletionRefusal.RECIPIENT_NOT_ELIGIBLE);
@@ -99,13 +98,13 @@ class TransferRulesTest {
 	void theChecksRunInTheOrderOfTheSpec() {
 		// Everything wrong at once: the first check in the spec's order wins.
 		assertThat(refusal(TransferStatus.EXPIRED, true, CompanyStatus.PENDING_DELETION, Role.ADMIN, MembershipStatus.REMOVED,
-				RecipientProblem.SELF)).isEqualTo(CompletionRefusal.NOT_PENDING);
+				RecipientProblem.NOT_ACTIVE_MEMBER)).isEqualTo(CompletionRefusal.NOT_PENDING);
 		assertThat(refusal(TransferStatus.PENDING, true, CompanyStatus.PENDING_DELETION, Role.ADMIN, MembershipStatus.REMOVED,
-				RecipientProblem.SELF)).isEqualTo(CompletionRefusal.OVERDUE);
+				RecipientProblem.NOT_ACTIVE_MEMBER)).isEqualTo(CompletionRefusal.OVERDUE);
 		assertThat(refusal(TransferStatus.PENDING, false, CompanyStatus.PENDING_DELETION, Role.ADMIN, MembershipStatus.REMOVED,
-				RecipientProblem.SELF)).isEqualTo(CompletionRefusal.COMPANY_NOT_ACTIVE);
+				RecipientProblem.NOT_ACTIVE_MEMBER)).isEqualTo(CompletionRefusal.COMPANY_NOT_ACTIVE);
 		assertThat(refusal(TransferStatus.PENDING, false, CompanyStatus.ACTIVE, Role.ADMIN, MembershipStatus.REMOVED,
-				RecipientProblem.SELF)).isEqualTo(CompletionRefusal.INITIATOR_NOT_ACTIVE_OWNER);
+				RecipientProblem.NOT_ACTIVE_MEMBER)).isEqualTo(CompletionRefusal.INITIATOR_NOT_ACTIVE_OWNER);
 	}
 
 }

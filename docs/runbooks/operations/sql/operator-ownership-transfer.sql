@@ -10,6 +10,7 @@
 -- If a variable is missing psql sends the text unchanged, the statement fails, and nothing is committed.
 -- The integration test OperatorOwnershipTransferTests runs these statements against PostgreSQL. Keep them in step.
 -- Read docs/runbooks/operations/operator-ownership-transfer.md first.
+-- Run WITHOUT --single-transaction the script refuses to go on (see the marker statements below).
 -- Not idempotent on purpose: a second run finds the flag cleared and stops with an error, changing nothing.
 -- Statements end at a semicolon at the end of a line, and comments contain none, so the test can split them.
 --
@@ -23,6 +24,13 @@ SELECT 1 / (CASE WHEN :'non_admin_ok' IN ('yes', 'no') THEN 1 ELSE 0 END) AS non
 
 SELECT 1 / (CASE WHEN :'company' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN 1 ELSE 0 END)
        AS company_is_a_lower_case_uuid;
+
+-- The script must run inside ONE transaction (psql --single-transaction): the locks, the guards and the writes depend on
+-- it. A local setting lasts only to the end of the transaction, so in autocommit mode it is gone by the next statement
+-- and the guard below stops the script before anything is written.
+SELECT set_config('app.operator_transfer_tx', 'yes', true) AS marker;
+
+SELECT 1 / (CASE WHEN current_setting('app.operator_transfer_tx', true) = 'yes' THEN 1 ELSE 0 END) AS inside_one_transaction;
 
 -- Do not queue behind a long application transaction: give up after 5 seconds, as the application does (D-125).
 SET LOCAL lock_timeout = '5s';
@@ -41,7 +49,9 @@ SELECT u.id AS recipient_user_id
  WHERE u.email_normalized = lower(btrim(:'recipient'))
    FOR UPDATE;
 
--- 3. The company exists and is flagged for ownership resolution.
+-- 3. The company exists and is flagged for ownership resolution. Its status is not checked: a company that is
+-- PENDING_DELETION may be handed over (D-143: its deletion deadline stays and is rechecked now that the flag is cleared),
+-- unlike in the application, where a company that is not ACTIVE cannot complete a transfer.
 SELECT 1 / count(*) AS company_is_flagged
   FROM company c
  WHERE c.id = :'company'::uuid AND c.ownership_resolution_at IS NOT NULL;
@@ -143,12 +153,14 @@ SELECT now(), 'company.ownership_resolution.cleared', id, 'operator', 'company',
        'operator_ownership_transfer ticket=' || :'ticket'
   FROM cleared;
 
--- 12. The audit event of the whole transfer. The reason names the ticket and the database role that ran this, since
--- operators have no user ID yet. Only identifiers and the ticket: no address, no name.
+-- 12. The audit event of the whole transfer. The reason names the ticket and the database login that ran this (and the
+-- role it switched to, if different), since operators have no user ID yet. Only identifiers and the ticket: no address, no name.
 INSERT INTO audit_event (occurred_at, event_type, company_id, actor_type, target_type, target_id, outcome, reason_code)
 VALUES (now(), 'ownership.transfer.operator_completed', :'company'::uuid, 'operator', 'company', :'company'::uuid,
         'success', 'operator_ownership_transfer ticket=' || :'ticket' || ' db_user='
-        || left(regexp_replace(current_user, '[^A-Za-z0-9_.-]', '_', 'g'), 40));
+        || left(regexp_replace(session_user, '[^A-Za-z0-9_.-]', '_', 'g'), 40)
+        || CASE WHEN current_user <> session_user
+                THEN ' role=' || left(regexp_replace(current_user, '[^A-Za-z0-9_.-]', '_', 'g'), 40) ELSE '' END);
 
 -- 13. Queue the notices through the outbox (ADR-003), to be sent after commit: one to the new Owner and one to each
 -- ACTIVE Admin of the company, each with an ACTIVE account and a verified email. Identifiers only. The old Owner is a
@@ -157,16 +169,28 @@ INSERT INTO outbox_event (event_type, payload, idempotency_key, next_attempt_at,
 SELECT 'OWNERSHIP_TRANSFER_OPERATOR_COMPLETED',
        jsonb_build_object('companyId', m.company_id::text, 'userId', m.user_id::text,
                           'addressee', CASE WHEN m.role = 'OWNER' THEN 'NEW_OWNER' ELSE 'ADMIN' END),
-       'ownership-operator-' || m.company_id || '-' || :'ticket' || '-' || m.user_id, now(), now()
+       'ownership-operator-' || m.company_id || '-' || :'ticket' || '-' || m.user_id || '-'
+       || to_char(now() AT TIME ZONE 'UTC', 'YYYYMMDDHH24MISSUS'), now(), now()
   FROM membership m JOIN app_user u ON u.id = m.user_id
  WHERE m.company_id = :'company'::uuid AND m.status = 'ACTIVE' AND m.role IN ('OWNER', 'ADMIN')
    AND u.status = 'ACTIVE' AND u.email_verified_at IS NOT NULL
 ON CONFLICT (idempotency_key) DO NOTHING;
 
--- 14. Check: exactly one Owner membership, the flag is cleared, and nothing is pending.
+-- 14. Check: exactly one Owner membership, the flag is cleared, and nothing is pending. The first query shows it, the
+-- second stops the script, rolling everything back, if any of it is not so or the recipient is not the ACTIVE Owner.
 SELECT c.id AS company_id, c.ownership_resolution_at,
        (SELECT count(*) FROM membership o WHERE o.company_id = c.id AND o.role = 'OWNER'
            AND o.status IN ('ACTIVE', 'SUSPENDED')) AS owner_memberships,
        (SELECT count(*) FROM ownership_transfer t WHERE t.company_id = c.id AND t.status = 'PENDING') AS pending_transfers
   FROM company c
  WHERE c.id = :'company'::uuid;
+
+SELECT 1 / count(*) AS transfer_is_consistent
+  FROM company c
+ WHERE c.id = :'company'::uuid AND c.ownership_resolution_at IS NULL
+   AND (SELECT count(*) FROM membership o WHERE o.company_id = c.id AND o.role = 'OWNER'
+           AND o.status IN ('ACTIVE', 'SUSPENDED')) = 1
+   AND (SELECT count(*) FROM ownership_transfer t WHERE t.company_id = c.id AND t.status = 'PENDING') = 0
+   AND EXISTS (SELECT 1 FROM membership n JOIN app_user nu ON nu.id = n.user_id
+                WHERE n.company_id = c.id AND nu.email_normalized = lower(btrim(:'recipient'))
+                  AND n.role = 'OWNER' AND n.status = 'ACTIVE');

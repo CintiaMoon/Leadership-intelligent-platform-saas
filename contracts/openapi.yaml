@@ -1003,9 +1003,10 @@ paths:
       description: |
         Only the named recipient may accept (404 for anyone else), with a login or step-up within the last 10 minutes
         (403 `REAUTHENTICATION_REQUIRED`). In one transaction the previous Owner becomes an Admin and the recipient
-        becomes the Owner, so the company has exactly one Owner membership at every moment. It is refused with 409 if the
-        transfer is not pending any more, is overdue, the company is not ACTIVE, the initiator is no longer the active
-        Owner, or the recipient is no longer an ACTIVE member with a usable account. The previous Owner's pending
+        becomes the Owner, so the company has exactly one Owner membership at every moment. It is refused with 404 if the
+        recipient is no longer an ACTIVE member of the company (that is checked first, so the transfer is not revealed to
+        them), and with 409 if the transfer is not pending any more, is overdue, the company is not ACTIVE, the initiator
+        is no longer the active Owner, or the recipient's account is no longer usable (disabled or not verified). The previous Owner's pending
         invitations for roles an Admin cannot grant are revoked. The recipient's own role changes, so the response sets a
         new session cookie and the old one stops working (AC-AUTH-23); fetch a new CSRF token afterwards. Both people are
         emailed.
@@ -1387,7 +1388,9 @@ components:
         resolvedAt:
           type: string
           format: date-time
-          description: Present once the transfer is COMPLETED, CANCELLED or EXPIRED by the periodic sweep.
+          description: |
+            Present once the transfer is COMPLETED or CANCELLED, or EXPIRED by the periodic sweep. A transfer that ran
+            past its expiry before the sweep marked it is shown as `EXPIRED` without this field.
     SessionInfo:
       type: object
       required: [userId, email, displayName, emailVerified, lastAuthenticatedAt, expiresAt]
@@ -1419,8 +1422,8 @@ components:
       type: string
       description: |
         Stable application error code (ADR-005). The frontend maps codes to messages. `REAUTHENTICATION_REQUIRED`
-        (403) is returned by the sensitive operations (promoting or demoting an Admin now; ownership transfer, company
-        deletion and export in later slices) when the session is valid but the last login or
+        (403) is returned by the sensitive operations (promoting or demoting an Admin, starting and accepting an ownership
+        transfer now; company deletion and export in later slices) when the session is valid but the last login or
         step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry.
       enum:
         - VALIDATION_FAILED

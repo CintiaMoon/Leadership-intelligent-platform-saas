@@ -2,6 +2,7 @@ package com.example.saas.api.tenant.ownership;
 
 import java.util.UUID;
 
+import com.example.saas.api.auth.outbox.OutboxRepository;
 import com.example.saas.api.auth.persistence.AuditLog;
 import com.example.saas.api.invitation.application.InvitationService;
 import com.example.saas.api.ratelimit.RateLimiter;
@@ -31,6 +32,9 @@ class OwnershipTransferAtomicityTests extends OwnershipTestBase {
 	@MockitoSpyBean
 	private AuditLog audit;
 
+	@MockitoSpyBean
+	private OutboxRepository outbox;
+
 	@Autowired
 	private RateLimiter limiter;
 
@@ -39,7 +43,7 @@ class OwnershipTransferAtomicityTests extends OwnershipTestBase {
 
 	@AfterEach
 	void healTheSpy() {
-		Mockito.reset(audit);
+		Mockito.reset(audit, outbox);
 	}
 
 	private void failTheAuditOf(String eventType) {
@@ -72,6 +76,30 @@ class OwnershipTransferAtomicityTests extends OwnershipTestBase {
 		Mockito.reset(audit);
 		service.accept(session(team.admin()), team.companyId(), view.id());
 		assertThat(roleOf(team.companyId(), team.admin())).as("the same transfer still works").isEqualTo("OWNER:ACTIVE");
+	}
+
+	@Test
+	void aFailureAfterTheInvitationsWereRevokedRestoresThemToo() {
+		Team team = team();
+		UUID forAdmin = invitations.create(session(team.owner()), team.companyId(), "late.admin@example.com", Role.ADMIN).id();
+		UUID forAgent = invitations.create(session(team.owner()), team.companyId(), "late.agent@example.com", Role.AGENT).id();
+		TransferView view = service.initiate(session(team.owner()), team.companyId(), team.adminSeat());
+
+		// The outbox write of the completion comes after the role changes, the audit rows and the revocations.
+		tx.executeWithoutResult(status -> Mockito.doThrow(new IllegalStateException("outbox store failed"))
+			.when(outbox)
+			.enqueue(eq(OwnershipEvents.COMPLETED), any(), any(), any()));
+		assertThatThrownBy(() -> service.accept(session(team.admin()), team.companyId(), view.id()))
+			.isInstanceOf(RuntimeException.class);
+
+		assertThat(roleOf(team.companyId(), team.owner())).isEqualTo("OWNER:ACTIVE");
+		assertThat(roleOf(team.companyId(), team.admin())).isEqualTo("ADMIN:ACTIVE");
+		assertThat(transferStatus(view.id())).isEqualTo("PENDING");
+		assertThat(audits("ownership.transfer.completed", team.companyId())).isZero();
+		assertThat(jdbc.queryForObject("SELECT status FROM invitation WHERE id = ?", String.class, forAdmin))
+			.as("the revocation of the old Owner's Admin invitation was rolled back").isEqualTo("PENDING");
+		assertThat(jdbc.queryForObject("SELECT status FROM invitation WHERE id = ?", String.class, forAgent))
+			.isEqualTo("PENDING");
 	}
 
 	@Test

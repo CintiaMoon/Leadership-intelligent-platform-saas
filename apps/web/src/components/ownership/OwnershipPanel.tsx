@@ -67,7 +67,8 @@ export function OwnershipPanel({
       () => send("POST", base, { recipientMembershipId: person.id }),
       `${person.name} was asked to become the Owner. They have 7 days to accept.`,
     ).then((outcome) => {
-      if (outcome.done) {
+      // Not when the password dialog was opened: cancelling it should leave the choice as it was.
+      if (outcome.succeeded) {
         setChoice("");
       }
     });

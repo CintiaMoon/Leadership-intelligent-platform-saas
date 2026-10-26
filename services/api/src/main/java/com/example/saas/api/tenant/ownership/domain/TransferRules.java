@@ -41,21 +41,17 @@ public final class TransferRules {
 	/** Why a member cannot receive the ownership, if they cannot (D-180, AC-OWN-08, AC-OWN-19). */
 	public enum RecipientProblem {
 
-		NONE, SELF, NOT_ACTIVE_MEMBER, ACCOUNT_NOT_USABLE
+		NONE, NOT_ACTIVE_MEMBER, ACCOUNT_NOT_USABLE
 
 	}
 
 	/**
-	 * @param self the recipient is the person handing the ownership over
 	 * @param membershipStatus the recipient's membership status, or null if they have no live membership
 	 * @param accountActive the recipient's account is ACTIVE (not disabled by an operator)
 	 * @param emailVerified the recipient's email is verified
 	 */
-	public static RecipientProblem checkRecipient(boolean self, MembershipStatus membershipStatus, boolean accountActive,
+	public static RecipientProblem checkRecipient(MembershipStatus membershipStatus, boolean accountActive,
 			boolean emailVerified) {
-		if (self) {
-			return RecipientProblem.SELF;
-		}
 		if (membershipStatus != MembershipStatus.ACTIVE) {
 			return RecipientProblem.NOT_ACTIVE_MEMBER;
 		}
