@@ -30,12 +30,17 @@ public final class TransferRules {
 	 * recipient may do it, which the service checks.
 	 */
 	public static Permission refusedWhateverTheRole(Operation operation, Role actorRole) {
-		Permission needed = switch (operation) {
+		Permission needed = permissionFor(operation);
+		return CompanyPolicy.grant(actorRole, needed) == Grant.DENIED ? needed : null;
+	}
+
+	/** The matrix row an operation needs. */
+	public static Permission permissionFor(Operation operation) {
+		return switch (operation) {
 			case INITIATE -> Permission.TRANSFER_OWNERSHIP;
 			case CANCEL -> Permission.CANCEL_OWNERSHIP_TRANSFER;
 			case ACCEPT -> Permission.ACCEPT_OWNERSHIP_TRANSFER;
 		};
-		return CompanyPolicy.grant(actorRole, needed) == Grant.DENIED ? needed : null;
 	}
 
 	/** Why a member cannot receive the ownership, if they cannot (D-180, AC-OWN-08, AC-OWN-19). */

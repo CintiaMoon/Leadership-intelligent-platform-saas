@@ -1,6 +1,7 @@
 package com.example.saas.api.plan.application;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.UUID;
 
@@ -9,7 +10,9 @@ import com.example.saas.api.plan.domain.LimitKey;
 import com.example.saas.api.plan.domain.SubscriptionState;
 import com.example.saas.api.plan.persistence.CompanySubscription;
 import com.example.saas.api.plan.persistence.CompanySubscriptionRepository;
+import com.example.saas.api.plan.persistence.Plan;
 import com.example.saas.api.plan.persistence.PlanRepository;
+import com.example.saas.api.plan.persistence.StateRow;
 import com.example.saas.api.tenant.domain.MembershipStatus;
 import com.example.saas.api.tenant.persistence.MembershipRepository;
 import org.springframework.stereotype.Service;
@@ -46,9 +49,40 @@ public class EntitlementService {
 	/** The effective state now (AC-PLAN-10); reading never writes. */
 	@Transactional(readOnly = true)
 	public SubscriptionState state(UUID companyId) {
-		return subscriptions.findById(companyId)
+		return subscriptions.findStateRow(companyId)
 			.map(s -> s.effectiveAt(clock.instant()))
 			.orElse(SubscriptionState.NO_PLAN);
+	}
+
+	/**
+	 * The plan, the effective state, the features and the limits for the plan endpoint (Q-13). Teams and assessments are
+	 * listed with {@code enforced: false} and no usage until their slices exist (Q-12).
+	 */
+	@Transactional(readOnly = true)
+	public SubscriptionView describe(UUID companyId) {
+		java.time.Instant now = clock.instant();
+		StateRow row = subscriptions.findStateRow(companyId).orElse(null);
+		CompanySubscription subscription = subscriptions.findById(companyId).orElse(null);
+		Plan plan = subscription == null || subscription.getPlanId() == null ? null
+				: plans.findById(subscription.getPlanId()).orElse(null);
+		SubscriptionState state = row == null ? SubscriptionState.NO_PLAN : row.effectiveAt(now);
+		if (plan == null) {
+			return new SubscriptionView(null, state, null, null, List.of(), List.of());
+		}
+		// The trial instants matter only while the subscription is a trial or one of its two expired states.
+		boolean trialOnly = state != SubscriptionState.ACTIVE;
+		List<FeatureKey> features = plans.findFeatureKeys(plan.getId()).stream().map(FeatureKey::valueOf).toList();
+		List<SubscriptionView.LimitView> limits = plans.findLimits(plan.getId()).stream().map(r -> {
+			LimitKey key = LimitKey.valueOf((String) r[0]);
+			int value = ((Number) r[1]).intValue();
+			boolean enforced = key == LimitKey.ACTIVE_MEMBERS;
+			Integer usage = enforced
+					? (int) memberships.countByCompanyIdAndStatus(companyId, MembershipStatus.ACTIVE) : null;
+			return new SubscriptionView.LimitView(key, value, enforced, usage);
+		}).toList();
+		return new SubscriptionView(new SubscriptionView.PlanRef(plan.getCode(), plan.getName(), plan.getVersion()),
+				state, trialOnly ? subscription.getTrialEndsAt() : null, trialOnly ? subscription.getReadOnlyEndsAt() : null,
+				features, limits);
 	}
 
 	/** Whether the company's plan version includes the feature; false without a plan. */

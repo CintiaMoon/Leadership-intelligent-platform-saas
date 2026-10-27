@@ -21,6 +21,7 @@ import com.example.saas.api.invitation.persistence.InvitationRepository;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.security.RecentAuthentication;
 import com.example.saas.api.tenant.application.CompanyLocks;
+import com.example.saas.api.tenant.application.PlanGate;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
 import com.example.saas.api.tenant.domain.MembershipStatus;
@@ -62,9 +63,11 @@ class InvitationTransactions {
 
 	private final Clock clock;
 
+	private final PlanGate planGate;
+
 	InvitationTransactions(CompanyLocks companyLocks, InvitationLocks invitationLocks, MembershipRepository memberships,
 			InvitationRepository invitations, RecentAuthentication recentAuthentication,
-			OutboxRepository outbox, AuditLog audit, Clock clock) {
+			OutboxRepository outbox, AuditLog audit, Clock clock, PlanGate planGate) {
 		this.companyLocks = companyLocks;
 		this.invitationLocks = invitationLocks;
 		this.memberships = memberships;
@@ -73,14 +76,15 @@ class InvitationTransactions {
 		this.outbox = outbox;
 		this.audit = audit;
 		this.clock = clock;
+		this.planGate = planGate;
 	}
 
 	@Transactional
 	InvitationView create(AuthenticatedUser actor, UUID companyId, EmailAddress address, Role role) {
 		Company company = companyLocks.lockCompany(companyId);
 		Role actorRole = actorRole(actor, companyId);
-		authorize(InvitationRules.decide(InvitationRules.Operation.CREATE, actorRole, role, company.getStatus()), actor,
-				companyId, role);
+		authorize(InvitationRules.decide(InvitationRules.Operation.CREATE, actorRole, role, company.getStatus()),
+				InvitationRules.Operation.CREATE, actor, companyId, actorRole, role);
 		if (memberships.hasLiveMemberWithEmail(companyId, address.normalized())) {
 			throw new InvitationConflictException();
 		}
@@ -113,7 +117,7 @@ class InvitationTransactions {
 		Role actorRole = actorRole(actor, companyId);
 		Invitation invitation = invitationLocks.lockInvitation(companyId, invitationId);
 		authorize(InvitationRules.decide(InvitationRules.Operation.RESEND, actorRole, invitation.getRole(),
-				company.getStatus()), actor, companyId, invitation.getRole());
+				company.getStatus()), InvitationRules.Operation.RESEND, actor, companyId, actorRole, invitation.getRole());
 		if (invitation.getStatus() != InvitationStatus.PENDING) {
 			throw new InvitationConflictException();
 		}
@@ -132,7 +136,7 @@ class InvitationTransactions {
 		Role actorRole = actorRole(actor, companyId);
 		Invitation invitation = invitationLocks.lockInvitation(companyId, invitationId);
 		authorize(InvitationRules.decide(InvitationRules.Operation.REVOKE, actorRole, invitation.getRole(),
-				company.getStatus()), actor, companyId, invitation.getRole());
+				company.getStatus()), InvitationRules.Operation.REVOKE, actor, companyId, actorRole, invitation.getRole());
 		if (invitation.getStatus() != InvitationStatus.PENDING) {
 			throw new InvitationConflictException();
 		}
@@ -149,9 +153,20 @@ class InvitationTransactions {
 			.orElseThrow(CompanyNotFoundException::new);
 	}
 
-	private void authorize(Decision decision, AuthenticatedUser actor, UUID companyId, Role role) {
+	private void authorize(Decision decision, InvitationRules.Operation operation, AuthenticatedUser actor,
+			UUID companyId, Role actorRole, Role role) {
+		if (decision.outcome() == InvitationRules.Outcome.FORBIDDEN) {
+			throw new PermissionDeniedException(actor.userId(), companyId, decision.deniedPermission());
+		}
+		// Under the company lock, where the subscription state is stable (plan Q-10); before the request is called invalid.
+		if (operation == InvitationRules.Operation.REVOKE) {
+			planGate.requireRevokingInvitation(actor.userId(), companyId);
+		}
+		else {
+			planGate.require(actor.userId(), companyId, InvitationRules.permissionFor(operation), actorRole);
+		}
 		switch (decision.outcome()) {
-			case FORBIDDEN -> throw new PermissionDeniedException(actor.userId(), companyId, decision.deniedPermission());
+			case FORBIDDEN -> throw new IllegalStateException("handled above");
 			case INVALID -> throw new ValidationFailedException(
 					List.of(new FieldProblem("role", role == null ? "REQUIRED" : "INVALID")));
 			case ALLOWED -> {

@@ -1,42 +1,42 @@
 # SPEC-PLAN Traceability (implementation status)
 
-- Updated: 2026-10-27, after Phase 2 (domain and service). The migration, the domain classes, the subscription and entitlement services, the sweep and the plan-based member limit exist; no gating, endpoint or screen.
+- Updated: 2026-10-27, after Phase 3 (gating, contract and API). The migration, the domain classes, the services, the sweep, the plan-based member limit, the gating of every existing operation, the two error codes and the read-only `GET .../subscription` exist; no operator script and no screen yet.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL); for the frontend, in the web unit tests and Playwright.
 - Plan: `plan.md` (approved 2026-10-27, Q-01 to Q-23, D-195 to D-217). Spec approved the same day with AC-PLAN-21 to AC-PLAN-25 and the gating, existing-companies, endpoint and operator sections added.
-- Phases: 0, 1 and 2 done; 3 (gating, contract and API), 4 (operator assignment), 5 (frontend), 6 (review and closure) not started.
+- Phases: 0, 1, 2 and 3 done; 4 (operator assignment), 5 (frontend), 6 (review and closure) not started.
 
 | AC | Status | Planned | Evidence so far |
 |---|---|---|---|
 | AC-PLAN-01 | Verified (computation); end-to-end through the API in Phase 3 | Phases 1, 2 | `SubscriptionLifecycleTests.theFirstCompanyOfAUserStartsATrialComputedOnTheServer` (start, end and read-only end computed from the clock, 336 hours each) |
 | AC-PLAN-02 | Partly (the data) | Phases 1, 2 | `PlanSchemaTests.theThreePlansAreSeededWithTheLimitsAndFeaturesOfTheSpec` (every limit and feature of Trial, Starter and Team compared with the spec; the Trial has the full Team set). The service that reads them is Phase 2 |
-| AC-PLAN-03 | Pending | Phase 3 | |
-| AC-PLAN-04 | Pending | Phases 2, 3 | |
+| AC-PLAN-03 | Verified | Phase 3 | `PlanGatingHttpTests.noRouteChangesAPlanAndAClientSuppliedPlanIsIgnored` (no write route; plan and state fields in a request are rejected as unknown fields and the stored plan and state still decide) |
+| AC-PLAN-04 | Verified for the operations that exist (member, invitation and ownership changes); business-record writes and quotas are gated in the table and have no operation yet | Phases 2, 3 | `PlanGatingHttpTests.whileReadOnlyInvitingResendingRoleChangesAndReactivationAreRefused`, `theTrialEndInstantMakesWritesRefusedAtOnceWithNoJobHavingRun`, `StateGatingParityTest` (every write permission rejected while read-only) |
 | AC-PLAN-05 | Verified for members (teams and assessments stay open until the domain spec, D-68, D-206) | Phase 2 | `PlanActiveMemberLimitTests.eightSimultaneousReactivationsAtLimitMinusOneAdmitExactlyOne` (8 at once at 14 of 15: exactly one), `aReactivationUpToTheLimitIsAllowedAndOneBeyondItIsRefused`, `suspendedMembersAreNotCounted`, `anotherCompanysMembersDoNotCountTowardsTheLimit`. The 409 `MEMBER_LIMIT_REACHED` mapping is Phase 3 |
 | AC-PLAN-06 | Not applicable: no billing state exists; the only writers are the application and the operator script | - | To be stated in the closure |
-| AC-PLAN-07 | Pending | Phase 3 | |
-| AC-PLAN-08 | Pending | Phase 3 | |
+| AC-PLAN-07 | Verified | Phase 3 | `PlanGatingHttpTests.anotherCompanysMembersAndOutsidersCannotReadThePlan` (the Owner of another company, a stranger and an unknown ID all get 404) |
+| AC-PLAN-08 | Verified | Phase 3 | `PlanGatingHttpTests.anOwnerAndAnAdminSeeThePlanAndAnAgentAndAViewerDoNot` (Owner and Admin 200; Agent and Viewer 403 `FORBIDDEN`) |
 | AC-PLAN-09 | Verified | Phases 1, 2 | `SubscriptionLifecycleTests.aFailedCompanyCreationLeavesNoSubscriptionAndNoGrant` (rollback leaves no subscription and keeps the slot), `theFirstCompanyOfAUserStartsATrialComputedOnTheServer` (written by `CompanyCreator` in its transaction) |
-| AC-PLAN-10 | Verified at the service; over HTTP in Phase 3 | Phase 2 | `SubscriptionLifecycleTests.aRequestAfterTheEndInstantSeesTheExpiredStateWithoutAnyJobHavingRun` (1 ms before, at, after, for both boundaries; reading writes nothing), `SubscriptionStateTest` |
+| AC-PLAN-10 | Verified (service and HTTP) | Phase 2, 3 | `SubscriptionLifecycleTests.aRequestAfterTheEndInstantSeesTheExpiredStateWithoutAnyJobHavingRun`, `SubscriptionStateTest`, `PlanGatingHttpTests.theTrialEndInstantMakesWritesRefusedAtOnceWithNoJobHavingRun` (1 ms before the end: 201; at the end: 403 `PLAN_RESTRICTED`; the stored state is still TRIALING), `theLastInstantOfTheReadOnlyWindowIsStillReadOnly` |
 | AC-PLAN-11 | Partly (time transitions; the operator side is Phase 4) | Phases 2, 4 | `SubscriptionLifecycleTests.theSweepRecordsEachTimeTransitionOnceWithItsAuditEvent` (a repeat changes nothing and writes no second event), `twoSweepsAtOnceRecordTheTransitionOnce`, `aSweepThatWasDownForLongStepsThroughBothTransitions` |
-| AC-PLAN-12 | Pending (export has no operation yet: tested through the existing `EXPORT_DATA` test route) | Phase 3 | |
-| AC-PLAN-13 | Pending | Phase 3 | |
-| AC-PLAN-14 | Pending (member limit only) | Phase 3 | |
+| AC-PLAN-12 | Verified in the gating table; no export operation exists yet to call over HTTP | Phase 3 | `StateGatingParityTest.theCodeMatchesTheSpecTableForEveryPermissionStateAndRole` (`EXPORT_DATA` rejected in EXPIRED_READ_ONLY, NO_PLAN and EXPIRED_LOCKED; reads stay per matrix); `PlanGatingHttpTests.whileReadOnlyRevokingSuspendingRemovingAndLeavingAreAllowedAndReadsContinue` (reads continue) |
+| AC-PLAN-13 | Verified | Phase 3 | `PlanGatingHttpTests.afterTheReadOnlyWindowOnlyTheOwnerReadsAndNothingElseIsAllowed` (Owner reads the company and members; Admin, Agent and Viewer 403 `PLAN_RESTRICTED`). The deletion request stays allowed in the table (`StateGatingParityTest`); the operation is slice 007 |
+| AC-PLAN-14 | Verified for members at the limit check (a downgrade is an operator assignment, Phase 4); teams and assessments stay open (D-68) | Phases 3, 4 | `PlanActiveMemberLimitTests` (refusal beyond the limit; existing members and data are never removed) |
 | AC-PLAN-15 | Verified | Phases 1, 2 | `SubscriptionLifecycleTests.aSecondCompanyOfTheSameUserHasNoPlanAndNoAuditedTransition`; at the schema `PlanSchemaTests.aUserHasOneTrialGrantAndItReferencesNoCompany`, `MigrationV15OnExistingDataTest` |
 | AC-PLAN-16 | Verified at the schema (the service reading the latest version is Phase 2) | Phases 1, 2 | `PlanSchemaTests.aPlanVersionCanNeverBeChangedOnlyAddedAndARowCannotBeAddedToOneThatIsInUse`, `aLimitOrFeatureCannotBeAddedToAVersionInUseEvenForAKeyItLacks`, `aNewVersionIsAddedWithItsOwnRowsAndAnExistingSubscriptionKeepsItsVersion` (a new version is added, the existing subscription keeps version 1; the test rolls back so no version is left behind) |
 | AC-PLAN-17 | Verified (application table and database trigger) | Phase 2 | `SubscriptionTransitionsTest` (all 25 pairs), `PlanSchemaTests.everyPairOfStatesIsAllowedOrRefusedExactlyAsTheSpecSays` |
 | AC-PLAN-18 | Verified | Phase 2 | `SubscriptionStateTest.aTrialRunsUntilItsEndInstantAndIsExpiredAtIt` (expired at the end instant, not before) |
-| AC-PLAN-19 | Pending | Phase 3 | |
-| AC-PLAN-20 | Pending | Phase 3 | |
+| AC-PLAN-19 | Verified | Phase 3 | `PlanGatingHttpTests.aCompanyWithNoPlanCanBeReadButNotInvitedToOrChanged` (reads 200; invitation and role change 403 `PLAN_RESTRICTED` with state NO_PLAN); `InvitationAcceptTests.anInvitationCannotBeAcceptedWhileTheCompanyIsReadOnlyOrLockedAndItStaysPending`; exports and business-record writes in `StateGatingParityTest` |
+| AC-PLAN-20 | Verified | Phase 3 | `PlanGatingHttpTests.whileReadOnlyRevokingSuspendingRemovingAndLeavingAreAllowedAndReadsContinue`, `whileReadOnlyInvitingResendingRoleChangesAndReactivationAreRefused`; `OwnershipPlanGatingTests` (transfer start, accept and cancel allowed while read-only and with no plan, refused when locked) |
 | AC-PLAN-21 | Pending | Phase 4 | |
-| AC-PLAN-22 | Pending | Phase 3 | |
+| AC-PLAN-22 | Verified | Phase 3 | `PlanGatingHttpTests.theTrialEndInstantMakesWritesRefusedAtOnceWithNoJobHavingRun` (403, code `PLAN_RESTRICTED`, `subscriptionState`), `aRefusalBecauseOfTheStateIsAuditedLikeAPermissionDenialOncePerWindow` (one `tenant.authorization.denied` row, reason `plan_restricted:invite_members`, the state as the before value), `aRestrictedRequestIsRefusedBeforeAnyLockSoItNeverQueuesForTheCompany`, `aRoleThatNeverHoldsThePermissionIsToldForbiddenNotRestricted`, `reactivatingAtTheLimitIsRefusedWithTheMemberLimitCode` (409 `MEMBER_LIMIT_REACHED`) |
 | AC-PLAN-23 | Verified | Phase 1 | `MigrationV15OnExistingDataTest.v15GivesEveryExistingCompanyNoPlanAndRecordsWhoHasAlreadyCreatedOne` (a database migrated to V14 with four companies, one of them pending deletion, then to V15: all four NO_PLAN with no plan and no trial, nothing lost, every constraint validated), `v15OnAnEmptyDatabaseCreatesTheCatalogAndNothingElse` |
-| AC-PLAN-24 | Pending | Phase 3 | |
+| AC-PLAN-24 | Verified | Phase 3 | `StateGatingParityTest.theCodeMatchesTheSpecTableForEveryPermissionStateAndRole` (the spec table is parsed; 460 cells = 23 permissions x 5 states x 4 roles), `revokingAndAcceptingAnInvitationFollowTheirOwnRows`, `theStateOnlyTakesAwayAndNeverGrantsWhatTheRoleLacks`; a mutation of one cell fails it |
 | AC-PLAN-25 | Verified | Phase 2 | `SubscriptionLifecycleTests.eightSimultaneousFirstCompaniesOfOneUserYieldExactlyOneTrial` (through `SubscriptionService.startFor`); at the schema `PlanSchemaTests.simultaneousFirstCompanyGrantsForOneUserAdmitExactlyOne` |
-| AC-MEM-17 | Pending (closes here: the `ActiveMemberLimit` hook of slice 003) | Phases 2, 3 | |
-| AC-INV-12 | Pending (closes here: the hook of slice 004) | Phases 2, 3 | |
-| AC-INV-26 | Pending (closes here) | Phases 2, 3 | |
-| AC-TEN-12 | Pending | Phase 3 | |
-| AC-TEN-14 | Pending (through the export test route) | Phase 3 | |
+| AC-MEM-17 | Verified (closed here) | Phases 2, 3 | `PlanActiveMemberLimitTests` (the plan-based limit replaces the unlimited default), `ReactivationLimitHookTests` (409 `MEMBER_LIMIT_REACHED`, the member stays suspended), `PlanGatingHttpTests.reactivatingAtTheLimitIsRefusedWithTheMemberLimitCode` |
+| AC-INV-12 | Verified (closed here) | Phases 2, 3 | `InvitationAcceptLimitTests` (acceptance at the limit through the real `ActiveMemberLimit` hook, which is now the plan limit) and `PlanActiveMemberLimitTests`; creating an invitation is never capped by the limit (`PlanGatingHttpTests.whileTheTrialRunsTheMatrixAloneDecidesAndNothingIsRestricted`) |
+| AC-INV-26 | Verified (closed here) | Phases 2, 3 | `InvitationAcceptTests.anInvitationCannotBeAcceptedWhileTheCompanyIsReadOnlyOrLockedAndItStaysPending` and the member limit above; the invitation page keeps its own 409 `CONFLICT` wording |
+| AC-TEN-12 | Verified | Phase 3 | `PlanGatingHttpTests.noRouteChangesAPlanAndAClientSuppliedPlanIsIgnored` (POST, PUT, PATCH and DELETE on the subscription path are refused); `MANAGE_PLANS` has no endpoint |
+| AC-TEN-14 | Verified in the gating table; no export operation exists yet to call over HTTP | Phase 3 | `StateGatingParityTest` (`EXPORT_DATA` per matrix while the subscription is TRIALING or ACTIVE, rejected otherwise) |
 
 ## Phase 0
 - D-195 to D-217 are Approved in the register (user: "Approve all as written", and for Q-02, Q-05, Q-09 and Q-12 the answers "use your proposal", "proposal accepted", and "Literal spec text" for Q-09). D-68 is Partly decided: its deferral unblocks this slice (D-196), the domain spec stays open for the team and assessment quotas and slice 007.
@@ -65,3 +65,19 @@
 - **Invitation acceptance** already called `ActiveMemberLimit`, so it uses the plan limit without a code change; a test of acceptance at the limit through HTTP is Phase 3 (the error code is mapped there).
 - **Mutation checks run (restored afterwards):** `<` changed to `<=` in the limit (2 tests fail), the trial boundary made inclusive (4 fail), the first-company grant always refused (3 fail), one cell of the transition table changed (1 fails).
 - **Checks run:** `./mvnw -o verify` in `services/api`: 667 tests, 0 failures, 2 skipped (skipped before this phase). Not run: frontend checks (no frontend change), a clean-database Flyway run beyond what the Testcontainers tests already do, independent code and security review (Phase 6).
+
+## Phase 3: gating, contract and API
+- **Added:** the second dimension of `CompanyPolicy` (`check`, `permits` with a state, `stateAllows`, `stateAllowsRevokingInvitation`, `stateAllowsInvitationAcceptance`), `PlanGate` (the application side, used before any lock and again under the company lock), `PlanRestrictedException` and `MemberLimitReachedException` with their handlers, the error codes `PLAN_RESTRICTED` (403, with `subscriptionState`) and `MEMBER_LIMIT_REACHED` (409), `GET /api/v1/companies/{companyId}/subscription`, the security rule for it, `OpenAPI` (path, schemas, error codes), the regenerated `schema.d.ts` and a Postman request.
+- **Every call site goes through the one policy:** company reads (`CompanyAuthorizationService`), member changes (`MembershipChangeAuthorizer`), invitation create, resend and revoke, invitation acceptance, ownership initiate, cancel and accept. Role and company status are decided first, then the state; a caller whose role never holds the permission gets `FORBIDDEN`, whatever the state.
+- **Derived decisions, not asked (for your check):**
+  1. The denial audit of a state refusal is a `tenant.authorization.denied` row with reason `plan_restricted:<permission>` and the state as the before value, once per user, company, permission and state per window, like a permission denial.
+  2. An Admin reading the plan in EXPIRED_LOCKED gets 403 `PLAN_RESTRICTED` (the caller is a member), not 404.
+  3. Accepting an invitation in a restricted state is a 409 `CONFLICT` after the address matched, the same answer as the member limit, so the invitee is not told the company's plan state.
+  4. Revoking and resending share one matrix permission, so the state table has a separate function for revoking; the parity test checks both rows.
+  5. A permission added to the matrix without a rule for the plan states stops the application at startup (the static initializer), so it cannot stay open silently.
+  6. `EntitlementService.permits` of Q-23 is the `CompanyPolicy` method, not an `EntitlementService` method.
+  7. `EntitlementService.state` reads the columns with a query, never an entity, so a decision under the lock sees an operator's committed change (Phase 4 script must lock the company first).
+- **Existing tests changed:** 17 test classes insert their companies by SQL; each insert now also creates a running Trial subscription (what a company created through the API starts with), because a company with no subscription row is read as NO_PLAN and refused. `OwnershipTestBase` uses an ACTIVE Team subscription because its concurrency tests move the clock by days. `ReactivationLimitHookTests` now expects `MEMBER_LIMIT_REACHED` instead of `CONFLICT`.
+- **Not tested here:** moving the clock by days over HTTP (a session lasts hours and is tied to the real time it was created, so the HTTP tests place a company at the position they need and move the clock by minutes; the day-scale transitions are tested at the service in Phase 2); the frontend (Phase 5); export and business-record routes (they do not exist yet; the table is tested).
+- **Mutation checks run (restored afterwards):** the leave cell changed in the table (parity and HTTP fail), reads no longer Owner-only when locked (3 fail), the gate removed from the authorization service (3 fail), acceptance not gated (1 fails), both ownership gates removed (2 fail).
+- **Checks run:** `./mvnw -o verify` in `services/api` : 696 tests, 0 failures, 2 skipped (skipped before this phase), `npm run lint` in `contracts` (valid; 2 warnings from rules `info-license` and `no-server-example-com`, both about the existing `info` and `servers` blocks), `npm run gen:api` in `apps/web` (types regenerated), and in `apps/web` `typecheck`, `lint` and `test` (185 tests). Not run: Playwright, `gen:api:check` in CI form (the generated file is the working copy), the independent code and security review (Phase 6).

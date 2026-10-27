@@ -13,7 +13,9 @@ import com.example.saas.api.security.ReauthenticationRequiredException;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.application.DenialAudit;
 import com.example.saas.api.tenant.application.MembershipConflictException;
+import com.example.saas.api.tenant.application.MemberLimitReachedException;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
+import com.example.saas.api.tenant.application.PlanRestrictedException;
 import com.example.saas.api.ratelimit.RateLimitedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -127,6 +129,27 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			}
 		});
 		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem(ErrorCode.FORBIDDEN, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(PlanRestrictedException.class)
+	ResponseEntity<Object> handlePlanRestricted(PlanRestrictedException ex, HttpServletRequest request) {
+		// Written here, after the service's transaction has ended and returned its connection (D-125).
+		try {
+			denialAudit.restricted(ex.userId(), ex.companyId(), ex.permission(), ex.state());
+		}
+		catch (RuntimeException e) {
+			log.error("Denial audit could not be written: {}", e.getClass().getName());
+		}
+		ProblemDetail problem = problem(ErrorCode.PLAN_RESTRICTED, request.getRequestURI());
+		// The caller is a member of the company, so the state is theirs to know (plan Q-10).
+		problem.setProperty("subscriptionState", ex.state().name());
+		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+	}
+
+	@ExceptionHandler(MemberLimitReachedException.class)
+	ResponseEntity<Object> handleMemberLimitReached(MemberLimitReachedException ex, HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+			.body(problem(ErrorCode.MEMBER_LIMIT_REACHED, request.getRequestURI()));
 	}
 
 	@ExceptionHandler(RateLimitedException.class)

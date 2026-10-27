@@ -15,6 +15,7 @@ import com.example.saas.api.ratelimit.RateLimitStoreUnavailableException;
 import com.example.saas.api.ratelimit.RateLimiter;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.application.PlanGate;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
 import com.example.saas.api.tenant.domain.MembershipStatus;
 import com.example.saas.api.tenant.domain.Permission;
@@ -44,13 +45,16 @@ public class InvitationService {
 
 	private final Clock clock;
 
+	private final PlanGate planGate;
+
 	InvitationService(InvitationTransactions transactions, MembershipRepository memberships,
-			InvitationRepository invitations, RateLimiter rateLimiter, Clock clock) {
+			InvitationRepository invitations, RateLimiter rateLimiter, Clock clock, PlanGate planGate) {
 		this.transactions = transactions;
 		this.memberships = memberships;
 		this.invitations = invitations;
 		this.rateLimiter = rateLimiter;
 		this.clock = clock;
+		this.planGate = planGate;
 	}
 
 	/**
@@ -111,6 +115,13 @@ public class InvitationService {
 		Permission refused = InvitationRules.refusedWhateverTheRole(operation, role);
 		if (refused != null) {
 			throw new PermissionDeniedException(actor.userId(), companyId, refused);
+		}
+		// Before any lock and before anything is counted: a restricted company is refused without using an allowance.
+		if (operation == InvitationRules.Operation.REVOKE) {
+			planGate.requireRevokingInvitation(actor.userId(), companyId);
+		}
+		else {
+			planGate.require(actor.userId(), companyId, InvitationRules.permissionFor(operation), role);
 		}
 	}
 

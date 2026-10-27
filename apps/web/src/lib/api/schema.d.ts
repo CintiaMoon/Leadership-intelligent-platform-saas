@@ -270,6 +270,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/companies/{companyId}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the company's plan and subscription
+         * @description Requires the "View plan and entitlements" permission: Owner and Admin (403 `FORBIDDEN` for Agent and Viewer, 404
+         *     for a non-member). Once the plan has ended (`EXPIRED_LOCKED`) only the Owner may read it, and an Admin gets 403
+         *     `PLAN_RESTRICTED`. Every value comes from the server: the state is evaluated from the trial instants and the
+         *     clock at the time of the request, so it is already expired after the end instant even if no scheduled job has
+         *     recorded it. There is no operation that changes a plan: an operator assigns plans with a reviewed script.
+         *     Limits on teams and active assessments are listed with `enforced: false` and no usage until those features
+         *     exist (D-68); the limit on active members is enforced and reports its usage.
+         */
+        get: operations["getSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/companies/{companyId}/members": {
         parameters: {
             query?: never;
@@ -353,8 +379,9 @@ export interface paths {
         put?: never;
         /**
          * Reactivate a suspended member
-         * @description SUSPENDED to ACTIVE, with the preserved role. Rejected with 409 if the company's plan has no room for another
-         *     active member (AC-MEM-17; enforced once plans exist, slice 006).
+         * @description SUSPENDED to ACTIVE, with the preserved role. Rejected with 409 `MEMBER_LIMIT_REACHED` if the company's plan has
+         *     no room for another active member (AC-MEM-17, AC-PLAN-05), and with 403 `PLAN_RESTRICTED` while the subscription
+         *     is expired or has no plan.
          */
         post: operations["reactivateMember"];
         delete?: never;
@@ -688,6 +715,49 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /**
+         * @description The effective state of a subscription. `TRIALING` until the trial end instant, then `EXPIRED_READ_ONLY` for 14
+         *     days, then `EXPIRED_LOCKED`. `ACTIVE` is a plan assigned by an operator; `NO_PLAN` is a company that has none
+         *     (every company that existed before plans, and a user's second and later companies).
+         * @enum {string}
+         */
+        SubscriptionState: "TRIALING" | "EXPIRED_READ_ONLY" | "EXPIRED_LOCKED" | "ACTIVE" | "NO_PLAN";
+        /** @enum {string} */
+        FeatureKey: "CORE_SCORING" | "REPORTS" | "HISTORICAL_COMPARISONS" | "CSV_EXPORT" | "ADVANCED_ANALYTICS" | "BENCHMARKING" | "ANOMALY_DETECTION" | "EXTENDED_HISTORICAL_REPORTING";
+        /** @enum {string} */
+        LimitKey: "TEAMS" | "ACTIVE_MEMBERS" | "ACTIVE_ASSESSMENTS";
+        PlanReference: {
+            /** @enum {string} */
+            code: "TRIAL" | "STARTER" | "TEAM";
+            name: string;
+            /** @description The version of the plan the company was given; a changed plan is a new version (AC-PLAN-16). */
+            version: number;
+        };
+        PlanLimit: {
+            key: components["schemas"]["LimitKey"];
+            value: number;
+            /** @description Whether the API refuses beyond this limit today. Only `ACTIVE_MEMBERS` is enforced. */
+            enforced: boolean;
+            /** @description The current count for an enforced limit; null otherwise. */
+            usage: number | null;
+        };
+        Subscription: {
+            /** @description Null when the company has no plan. */
+            plan: components["schemas"]["PlanReference"] | null;
+            state: components["schemas"]["SubscriptionState"];
+            /**
+             * Format: date-time
+             * @description When the trial ends. Present in `TRIALING` and the two expired states; null otherwise.
+             */
+            trialEndsAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the read-only window ends. Present in `TRIALING` and the two expired states; null otherwise.
+             */
+            readOnlyEndsAt: string | null;
+            features: components["schemas"]["FeatureKey"][];
+            limits: components["schemas"]["PlanLimit"][];
+        };
         /** @enum {string} */
         MembershipStatus: "ACTIVE" | "SUSPENDED" | "REMOVED";
         ChangeMemberRoleRequest: {
@@ -803,10 +873,13 @@ export interface components {
          * @description Stable application error code (ADR-005). The frontend maps codes to messages. `REAUTHENTICATION_REQUIRED`
          *     (403) is returned by the sensitive operations (promoting or demoting an Admin, starting and accepting an ownership
          *     transfer now; company deletion and export in later slices) when the session is valid but the last login or
-         *     step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry.
+         *     step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry. `PLAN_RESTRICTED` (403) is returned
+         *     when the caller's role holds the permission but the company's subscription state does not allow it; the problem
+         *     then carries `subscriptionState`. `MEMBER_LIMIT_REACHED` (409) is returned when the plan's limit on active members
+         *     is reached (reactivating a member); accepting an invitation keeps its own 409 `CONFLICT` wording.
          * @enum {string}
          */
-        ErrorCode: "VALIDATION_FAILED" | "REQUEST_REJECTED" | "INVALID_CREDENTIALS" | "TOKEN_INVALID" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_REJECTED" | "REAUTHENTICATION_REQUIRED" | "RATE_LIMITED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
+        ErrorCode: "VALIDATION_FAILED" | "REQUEST_REJECTED" | "INVALID_CREDENTIALS" | "TOKEN_INVALID" | "UNAUTHENTICATED" | "FORBIDDEN" | "PLAN_RESTRICTED" | "NOT_FOUND" | "CONFLICT" | "MEMBER_LIMIT_REACHED" | "CSRF_REJECTED" | "REAUTHENTICATION_REQUIRED" | "RATE_LIMITED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
         FieldError: {
             field: string;
             /** @description Stable field error code. One of REQUIRED, INVALID, INVALID_LENGTH, INVALID_EMAIL, INVALID_NAME, TOO_SHORT, TOO_LONG, BREACHED_PASSWORD. */
@@ -823,6 +896,8 @@ export interface components {
             instance?: string;
             code: components["schemas"]["ErrorCode"];
             errors?: components["schemas"]["FieldError"][];
+            /** @description Only with PLAN_RESTRICTED, the effective state that refused the request. */
+            subscriptionState?: components["schemas"]["SubscriptionState"];
         };
     };
     responses: {
@@ -868,7 +943,10 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The caller is an active member of the company but lacks the permission (D-108). */
+        /**
+         * @description The caller is an active member of the company but lacks the permission (`FORBIDDEN`, D-108), or the company's
+         *     subscription state does not allow the operation (`PLAN_RESTRICTED`, with `subscriptionState`).
+         */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -891,7 +969,7 @@ export interface components {
         };
         /**
          * @description The change is not possible in the current state (for example suspending a suspended member), or it would touch
-         *     the Owner. Nothing was changed.
+         *     the Owner (`CONFLICT`), or the plan's member limit is reached (`MEMBER_LIMIT_REACHED`). Nothing was changed.
          */
         Conflict: {
             headers: {
@@ -1293,6 +1371,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyDetails"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The subscription. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subscription"];
                 };
             };
             401: components["responses"]["Unauthorized"];

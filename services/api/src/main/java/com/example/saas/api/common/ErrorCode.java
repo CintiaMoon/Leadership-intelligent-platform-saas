@@ -15,6 +15,8 @@ public enum ErrorCode {
 	FORBIDDEN(HttpStatus.FORBIDDEN, "The request is not permitted."),
 	NOT_FOUND(HttpStatus.NOT_FOUND, "The resource was not found."),
 	CONFLICT(HttpStatus.CONFLICT, "The request conflicts with the current state."),
+	PLAN_RESTRICTED(HttpStatus.FORBIDDEN, "The plan of the company does not allow this right now."),
+	MEMBER_LIMIT_REACHED(HttpStatus.CONFLICT, "The company has reached the member limit of its plan."),
 	CSRF_REJECTED(HttpStatus.FORBIDDEN, "The request was rejected."),
 	REAUTHENTICATION_REQUIRED(HttpStatus.FORBIDDEN, "Confirm your password to continue."),
 	TOKEN_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "The link is invalid or has expired."),

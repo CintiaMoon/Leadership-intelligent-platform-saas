@@ -27,11 +27,14 @@ public class CompanyAuthorizationService {
 
 	private final DenialAudit denialAudit;
 
+	private final PlanGate planGate;
+
 	CompanyAuthorizationService(MembershipRepository memberships, CompanyRepository companies,
-			DenialAudit denialAudit) {
+			DenialAudit denialAudit, PlanGate planGate) {
 		this.memberships = memberships;
 		this.companies = companies;
 		this.denialAudit = denialAudit;
+		this.planGate = planGate;
 	}
 
 	/** For permissions that act on no other membership. */
@@ -43,6 +46,7 @@ public class CompanyAuthorizationService {
 	 * @param targetRole the role of the membership being acted on, for permissions that depend on it
 	 * @throws CompanyNotFoundException if the caller has no ACTIVE membership, or the company does not exist
 	 * @throws PermissionDeniedException if the caller is an ACTIVE member whose role does not hold the permission
+	 * @throws PlanRestrictedException the role holds it but the subscription state does not allow it
 	 */
 	public AuthorizedCompany require(UUID userId, UUID companyId, Permission permission, Role targetRole) {
 		Optional<Membership> membership = memberships.findByCompanyIdAndUserIdAndStatus(companyId, userId,
@@ -57,6 +61,8 @@ public class CompanyAuthorizationService {
 			denialAudit.denied(userId, companyId, permission);
 			throw new PermissionDeniedException();
 		}
+		// The role holds it; the subscription state may still take it away (403 PLAN_RESTRICTED, plan Q-10).
+		planGate.require(userId, companyId, permission, role);
 		return new AuthorizedCompany(companyId, userId, role);
 	}
 

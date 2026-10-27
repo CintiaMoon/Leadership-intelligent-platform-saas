@@ -83,7 +83,7 @@ class MemberApiTests extends AuthIntegrationTest {
 		Map<Role, Seat> seats = new EnumMap<>(Role.class);
 		UUID companyId = tx.execute(s -> {
 			UUID id = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Members', now(), now()) RETURNING id",
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Members', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c",
 					UUID.class);
 			for (Role role : Role.values()) {
 				Person p = people.get(role);
@@ -381,7 +381,7 @@ class MemberApiTests extends AuthIntegrationTest {
 		Person agent = team.person(Role.AGENT);
 		UUID otherCompany = tx.execute(s -> {
 			UUID id = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Other', now(), now()) RETURNING id",
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Other', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c",
 					UUID.class);
 			join(id, newUserId(), "OWNER", "ACTIVE");
 			join(id, agent.userId(), "VIEWER", "ACTIVE");
@@ -545,7 +545,7 @@ class MemberApiTests extends AuthIntegrationTest {
 			Map<Role, UUID> targets = new EnumMap<>(Role.class);
 			UUID companyId = tx.execute(s -> {
 				UUID id = jdbc.queryForObject(
-						"INSERT INTO company (name, created_at, updated_at) VALUES ('Matrix', now(), now()) RETURNING id",
+						"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Matrix', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c",
 						UUID.class);
 				if (actorRole == Role.OWNER) {
 					join(id, actor.userId(), "OWNER", "ACTIVE");

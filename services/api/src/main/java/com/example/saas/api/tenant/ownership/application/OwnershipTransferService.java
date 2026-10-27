@@ -8,6 +8,7 @@ import com.example.saas.api.ratelimit.RateLimiter;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.security.RecentAuthentication;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.application.PlanGate;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
 import com.example.saas.api.tenant.domain.MembershipStatus;
 import com.example.saas.api.tenant.domain.Permission;
@@ -45,15 +46,18 @@ public class OwnershipTransferService {
 
 	private final Clock clock;
 
+	private final PlanGate planGate;
+
 	OwnershipTransferService(OwnershipTransferTransactions transactions, MembershipRepository memberships,
 			OwnershipTransferRepository transfers, RecentAuthentication recentAuthentication, RateLimiter rateLimiter,
-			Clock clock) {
+			Clock clock, PlanGate planGate) {
 		this.transactions = transactions;
 		this.memberships = memberships;
 		this.transfers = transfers;
 		this.recentAuthentication = recentAuthentication;
 		this.rateLimiter = rateLimiter;
 		this.clock = clock;
+		this.planGate = planGate;
 	}
 
 	/**
@@ -126,6 +130,7 @@ public class OwnershipTransferService {
 		if (refused != null) {
 			throw new PermissionDeniedException(actor.userId(), companyId, refused);
 		}
+		planGate.require(actor.userId(), companyId, TransferRules.permissionFor(operation), role);
 	}
 
 	private Role requireActiveMember(AuthenticatedUser actor, UUID companyId) {

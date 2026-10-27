@@ -51,7 +51,8 @@ public final class InvitationRules {
 	private InvitationRules() {
 	}
 
-	private static Permission permissionFor(Operation operation) {
+	/** The matrix row an operation needs. */
+	public static Permission permissionFor(Operation operation) {
 		return operation == Operation.CREATE ? Permission.INVITE_MEMBERS : Permission.REVOKE_OR_RESEND_INVITATIONS;
 	}
 

@@ -18,6 +18,7 @@ import com.example.saas.api.invitation.persistence.Invitation;
 import com.example.saas.api.invitation.persistence.InvitationRepository;
 import com.example.saas.api.tenant.application.ActiveMemberLimit;
 import com.example.saas.api.tenant.application.CompanyLocks;
+import com.example.saas.api.tenant.application.PlanGate;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.domain.CompanyPolicy;
 import com.example.saas.api.tenant.domain.CompanyStatus;
@@ -52,19 +53,22 @@ class InvitationAcceptTransactions {
 
 	private final ActiveMemberLimit memberLimit;
 
+	private final PlanGate planGate;
+
 	private final AuditLog audit;
 
 	private final Clock clock;
 
 	InvitationAcceptTransactions(InvitationRepository invitations, CompanyLocks companyLocks,
 			InvitationLocks invitationLocks, MembershipRepository memberships, UserAccountRepository users,
-			ActiveMemberLimit memberLimit, AuditLog audit, Clock clock) {
+			ActiveMemberLimit memberLimit, PlanGate planGate, AuditLog audit, Clock clock) {
 		this.invitations = invitations;
 		this.companyLocks = companyLocks;
 		this.invitationLocks = invitationLocks;
 		this.memberships = memberships;
 		this.users = users;
 		this.memberLimit = memberLimit;
+		this.planGate = planGate;
 		this.audit = audit;
 		this.clock = clock;
 	}
@@ -99,7 +103,10 @@ class InvitationAcceptTransactions {
 		if (memberships.hasLiveMembership(companyId, userId)) {
 			throw new InvitationConflictException();
 		}
-		if (!memberLimit.hasRoomForAnotherActiveMember(companyId)) {
+		// Accepting adds a member, so it needs a running subscription, checked under the lock together with the limit
+		// (plan Q-10, Q-11). The invitee is not a member and is not told the state: the page shows its own wording.
+		if (!CompanyPolicy.stateAllowsInvitationAcceptance(planGate.state(companyId))
+				|| !memberLimit.hasRoomForAnotherActiveMember(companyId)) {
 			throw new InvitationConflictException();
 		}
 

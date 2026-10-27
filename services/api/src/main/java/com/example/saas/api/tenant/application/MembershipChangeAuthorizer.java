@@ -39,9 +39,12 @@ public class MembershipChangeAuthorizer {
 
 	private final CompanyLocks locks;
 
-	MembershipChangeAuthorizer(MembershipRepository memberships, CompanyLocks locks) {
+	private final PlanGate planGate;
+
+	MembershipChangeAuthorizer(MembershipRepository memberships, CompanyLocks locks, PlanGate planGate) {
 		this.memberships = memberships;
 		this.locks = locks;
+		this.planGate = planGate;
 	}
 
 	/**
@@ -64,6 +67,9 @@ public class MembershipChangeAuthorizer {
 		if (refused != null) {
 			throw new PermissionDeniedException(userId, companyId, refused);
 		}
+		// The subscription state is checked here too, before any lock, so a restricted company cannot be queued for.
+		Permission needed = MembershipChanges.neededPermission(operation);
+		planGate.require(userId, companyId, needed, unlockedRole);
 		Company company = locks.lockCompany(companyId);
 		Membership actor;
 		Membership target;
@@ -79,11 +85,15 @@ public class MembershipChangeAuthorizer {
 		}
 		ChangeDecision decision = MembershipChanges.decide(operation, actor.getRole(), target.getRole(),
 				target.getStatus(), actor.getId().equals(target.getId()), newRole, company.getStatus());
+		if (decision.outcome() == ChangeDecision.Outcome.FORBIDDEN) {
+			// Audited by the exception handler once this transaction has ended (see PermissionDeniedException).
+			throw new PermissionDeniedException(userId, companyId, decision.deniedPermission());
+		}
+		// Again under the lock, which is where the state is stable against an operator plan change (plan Q-10). A
+		// request the state never allows is refused before it is told it conflicts or is invalid.
+		planGate.require(userId, companyId, needed, actor.getRole());
 		switch (decision.outcome()) {
-			case FORBIDDEN -> {
-				// Audited by the exception handler once this transaction has ended (see PermissionDeniedException).
-				throw new PermissionDeniedException(userId, companyId, decision.deniedPermission());
-			}
+			case FORBIDDEN -> throw new IllegalStateException("handled above");
 			case CONFLICT -> throw new MembershipConflictException();
 			case INVALID -> throw new ValidationFailedException(
 					List.of(new FieldProblem("role", newRole == null ? "REQUIRED" : "INVALID")));
