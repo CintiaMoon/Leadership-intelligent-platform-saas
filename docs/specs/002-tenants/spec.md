@@ -32,6 +32,7 @@ The matrix assumes Agents work with the product's core business records.
 - Revoking or resending an invitation has the same role permissions as inviting, and an actor can revoke or resend only invitations for roles that actor may invite (SPEC-INV, AC-INV-17); its semantics are decision D-25.
 - Some operations are not role-based: creating a company (any verified user, see "Company creation"), accepting an invitation (the invited user with a matching verified email, SPEC-INV), and accepting an ownership transfer (the named recipient, SPEC-OWN).
 - Any operation not listed in the matrix or in the previous bullet is denied.
+- The matrix is combined with the company's subscription state (SPEC-PLAN, "Gating by subscription state"): after a trial ends, or while a company has no plan, several rows are refused for every role. A refusal for that reason is 403 `PLAN_RESTRICTED` (plan decision D-202).
 - While a company is PENDING_DELETION, every state-changing row of the matrix is denied except the Owner's cancellation of the deletion, including "Leave the company" (SPEC-DEL, AC-DEL-12).
 
 | Permission | Owner | Admin | Agent | Viewer |
