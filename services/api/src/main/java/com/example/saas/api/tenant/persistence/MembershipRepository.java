@@ -50,6 +50,9 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 			+ "com.example.saas.api.tenant.domain.MembershipStatus.SUSPENDED)")
 	boolean hasLiveMemberWithEmail(@Param("companyId") UUID companyId, @Param("email") String email);
 
+	/** How many memberships of the company have this status; the plan limit counts ACTIVE ones (Q-11). */
+	long countByCompanyIdAndStatus(UUID companyId, com.example.saas.api.tenant.domain.MembershipStatus status);
+
 	/** {@code SELECT ... FOR UPDATE} on one membership of the company, after the company row (D-125). Use {@code CompanyLocks}. */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select m from Membership m where m.companyId = :companyId and m.id = :id")

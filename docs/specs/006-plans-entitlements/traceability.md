@@ -1,37 +1,37 @@
 # SPEC-PLAN Traceability (implementation status)
 
-- Updated: 2026-10-27, after Phase 1 (schema). Only the migration and its tests exist; no service, endpoint or screen.
+- Updated: 2026-10-27, after Phase 2 (domain and service). The migration, the domain classes, the subscription and entitlement services, the sweep and the plan-based member limit exist; no gating, endpoint or screen.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL); for the frontend, in the web unit tests and Playwright.
 - Plan: `plan.md` (approved 2026-10-27, Q-01 to Q-23, D-195 to D-217). Spec approved the same day with AC-PLAN-21 to AC-PLAN-25 and the gating, existing-companies, endpoint and operator sections added.
-- Phases: 0 and 1 done; 2 (domain and service), 3 (gating, contract and API), 4 (operator assignment), 5 (frontend), 6 (review and closure) not started.
+- Phases: 0, 1 and 2 done; 3 (gating, contract and API), 4 (operator assignment), 5 (frontend), 6 (review and closure) not started.
 
 | AC | Status | Planned | Evidence so far |
 |---|---|---|---|
-| AC-PLAN-01 | Pending | Phases 1, 2 | |
+| AC-PLAN-01 | Verified (computation); end-to-end through the API in Phase 3 | Phases 1, 2 | `SubscriptionLifecycleTests.theFirstCompanyOfAUserStartsATrialComputedOnTheServer` (start, end and read-only end computed from the clock, 336 hours each) |
 | AC-PLAN-02 | Partly (the data) | Phases 1, 2 | `PlanSchemaTests.theThreePlansAreSeededWithTheLimitsAndFeaturesOfTheSpec` (every limit and feature of Trial, Starter and Team compared with the spec; the Trial has the full Team set). The service that reads them is Phase 2 |
 | AC-PLAN-03 | Pending | Phase 3 | |
 | AC-PLAN-04 | Pending | Phases 2, 3 | |
-| AC-PLAN-05 | Pending (member limit only; teams and assessments stay open until the domain spec, D-68, D-206) | Phase 2, 3 | |
+| AC-PLAN-05 | Verified for members (teams and assessments stay open until the domain spec, D-68, D-206) | Phase 2 | `PlanActiveMemberLimitTests.eightSimultaneousReactivationsAtLimitMinusOneAdmitExactlyOne` (8 at once at 14 of 15: exactly one), `aReactivationUpToTheLimitIsAllowedAndOneBeyondItIsRefused`, `suspendedMembersAreNotCounted`, `anotherCompanysMembersDoNotCountTowardsTheLimit`. The 409 `MEMBER_LIMIT_REACHED` mapping is Phase 3 |
 | AC-PLAN-06 | Not applicable: no billing state exists; the only writers are the application and the operator script | - | To be stated in the closure |
 | AC-PLAN-07 | Pending | Phase 3 | |
 | AC-PLAN-08 | Pending | Phase 3 | |
-| AC-PLAN-09 | Partly (the database side) | Phases 1, 2 | The trial grant and the subscription are ordinary rows that Phase 2 writes in the company-creation transaction; nothing to test yet on the transaction itself |
-| AC-PLAN-10 | Pending | Phase 2 | |
-| AC-PLAN-11 | Pending | Phases 2, 4 | |
+| AC-PLAN-09 | Verified | Phases 1, 2 | `SubscriptionLifecycleTests.aFailedCompanyCreationLeavesNoSubscriptionAndNoGrant` (rollback leaves no subscription and keeps the slot), `theFirstCompanyOfAUserStartsATrialComputedOnTheServer` (written by `CompanyCreator` in its transaction) |
+| AC-PLAN-10 | Verified at the service; over HTTP in Phase 3 | Phase 2 | `SubscriptionLifecycleTests.aRequestAfterTheEndInstantSeesTheExpiredStateWithoutAnyJobHavingRun` (1 ms before, at, after, for both boundaries; reading writes nothing), `SubscriptionStateTest` |
+| AC-PLAN-11 | Partly (time transitions; the operator side is Phase 4) | Phases 2, 4 | `SubscriptionLifecycleTests.theSweepRecordsEachTimeTransitionOnceWithItsAuditEvent` (a repeat changes nothing and writes no second event), `twoSweepsAtOnceRecordTheTransitionOnce`, `aSweepThatWasDownForLongStepsThroughBothTransitions` |
 | AC-PLAN-12 | Pending (export has no operation yet: tested through the existing `EXPORT_DATA` test route) | Phase 3 | |
 | AC-PLAN-13 | Pending | Phase 3 | |
 | AC-PLAN-14 | Pending (member limit only) | Phase 3 | |
-| AC-PLAN-15 | Partly (the database side) | Phases 1, 2 | `PlanSchemaTests.aUserHasOneTrialGrantAndItReferencesNoCompany` (a second grant for one user is refused), `MigrationV15OnExistingDataTest` (a user who already created a company has used the slot). The service decision is Phase 2 |
+| AC-PLAN-15 | Verified | Phases 1, 2 | `SubscriptionLifecycleTests.aSecondCompanyOfTheSameUserHasNoPlanAndNoAuditedTransition`; at the schema `PlanSchemaTests.aUserHasOneTrialGrantAndItReferencesNoCompany`, `MigrationV15OnExistingDataTest` |
 | AC-PLAN-16 | Verified at the schema (the service reading the latest version is Phase 2) | Phases 1, 2 | `PlanSchemaTests.aPlanVersionCanNeverBeChangedOnlyAddedAndARowCannotBeAddedToOneThatIsInUse`, `aLimitOrFeatureCannotBeAddedToAVersionInUseEvenForAKeyItLacks`, `aNewVersionIsAddedWithItsOwnRowsAndAnExistingSubscriptionKeepsItsVersion` (a new version is added, the existing subscription keeps version 1; the test rolls back so no version is left behind) |
-| AC-PLAN-17 | Partly (the database side) | Phase 2 | `PlanSchemaTests.everyPairOfStatesIsAllowedOrRefusedExactlyAsTheSpecSays` (all 25 pairs against a table written from the spec), `aPlanChangeWhileActiveIsAllowedAndAnOperatorCanLeaveEveryStateForActive`. The `SubscriptionTransitions` class is Phase 2 |
-| AC-PLAN-18 | Pending | Phase 2 | |
+| AC-PLAN-17 | Verified (application table and database trigger) | Phase 2 | `SubscriptionTransitionsTest` (all 25 pairs), `PlanSchemaTests.everyPairOfStatesIsAllowedOrRefusedExactlyAsTheSpecSays` |
+| AC-PLAN-18 | Verified | Phase 2 | `SubscriptionStateTest.aTrialRunsUntilItsEndInstantAndIsExpiredAtIt` (expired at the end instant, not before) |
 | AC-PLAN-19 | Pending | Phase 3 | |
 | AC-PLAN-20 | Pending | Phase 3 | |
 | AC-PLAN-21 | Pending | Phase 4 | |
 | AC-PLAN-22 | Pending | Phase 3 | |
 | AC-PLAN-23 | Verified | Phase 1 | `MigrationV15OnExistingDataTest.v15GivesEveryExistingCompanyNoPlanAndRecordsWhoHasAlreadyCreatedOne` (a database migrated to V14 with four companies, one of them pending deletion, then to V15: all four NO_PLAN with no plan and no trial, nothing lost, every constraint validated), `v15OnAnEmptyDatabaseCreatesTheCatalogAndNothingElse` |
 | AC-PLAN-24 | Pending | Phase 3 | |
-| AC-PLAN-25 | Partly (the database side) | Phase 2 | `PlanSchemaTests.simultaneousFirstCompanyGrantsForOneUserAdmitExactlyOne` (8 simultaneous `INSERT ... ON CONFLICT DO NOTHING` for one user, 5 rounds: exactly one row each time). The creation path that uses it is Phase 2 |
+| AC-PLAN-25 | Verified | Phase 2 | `SubscriptionLifecycleTests.eightSimultaneousFirstCompaniesOfOneUserYieldExactlyOneTrial` (through `SubscriptionService.startFor`); at the schema `PlanSchemaTests.simultaneousFirstCompanyGrantsForOneUserAdmitExactlyOne` |
 | AC-MEM-17 | Pending (closes here: the `ActiveMemberLimit` hook of slice 003) | Phases 2, 3 | |
 | AC-INV-12 | Pending (closes here: the hook of slice 004) | Phases 2, 3 | |
 | AC-INV-26 | Pending (closes here) | Phases 2, 3 | |
@@ -57,3 +57,11 @@
 - `PlanSchemaTests` (15) and `MigrationV15OnExistingDataTest` (2) pass on PostgreSQL 17.6; the migration was validated on an empty database and on one holding V1 to V14 data.
 - Not run: web checks (no frontend or contract change), the CI jobs.
 - The local build now needs network access the first time: Dependabot's Spring Boot 4.1.2 bump (PR #67) was not in my offline Maven cache.
+
+## Phase 2: domain and service
+- **Added:** `plan` package (`SubscriptionState.effective`, `SubscriptionTransitions`, `FeatureKey`, `LimitKey`, the plan and subscription entities, `EntitlementService`, `SubscriptionService`, `SubscriptionSweep`, `PlanActiveMemberLimit`). `CompanyCreator` now writes the subscription in the company-creation transaction. `UnlimitedActiveMembers` is deleted. One repository method was added (`MembershipRepository.countByCompanyIdAndStatus`).
+- **Deviation from Q-23, for your check:** `EntitlementService.permits(role, permission, companyId)` is not there yet. It is the gating table of Q-08 and belongs to Phase 3 with `CompanyPolicy`; `state`, `hasFeature`, `limit` and `hasRoomFor` are.
+- **Derived decisions, not asked:** (1) A company in NO_PLAN, or with no subscription row, is not limited by `PlanActiveMemberLimit` (it keeps today's behaviour until the Phase 3 gating refuses its operations first); `EntitlementService.hasRoomFor` itself answers false without a plan. (2) A missing subscription row is read as NO_PLAN. (3) The sweep steps TRIALING to EXPIRED_READ_ONLY to EXPIRED_LOCKED one transition at a time, each with its own audit event, because the table has no direct jump. (4) The audit actor of the time transitions and of the trial start is `system`, reason `trial_started`, `trial_expired` or `read_only_ended` (Q-16). (5) `recordState` and the sweep query are the only writers/readers outside the company-scoped path; the query is marked `@CrossTenantByDesign`.
+- **Invitation acceptance** already called `ActiveMemberLimit`, so it uses the plan limit without a code change; a test of acceptance at the limit through HTTP is Phase 3 (the error code is mapped there).
+- **Mutation checks run (restored afterwards):** `<` changed to `<=` in the limit (2 tests fail), the trial boundary made inclusive (4 fail), the first-company grant always refused (3 fail), one cell of the transition table changed (1 fails).
+- **Checks run:** `./mvnw -o verify` in `services/api`: 667 tests, 0 failures, 2 skipped (skipped before this phase). Not run: frontend checks (no frontend change), a clean-database Flyway run beyond what the Testcontainers tests already do, independent code and security review (Phase 6).
