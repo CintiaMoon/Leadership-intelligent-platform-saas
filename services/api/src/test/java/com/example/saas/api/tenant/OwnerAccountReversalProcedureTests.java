@@ -71,11 +71,11 @@ class OwnerAccountReversalProcedureTests extends AuthIntegrationTest {
 	}
 
 	private void disable(String email) throws IOException {
-		run(DISABLE, email, "SEC-1", 8);
+		run(DISABLE, email, "SEC-1", 11);
 	}
 
 	private void reverse(String email) throws IOException {
-		run(REVERSE, email, "SEC-2", 7);
+		run(REVERSE, email, "SEC-2", 10);
 	}
 
 	private String membershipStatus(UUID seat) {
@@ -200,12 +200,30 @@ class OwnerAccountReversalProcedureTests extends AuthIntegrationTest {
 		assertThatThrownBy(() -> reverse("nobody." + UUID.randomUUID() + "@example.com"))
 			.isInstanceOf(DataAccessException.class);
 		for (String ticket : new String[] { "", "has space", "x".repeat(41) }) {
-			assertThatThrownBy(() -> run(REVERSE, owner.email(), ticket, 7)).as("ticket '%s'", ticket)
+			assertThatThrownBy(() -> run(REVERSE, owner.email(), ticket, 10)).as("ticket '%s'", ticket)
 				.isInstanceOf(DataAccessException.class);
 		}
 
 		assertThat(count("SELECT count(*) FROM audit_event")).isEqualTo(audit);
 		assertThat(membershipStatus(company.ownerSeat())).isEqualTo("SUSPENDED");
+		assertThat(jdbc.queryForObject("SELECT status FROM app_user WHERE id = ?", String.class, owner.userId()))
+			.isEqualTo("DISABLED");
+	}
+
+	@Test
+	void runOutsideASingleTransactionTheReversalStopsBeforeItChangesAnything() throws Exception {
+		Person owner = person();
+		Company company = company(owner);
+		disable(owner.email());
+		List<String> statements = RunbookSql.statements(REVERSE, Map.of("email", owner.email(), "ticket", "SEC-2"));
+
+		// Each statement in its own transaction, as psql does without --single-transaction.
+		assertThatThrownBy(() -> statements.forEach(jdbc::execute)).isInstanceOf(DataAccessException.class)
+			.rootCause()
+			.hasMessageContaining("division by zero");
+
+		assertThat(membershipStatus(company.ownerSeat())).isEqualTo("SUSPENDED");
+		assertThat(flagged(company.id())).isTrue();
 		assertThat(jdbc.queryForObject("SELECT status FROM app_user WHERE id = ?", String.class, owner.userId()))
 			.isEqualTo("DISABLED");
 	}

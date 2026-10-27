@@ -15,6 +15,13 @@ SELECT 1 / (CASE WHEN :'ticket' ~ '^[A-Za-z0-9_-]{1,40}$' THEN 1 ELSE 0 END) AS 
 
 SELECT 1 / count(*) AS account_exists FROM app_user WHERE email_normalized = lower(btrim(:'email'));
 
+-- The script must run inside ONE transaction (psql --single-transaction): the locks, the checks and the writes depend on
+-- it. A local setting lasts only to the end of the transaction, so in autocommit mode it is gone by the next statement
+-- and the guard below stops the script before anything is written.
+SELECT set_config('app.operator_script_tx', 'yes', true) AS marker;
+
+SELECT 1 / (CASE WHEN current_setting('app.operator_script_tx', true) = 'yes' THEN 1 ELSE 0 END) AS inside_one_transaction;
+
 -- Do not queue behind a long application transaction: give up after 5 seconds, as the application does (D-125).
 SET LOCAL lock_timeout = '5s';
 
@@ -38,7 +45,7 @@ WITH disabled AS (
 INSERT INTO audit_event (occurred_at, event_type, actor_type, target_type, target_id, outcome, before_value,
                          after_value, reason_code)
 SELECT now(), 'account.status.changed', 'operator', 'user', id, 'success', 'ACTIVE', 'DISABLED',
-       'operator_disable ticket=' || :'ticket' || ' db_user=' || left(regexp_replace(current_user, '[^A-Za-z0-9_.-]', '_', 'g'), 40)
+       'operator_disable ticket=' || :'ticket' || ' db_user=' || left(regexp_replace(session_user, '[^A-Za-z0-9_.-]', '_', 'g'), 40) || CASE WHEN current_user <> session_user THEN ' role=' || left(regexp_replace(current_user, '[^A-Za-z0-9_.-]', '_', 'g'), 40) ELSE '' END
   FROM disabled;
 
 -- 3. Its sessions (spring_session_attributes rows go with them).
@@ -81,3 +88,14 @@ SELECT c.id AS company_id, c.ownership_resolution_at,
  WHERE c.id IN (SELECT m.company_id
                   FROM membership m JOIN app_user u ON u.id = m.user_id
                  WHERE u.email_normalized = lower(btrim(:'email')) AND m.role = 'OWNER');
+
+-- 6. Stop, rolling everything back, unless every company this account owns is now flagged and still has exactly one
+-- Owner membership.
+SELECT 1 / (CASE WHEN NOT EXISTS (
+    SELECT 1 FROM company c
+     WHERE c.id IN (SELECT m.company_id
+                      FROM membership m JOIN app_user u ON u.id = m.user_id
+                     WHERE u.email_normalized = lower(btrim(:'email')) AND m.role = 'OWNER')
+       AND (c.ownership_resolution_at IS NULL
+            OR (SELECT count(*) FROM membership o WHERE o.company_id = c.id AND o.role = 'OWNER'
+                   AND o.status IN ('ACTIVE', 'SUSPENDED')) <> 1)) THEN 1 ELSE 0 END) AS disable_is_consistent;

@@ -38,7 +38,7 @@ psql --single-transaction --set ON_ERROR_STOP=1 -v email=person@example.com -v t
 - `ticket` is the approval ticket (letters, digits, `-`, `_`, up to 40). It is written into every audit row together with the database role that ran the script, because operators have no user ID yet. A missing or malformed ticket stops the script.
 - The script gives up on a lock after 5 seconds instead of queuing behind a long application transaction; run it again.
 
-It does, in this order: check the inputs; lock the company rows the account owns (before touching the account, the same order as the application, D-125); disable the account and audit it; delete its sessions; suspend its Owner memberships and flag those companies, with audit rows; print a check. It is idempotent: a second run changes nothing and writes no second set of audit rows.
+It does, in this order: check the inputs; lock the company rows the account owns (before touching the account, the same order as the application, D-125); disable the account and audit it; delete its sessions; suspend its Owner memberships and flag those companies, with audit rows; print a check. It is idempotent: a second run changes nothing and writes no second set of audit rows. It stops with an error if it is not run inside one transaction (see below).
 
 Check the output:
 - Step 1 lists the companies the account owns. Zero rows means it owns none (only the disable and the session deletion apply).
@@ -48,6 +48,9 @@ Then confirm: the user's next request returns 401, a login attempt returns the s
 
 ## Revoke sessions without disabling (suspected stolen session)
 Run only the `DELETE FROM spring_session ...` statement (step 3 of the script). The user stays able to log in again. If the password may be known to the attacker, also require a password reset (the user can use the forgot-password page, which signs out every device).
+
+## Both scripts must run in one transaction
+Run every script in this runbook with `psql --single-transaction --set ON_ERROR_STOP=1`. Since 2026-10-27 each of them checks this itself: a marker statement and a guard right after the input checks stop the script, before anything is written, if it is not running inside one transaction (in autocommit mode every statement would commit on its own, the locks would be released between the checks and the writes, and the 5-second lock timeout would not apply). Each script also ends with a guard that rolls everything back unless the result is consistent (disable: every company the account owns is flagged and still has exactly one Owner membership; reversal: the account is ACTIVE and every company where it still holds the Owner role has exactly one). The audit rows record the database login (`session_user`) and, if it differs, the role it switched to (`role=`), not only `current_user`.
 
 ## Undoing a mistaken disable (D-142)
 Use the reviewed reversal script. Do **not** re-enable the account with a plain `UPDATE`: that leaves an Owner membership suspended and the company flagged, and no application path can reactivate an Owner.
