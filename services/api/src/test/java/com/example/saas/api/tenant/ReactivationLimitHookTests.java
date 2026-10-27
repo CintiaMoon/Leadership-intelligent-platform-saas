@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The mechanism behind AC-MEM-17: reactivation asks the {@link ActiveMemberLimit} under the company lock and is refused
- * when there is no room. The real plan-based limit arrives in slice 006, which closes the criterion.
+ * when there is no room, with the stable code {@code MEMBER_LIMIT_REACHED} (AC-PLAN-22). The plan-based limit itself is
+ * tested in {@code PlanActiveMemberLimitTests}.
  */
 @Import(ReactivationLimitHookTests.FullCompany.class)
 class ReactivationLimitHookTests extends AuthIntegrationTest {
@@ -44,7 +45,11 @@ class ReactivationLimitHookTests extends AuthIntegrationTest {
 		Cookie cookie = sessionCookie(api.login(email, STRONG_PASSWORD, freshIp()));
 		UUID companyId = UUID.randomUUID();
 		jdbc.update("WITH c AS (INSERT INTO company (id, name, created_at, updated_at) VALUES (?, 'Full', now(), now()) "
-				+ "RETURNING id) INSERT INTO membership (company_id, user_id, role, status, created_at, updated_at) "
+				+ "RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, "
+				+ "trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id "
+				+ "FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', "
+				+ "now() + interval '672 hours', now(), now(), now() FROM c) "
+				+ "INSERT INTO membership (company_id, user_id, role, status, created_at, updated_at) "
 				+ "SELECT id, ?, 'OWNER', 'ACTIVE', now(), now() FROM c", companyId, ownerId);
 		String otherEmail = UUID.randomUUID() + "@example.com";
 		UUID other = jdbc.queryForObject("INSERT INTO app_user (email_normalized, email_original, display_name, "
@@ -60,7 +65,7 @@ class ReactivationLimitHookTests extends AuthIntegrationTest {
 				api.sessionCsrf(cookie, ip), ip);
 
 		assertThat(result.getResponse().getStatus()).isEqualTo(409);
-		assertThat(AuthApi.parse(result).get("code").asString()).isEqualTo("CONFLICT");
+		assertThat(AuthApi.parse(result).get("code").asString()).isEqualTo("MEMBER_LIMIT_REACHED");
 		assertThat(jdbc.queryForObject("SELECT status FROM membership WHERE id = ?", String.class, membershipId))
 			.isEqualTo("SUSPENDED");
 		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'membership.reactivated' "

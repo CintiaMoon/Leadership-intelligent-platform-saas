@@ -75,7 +75,7 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 		Person admin = person();
 		UUID id = tx.execute(s -> {
 			UUID companyId = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Accept Co', now(), now()) RETURNING id",
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Accept Co', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c",
 					UUID.class);
 			seat(companyId, owner.userId(), "OWNER", "ACTIVE");
 			seat(companyId, admin.userId(), "ADMIN", "ACTIVE");
@@ -161,6 +161,48 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 
 		assertThat(jdbc.queryForObject("SELECT role FROM membership WHERE company_id = ? AND user_id = ?", String.class,
 				company.id(), invitee.userId())).isEqualTo("ADMIN");
+	}
+
+	// ---- the subscription state (AC-PLAN-04, AC-PLAN-19, AC-PLAN-20; plan Q-10)
+
+	/** Moves the trial back in time by whole hours, so the company is read-only (337) or locked (673 and more). */
+	private void agedTrial(UUID companyId, int hours) {
+		jdbc.update("UPDATE company_subscription SET trial_started_at = trial_started_at - make_interval(hours => ?), "
+				+ "trial_ends_at = trial_ends_at - make_interval(hours => ?), "
+				+ "read_only_ends_at = read_only_ends_at - make_interval(hours => ?) WHERE company_id = ?", hours, hours,
+				hours, companyId);
+	}
+
+	@Test
+	void anInvitationCannotBeAcceptedWhileTheCompanyIsReadOnlyOrLockedAndItStaysPending() throws Exception {
+		for (int hours : new int[] { 337, 700 }) {
+			Company company = company();
+			String email = guest();
+			Issued issued = issue(company, company.owner(), email, Role.VIEWER);
+			Person invitee = person(email);
+			agedTrial(company.id(), hours);
+
+			MvcResult result = accept(invitee, issued.token());
+
+			assertThat(result.getResponse().getStatus()).as("after %d hours", hours).isEqualTo(409);
+			assertThat(status(issued.invitationId())).isEqualTo("PENDING");
+			assertThat(liveMemberships(company.id(), invitee.userId())).isZero();
+		}
+	}
+
+	@Test
+	void anInvitationCanBeAcceptedWhileTheTrialStillRuns() throws Exception {
+		Company company = company();
+		String email = guest();
+		Issued issued = issue(company, company.owner(), email, Role.VIEWER);
+		Person invitee = person(email);
+		// The trial ends in one hour, so it is still running.
+		jdbc.update("UPDATE company_subscription SET trial_started_at = now() - interval '335 hours', "
+				+ "trial_ends_at = now() - interval '335 hours' + interval '336 hours', "
+				+ "read_only_ends_at = now() - interval '335 hours' + interval '672 hours' WHERE company_id = ?",
+				company.id());
+
+		assertThat(accept(invitee, issued.token()).getResponse().getStatus()).isEqualTo(200);
 	}
 
 	// ---- authentication (AC-INV-08) and CSRF

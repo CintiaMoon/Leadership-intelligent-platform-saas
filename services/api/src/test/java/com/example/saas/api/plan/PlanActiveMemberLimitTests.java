@@ -7,7 +7,10 @@ import java.util.concurrent.Callable;
 
 import com.example.saas.api.tenant.Parallel;
 import com.example.saas.api.tenant.application.CompanyView;
-import com.example.saas.api.tenant.application.MembershipConflictException;
+import com.example.saas.api.plan.domain.SubscriptionState;
+import com.example.saas.api.tenant.application.ActiveMemberLimit;
+import com.example.saas.api.tenant.application.MemberLimitReachedException;
+import com.example.saas.api.tenant.application.PlanRestrictedException;
 import com.example.saas.api.tenant.application.MembershipService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +26,9 @@ class PlanActiveMemberLimitTests extends PlanTestBase {
 
 	@Autowired
 	private MembershipService memberships;
+
+	@Autowired
+	private ActiveMemberLimit limit;
 
 	private UUID member(UUID companyId, String status) {
 		UUID user = newUser();
@@ -57,7 +63,7 @@ class PlanActiveMemberLimitTests extends PlanTestBase {
 		assertThat(active(f.companyId())).isEqualTo(15);
 
 		assertThatThrownBy(() -> memberships.reactivate(session(f.owner()), f.companyId(), second))
-			.isInstanceOf(MembershipConflictException.class);
+			.isInstanceOf(MemberLimitReachedException.class);
 		assertThat(active(f.companyId())).isEqualTo(15);
 	}
 
@@ -88,7 +94,7 @@ class PlanActiveMemberLimitTests extends PlanTestBase {
 					memberships.reactivate(session(f.owner()), f.companyId(), seat);
 					return "ok";
 				}
-				catch (MembershipConflictException e) {
+				catch (MemberLimitReachedException e) {
 					return "full";
 				}
 			});
@@ -102,18 +108,19 @@ class PlanActiveMemberLimitTests extends PlanTestBase {
 	}
 
 	@Test
-	void aCompanyWithoutAPlanIsNotLimitedHereBecauseTheGatingRefusesFirst() {
+	void aCompanyWithoutAPlanIsNotCountedHereBecauseTheGatingRefusesBeforeTheLimitIsAsked() {
 		UUID user = newUser();
 		createCompany(user);
 		CompanyView noPlan = createCompany(user);
-		for (int i = 1; i < 20; i++) {
-			member(noPlan.id(), "ACTIVE");
-		}
 		UUID target = member(noPlan.id(), "SUSPENDED");
 
-		memberships.reactivate(session(user), noPlan.id(), target);
-
-		assertThat(active(noPlan.id())).isEqualTo(21);
+		// The limit itself has nothing to compare with and does not refuse...
+		assertThat(limit.hasRoomForAnotherActiveMember(noPlan.id())).isTrue();
+		// ...because reactivation is refused earlier, by the subscription state (403 PLAN_RESTRICTED).
+		assertThatThrownBy(() -> memberships.reactivate(session(user), noPlan.id(), target))
+			.isInstanceOfSatisfying(PlanRestrictedException.class,
+					e -> assertThat(e.state()).isEqualTo(SubscriptionState.NO_PLAN));
+		assertThat(active(noPlan.id())).isEqualTo(1);
 	}
 
 	@Test

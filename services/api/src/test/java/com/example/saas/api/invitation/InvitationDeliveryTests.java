@@ -41,8 +41,11 @@ class InvitationDeliveryTests extends AuthIntegrationTest {
 			UUID owner = jdbc.queryForObject("INSERT INTO app_user (email_normalized, email_original, display_name, "
 					+ "password_hash, created_at, updated_at) VALUES (?, ?, 'Olivia Owner', 'hash', now(), now()) "
 					+ "RETURNING id", UUID.class, email, email);
-			UUID id = jdbc.queryForObject("INSERT INTO company (name, created_at, updated_at) VALUES (?, now(), now()) "
-					+ "RETURNING id", UUID.class, name);
+			UUID id = jdbc.queryForObject("WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES (?, now(), now()) "
+					+ "RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, "
+					+ "trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id "
+					+ "FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', "
+					+ "now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c", UUID.class, name);
 			jdbc.update("INSERT INTO membership (company_id, user_id, role, status, created_at, updated_at) "
 					+ "VALUES (?, ?, 'OWNER', 'ACTIVE', now(), now())", id, owner);
 			Instant now = Instant.now();

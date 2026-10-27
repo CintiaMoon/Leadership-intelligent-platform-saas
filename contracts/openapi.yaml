@@ -3,7 +3,7 @@ info:
   title: SaaS Platform API
   version: 0.1.0
   description: |
-    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001), SPEC-TEN (slice 002), SPEC-MEM (slice 003) and SPEC-INV (slice 004) and SPEC-OWN (slice 005) operations are defined so far;
+    Contract for the Spring Boot API. Only the SPEC-AUTH (slice 001), SPEC-TEN (slice 002), SPEC-MEM (slice 003) and SPEC-INV (slice 004) and SPEC-OWN (slice 005) operations and the read-only plan endpoint of SPEC-PLAN (slice 006) are defined so far;
     each further endpoint is added with its approved feature spec (docs/api/contract-guidelines.md).
 
     Conventions
@@ -17,6 +17,9 @@ info:
     - A `companyId` in a path only selects a company; access comes from the caller's ACTIVE membership,
       checked on every request (D-03, D-109). A company the caller cannot access, or that does not exist,
       returns 404 `NOT_FOUND`; 403 `FORBIDDEN` means an active member lacks the permission (D-108).
+    - 403 `PLAN_RESTRICTED` means the member's role holds the permission but the company's subscription state does
+      not allow it (SPEC-PLAN, "Gating by subscription state"); the problem carries the effective state in
+      `subscriptionState`. 409 `MEMBER_LIMIT_REACHED` means the plan's limit on active members is reached.
 servers:
   - url: http://localhost:8080
     description: Local development only
@@ -33,6 +36,8 @@ tags:
     description: Inviting people to a company, listing, resending and revoking invitations (SPEC-INV).
   - name: Ownership
     description: Handing a company's ownership to another active member (SPEC-OWN).
+  - name: Plans
+    description: The company's plan, subscription state, features and limits, read only (SPEC-PLAN).
 paths:
   /api/v1/auth/csrf:
     get:
@@ -407,6 +412,42 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/companies/{companyId}/subscription:
+    get:
+      tags: [Plans]
+      operationId: getSubscription
+      summary: Get the company's plan and subscription
+      description: |
+        Requires the "View plan and entitlements" permission: Owner and Admin (403 `FORBIDDEN` for Agent and Viewer, 404
+        for a non-member). Once the plan has ended (`EXPIRED_LOCKED`) only the Owner may read it, and an Admin gets 403
+        `PLAN_RESTRICTED`. Every value comes from the server: the state is evaluated from the trial instants and the
+        clock at the time of the request, so it is already expired after the end instant even if no scheduled job has
+        recorded it. There is no operation that changes a plan: an operator assigns plans with a reviewed script.
+        Limits on teams and active assessments are listed with `enforced: false` and no usage until those features
+        exist (D-68); the limit on active members is enforced and reports its usage.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/companies/{companyId}/members:
     get:
       tags: [Members]
@@ -579,8 +620,9 @@ paths:
       operationId: reactivateMember
       summary: Reactivate a suspended member
       description: |
-        SUSPENDED to ACTIVE, with the preserved role. Rejected with 409 if the company's plan has no room for another
-        active member (AC-MEM-17; enforced once plans exist, slice 006).
+        SUSPENDED to ACTIVE, with the preserved role. Rejected with 409 `MEMBER_LIMIT_REACHED` if the company's plan has
+        no room for another active member (AC-MEM-17, AC-PLAN-05), and with 403 `PLAN_RESTRICTED` while the subscription
+        is expired or has no plan.
       security:
         - bffCredential: []
           sessionCookie: []
@@ -1259,6 +1301,73 @@ components:
         createdAt:
           type: string
           format: date-time
+    SubscriptionState:
+      type: string
+      description: |
+        The effective state of a subscription. `TRIALING` until the trial end instant, then `EXPIRED_READ_ONLY` for 14
+        days, then `EXPIRED_LOCKED`. `ACTIVE` is a plan assigned by an operator; `NO_PLAN` is a company that has none
+        (every company that existed before plans, and a user's second and later companies).
+      enum: [TRIALING, EXPIRED_READ_ONLY, EXPIRED_LOCKED, ACTIVE, NO_PLAN]
+    FeatureKey:
+      type: string
+      enum: [CORE_SCORING, REPORTS, HISTORICAL_COMPARISONS, CSV_EXPORT, ADVANCED_ANALYTICS, BENCHMARKING,
+        ANOMALY_DETECTION, EXTENDED_HISTORICAL_REPORTING]
+    LimitKey:
+      type: string
+      enum: [TEAMS, ACTIVE_MEMBERS, ACTIVE_ASSESSMENTS]
+    PlanReference:
+      type: object
+      required: [code, name, version]
+      properties:
+        code:
+          type: string
+          enum: [TRIAL, STARTER, TEAM]
+        name:
+          type: string
+        version:
+          type: integer
+          description: The version of the plan the company was given; a changed plan is a new version (AC-PLAN-16).
+    PlanLimit:
+      type: object
+      required: [key, value, enforced, usage]
+      properties:
+        key:
+          $ref: '#/components/schemas/LimitKey'
+        value:
+          type: integer
+        enforced:
+          type: boolean
+          description: Whether the API refuses beyond this limit today. Only `ACTIVE_MEMBERS` is enforced.
+        usage:
+          type: [integer, 'null']
+          description: The current count for an enforced limit; null otherwise.
+    Subscription:
+      type: object
+      required: [plan, state, trialEndsAt, readOnlyEndsAt, features, limits]
+      properties:
+        plan:
+          description: Null when the company has no plan.
+          oneOf:
+            - $ref: '#/components/schemas/PlanReference'
+            - type: 'null'
+        state:
+          $ref: '#/components/schemas/SubscriptionState'
+        trialEndsAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the trial ends. Present in `TRIALING` and the two expired states; null otherwise.
+        readOnlyEndsAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the read-only window ends. Present in `TRIALING` and the two expired states; null otherwise.
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeatureKey'
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanLimit'
     MembershipStatus:
       type: string
       enum: [ACTIVE, SUSPENDED, REMOVED]
@@ -1424,7 +1533,10 @@ components:
         Stable application error code (ADR-005). The frontend maps codes to messages. `REAUTHENTICATION_REQUIRED`
         (403) is returned by the sensitive operations (promoting or demoting an Admin, starting and accepting an ownership
         transfer now; company deletion and export in later slices) when the session is valid but the last login or
-        step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry.
+        step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry. `PLAN_RESTRICTED` (403) is returned
+        when the caller's role holds the permission but the company's subscription state does not allow it; the problem
+        then carries `subscriptionState`. `MEMBER_LIMIT_REACHED` (409) is returned when the plan's limit on active members
+        is reached (reactivating a member); accepting an invitation keeps its own 409 `CONFLICT` wording.
       enum:
         - VALIDATION_FAILED
         - REQUEST_REJECTED
@@ -1432,8 +1544,10 @@ components:
         - TOKEN_INVALID
         - UNAUTHENTICATED
         - FORBIDDEN
+        - PLAN_RESTRICTED
         - NOT_FOUND
         - CONFLICT
+        - MEMBER_LIMIT_REACHED
         - CSRF_REJECTED
         - REAUTHENTICATION_REQUIRED
         - RATE_LIMITED
@@ -1471,6 +1585,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FieldError'
+        subscriptionState:
+          description: 'Only with PLAN_RESTRICTED, the effective state that refused the request.'
+          $ref: '#/components/schemas/SubscriptionState'
   responses:
     Neutral:
       description: Accepted. Identical for every outcome of the operation.
@@ -1506,7 +1623,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
-      description: The caller is an active member of the company but lacks the permission (D-108).
+      description: |
+        The caller is an active member of the company but lacks the permission (`FORBIDDEN`, D-108), or the company's
+        subscription state does not allow the operation (`PLAN_RESTRICTED`, with `subscriptionState`).
       content:
         application/problem+json:
           schema:
@@ -1522,7 +1641,7 @@ components:
     Conflict:
       description: |
         The change is not possible in the current state (for example suspending a suspended member), or it would touch
-        the Owner. Nothing was changed.
+        the Owner (`CONFLICT`), or the plan's member limit is reached (`MEMBER_LIMIT_REACHED`). Nothing was changed.
       content:
         application/problem+json:
           schema:

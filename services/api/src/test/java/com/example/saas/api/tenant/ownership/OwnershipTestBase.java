@@ -67,7 +67,9 @@ abstract class OwnershipTestBase extends AuthIntegrationTest {
 			Person agent = person("Cy Agent");
 			Person viewer = person("Di Viewer");
 			UUID id = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Handover Co', now(), now()) RETURNING id",
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Handover Co', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, state_changed_at, created_at, updated_at) "
+					+ "SELECT c.id, (SELECT id FROM plan WHERE code = 'TEAM' AND version = 1), 'ACTIVE', now(), now(), now() FROM c) "
+					+ "SELECT id FROM c",
 					UUID.class);
 			return new Team(id, owner, admin, agent, viewer, seat(id, owner, "OWNER"), seat(id, admin, "ADMIN"),
 					seat(id, agent, "AGENT"), seat(id, viewer, "VIEWER"));

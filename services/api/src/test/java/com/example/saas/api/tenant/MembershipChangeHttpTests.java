@@ -58,7 +58,7 @@ class MembershipChangeHttpTests extends AuthIntegrationTest {
 		UUID ownerId = registerVerified(email, STRONG_PASSWORD);
 		return tx.execute(s -> {
 			UUID id = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Http', now(), now()) RETURNING id",
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Http', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c",
 					UUID.class);
 			jdbc.update("INSERT INTO membership (company_id, user_id, role, status, created_at, updated_at) "
 					+ "VALUES (?, ?, 'OWNER', 'ACTIVE', now(), now())", id, ownerId);

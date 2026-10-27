@@ -15,6 +15,7 @@ import com.example.saas.api.common.FieldProblem;
 import com.example.saas.api.common.ValidationFailedException;
 import com.example.saas.api.security.AuthenticatedUser;
 import com.example.saas.api.tenant.application.CompanyLocks;
+import com.example.saas.api.tenant.application.PlanGate;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
 import com.example.saas.api.tenant.application.MembershipChangeListener;
 import com.example.saas.api.tenant.application.PermissionDeniedException;
@@ -67,9 +68,12 @@ class OwnershipTransferTransactions {
 
 	private final Clock clock;
 
+	private final PlanGate planGate;
+
 	OwnershipTransferTransactions(CompanyLocks companyLocks, OwnershipTransferLocks transferLocks,
 			OwnershipTransferRepository transfers, MembershipRepository memberships, UserAccountRepository users,
-			AuditLog audit, OutboxRepository outbox, List<MembershipChangeListener> listeners, Clock clock) {
+			AuditLog audit, OutboxRepository outbox, List<MembershipChangeListener> listeners, Clock clock,
+			PlanGate planGate) {
 		this.companyLocks = companyLocks;
 		this.transferLocks = transferLocks;
 		this.transfers = transfers;
@@ -79,6 +83,7 @@ class OwnershipTransferTransactions {
 		this.outbox = outbox;
 		this.listeners = listeners;
 		this.clock = clock;
+		this.planGate = planGate;
 	}
 
 	// ---- initiate
@@ -91,6 +96,7 @@ class OwnershipTransferTransactions {
 		if (!CompanyPolicy.permits(actorRole, Permission.TRANSFER_OWNERSHIP, company.getStatus(), null)) {
 			throw new PermissionDeniedException(actor.userId(), companyId, Permission.TRANSFER_OWNERSHIP);
 		}
+		planGate.require(actor.userId(), companyId, Permission.TRANSFER_OWNERSHIP, actorRole);
 		Instant now = clock.instant();
 
 		// An overdue pending transfer must not block a new one (the unique index covers pending rows): end it first.
@@ -142,6 +148,7 @@ class OwnershipTransferTransactions {
 		if (!CompanyPolicy.permits(actorRole, Permission.CANCEL_OWNERSHIP_TRANSFER, company.getStatus(), null)) {
 			throw new PermissionDeniedException(actor.userId(), companyId, Permission.CANCEL_OWNERSHIP_TRANSFER);
 		}
+		planGate.require(actor.userId(), companyId, Permission.CANCEL_OWNERSHIP_TRANSFER, actorRole);
 		Instant now = clock.instant();
 		// A transfer that is not pending, or is overdue, cannot be cancelled; the sweep ends the overdue one (AC-OWN-16).
 		if (transfer.getStatus() != TransferStatus.PENDING || transfer.isOverdue(now)) {
@@ -165,6 +172,10 @@ class OwnershipTransferTransactions {
 		if (!transfer.getRecipientId().equals(actor.userId())) {
 			throw new CompanyNotFoundException();
 		}
+		Role actorRole = memberships
+			.findRoleByCompanyIdAndUserIdAndStatus(companyId, actor.userId(), MembershipStatus.ACTIVE)
+			.orElseThrow(CompanyNotFoundException::new);
+		planGate.require(actor.userId(), companyId, Permission.ACCEPT_OWNERSHIP_TRANSFER, actorRole);
 		Instant now = clock.instant();
 
 		// Both memberships, locked in ID order and loaded fresh (nothing of theirs was read before the lock).

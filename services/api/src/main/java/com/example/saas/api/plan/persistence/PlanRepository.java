@@ -1,5 +1,6 @@
 package com.example.saas.api.plan.persistence;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +20,13 @@ public interface PlanRepository extends Repository<Plan, UUID> {
 
 	@Query(value = "select value from plan_limit where plan_id = :planId and limit_key = :key", nativeQuery = true)
 	Optional<Integer> findLimit(@Param("planId") UUID planId, @Param("key") String key);
+
+	@Query(value = "select feature_key from plan_feature where plan_id = :planId order by feature_key", nativeQuery = true)
+	List<String> findFeatureKeys(@Param("planId") UUID planId);
+
+	/** Rows of (limit key, value). */
+	@Query(value = "select limit_key, value from plan_limit where plan_id = :planId order by limit_key", nativeQuery = true)
+	List<Object[]> findLimits(@Param("planId") UUID planId);
 
 	@Query(value = "select count(*) > 0 from plan_feature where plan_id = :planId and feature_key = :key",
 			nativeQuery = true)

@@ -10,6 +10,7 @@
 - Never recorded: passwords, tokens, cookies, email bodies, free-text content, or purged company content (CLAUDE.md principle 14; AC-DEL-11).
 - Storage: an append-only table. The application database role has insert and select only; no update or delete. Purge keeps audit events for the retention period (SPEC-DEL).
 - Denied authorization attempts on the operations below are recorded with outcome `denied`.
+- A request refused because of the company's subscription state (SPEC-PLAN, `PLAN_RESTRICTED`) is recorded as `tenant.authorization.denied` with outcome `denied`, reason code `plan_restricted:<permission>` and the effective subscription state as the before value; at most one row per user, company, permission and state per window, like a permission denial.
 
 ## Events by domain (from the specs)
 | Domain | Events | Source |

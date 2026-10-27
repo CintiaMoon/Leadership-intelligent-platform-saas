@@ -115,7 +115,7 @@ public class MembershipService {
 		MembershipChangeAuthorizer.Authorized authorized = authorize(actor, companyId, membershipId, operation, null);
 		Membership target = authorized.target();
 		if (operation == MembershipOperation.REACTIVATE && !memberLimit.hasRoomForAnotherActiveMember(companyId)) {
-			throw new MembershipConflictException();
+			throw new MemberLimitReachedException();
 		}
 		MembershipStatus before = target.getStatus();
 		Instant now = clock.instant();

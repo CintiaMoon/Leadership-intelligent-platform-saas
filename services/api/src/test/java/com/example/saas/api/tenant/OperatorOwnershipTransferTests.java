@@ -86,7 +86,7 @@ class OperatorOwnershipTransferTests extends AuthIntegrationTest {
 			Person otherAdmin = person("Bea Otheradmin");
 			Person agent = person("Cal Agentperson");
 			UUID id = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Handover Ltd', now(), now()) RETURNING id",
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Handover Ltd', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c",
 					UUID.class);
 			return new Team(id, owner, admin, otherAdmin, agent, seat(id, owner, "OWNER"), seat(id, admin, "ADMIN"),
 					seat(id, otherAdmin, "ADMIN"), seat(id, agent, "AGENT"));
@@ -460,7 +460,7 @@ class OperatorOwnershipTransferTests extends AuthIntegrationTest {
 		Person owner = person("Solo Owner");
 		UUID company = tx.execute(s -> {
 			UUID id = jdbc.queryForObject(
-					"INSERT INTO company (name, created_at, updated_at) VALUES ('Solo', now(), now()) RETURNING id", UUID.class);
+					"WITH c AS (INSERT INTO company (name, created_at, updated_at) VALUES ('Solo', now(), now()) RETURNING id), s AS (INSERT INTO company_subscription (company_id, plan_id, state, trial_started_at, trial_ends_at, read_only_ends_at, state_changed_at, created_at, updated_at) SELECT c.id, (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), 'TRIALING', now(), now() + interval '336 hours', now() + interval '672 hours', now(), now(), now() FROM c) SELECT id FROM c", UUID.class);
 			seat(id, owner, "OWNER");
 			return id;
 		});

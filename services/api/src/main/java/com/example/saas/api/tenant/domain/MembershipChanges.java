@@ -72,7 +72,8 @@ public final class MembershipChanges {
 		};
 	}
 
-	private static Permission neededPermission(MembershipOperation operation) {
+	/** The matrix row an operation needs. */
+	public static Permission neededPermission(MembershipOperation operation) {
 		return switch (operation) {
 			case CHANGE_ROLE -> Permission.CHANGE_MEMBER_ROLE;
 			case SUSPEND, REMOVE -> Permission.SUSPEND_OR_REMOVE_MEMBERS;

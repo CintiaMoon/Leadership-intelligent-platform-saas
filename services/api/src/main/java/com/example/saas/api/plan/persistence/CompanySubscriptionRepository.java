@@ -19,6 +19,11 @@ public interface CompanySubscriptionRepository extends Repository<CompanySubscri
 
 	Optional<CompanySubscription> findById(UUID companyId);
 
+	/** The recorded state and instants only, read from the database every time (never from the persistence context). */
+	@Query("select new com.example.saas.api.plan.persistence.StateRow(s.state, s.trialEndsAt, s.readOnlyEndsAt) "
+			+ "from CompanySubscription s where s.companyId = :companyId")
+	Optional<StateRow> findStateRow(@Param("companyId") UUID companyId);
+
 	/**
 	 * The companies whose recorded state is behind the clock, oldest first, for the sweep. The sweep is the only
 	 * cross-tenant reader and it only records what time already decided.

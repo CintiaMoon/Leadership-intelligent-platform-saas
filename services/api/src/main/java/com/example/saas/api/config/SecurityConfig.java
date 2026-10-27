@@ -64,6 +64,8 @@ class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/api/v1/companies", "/api/v1/companies/*").authenticated()
 				// Membership routes (SPEC-MEM). Who may do what is decided per company by the service.
 				.requestMatchers(HttpMethod.GET, "/api/v1/companies/*/members").authenticated()
+				// Read only: no route changes a plan (SPEC-PLAN). Anything else under it stays denied by default.
+				.requestMatchers(HttpMethod.GET, "/api/v1/companies/*/subscription").authenticated()
 				.requestMatchers(HttpMethod.PATCH, "/api/v1/companies/*/members/*").authenticated()
 				.requestMatchers(HttpMethod.DELETE, "/api/v1/companies/*/members/*").authenticated()
 				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/members/*/suspend",
