@@ -106,7 +106,7 @@ class OperatorOwnershipTransferTests extends AuthIntegrationTest {
 
 	/** The operator disables the Owner's account: the company is flagged and the Owner suspended. */
 	private void disable(Person owner) throws IOException {
-		runStatements(DISABLE, Map.of("email", owner.email(), "ticket", "SEC-1"), 8);
+		runStatements(DISABLE, Map.of("email", owner.email(), "ticket", "SEC-1"), 11);
 	}
 
 	private Map<String, String> variables(Team team, Person recipient, String ticket, String nonAdminOk) {
@@ -464,7 +464,7 @@ class OperatorOwnershipTransferTests extends AuthIntegrationTest {
 			seat(id, owner, "OWNER");
 			return id;
 		});
-		runStatements(DISABLE, Map.of("email", owner.email(), "ticket", "SEC-1"), 8);
+		runStatements(DISABLE, Map.of("email", owner.email(), "ticket", "SEC-1"), 11);
 
 		assertGuardStops(Map.of("email", owner.email(), "recipient", owner.email(), "company", company.toString(),
 				"ticket", "SEC-2", "non_admin_ok", "yes"), "nobody to transfer to");

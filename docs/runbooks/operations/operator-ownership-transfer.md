@@ -61,7 +61,7 @@ It is not idempotent on purpose: a second run finds the flag cleared and stops w
 - The deletion guard for flagged companies (D-143) belongs to slice 007; the deadline is rechecked when the flag is cleared.
 - The cancelled pending transfer sends no email: its initiator is the suspended Owner and its recipient learns of the new Owner from the notice only if they are an Admin or the new Owner.
 - Not tested: a lock timeout of exactly 5 seconds (the two lock-wait tests prove the order of the locks, not the timeout value), and the final consistency guard on its own (nothing the script can do on PostgreSQL leaves the state it checks for wrong, so no test can make only that guard fail; it is a second line behind the trigger and the earlier statements).
-- `disable-account-and-flag-companies.sql` and `reverse-account-disable.sql` do not yet have the single-transaction marker and a final guard. Without `--single-transaction` they have the same weakness this script was hardened against. Adding them changes the approved scripts and their tests, so it waits for a decision.
+- The disable and reversal scripts got the same single-transaction marker, final guard and `session_user` audit on 2026-10-27 (after the slice 005 reviews, with the user's approval); see `operator-account-disable.md`.
 - The ticket is a checked string, not a proof: nothing in the database shows that it exists or was approved, so the two-person rule is procedural.
 - The audit rows of the API path (`ownership.transfer.initiated`) hold the transfer id, from which the recipient is found in `ownership_transfer`; a refused request is not audited except a permission denial (as designed).
 

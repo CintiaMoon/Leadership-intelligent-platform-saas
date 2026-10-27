@@ -77,7 +77,7 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 
 	private void runProcedure(String email, String ticket) throws IOException {
 		List<String> statements = statements(email, ticket);
-		assertThat(statements).as("the eight statements of the runbook").hasSize(8);
+		assertThat(statements).as("the eleven statements of the runbook").hasSize(11);
 		tx.executeWithoutResult(s -> statements.forEach(jdbc::execute));
 	}
 
@@ -247,6 +247,37 @@ class OwnerAccountDisableProcedureTests extends AuthIntegrationTest {
 		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND role = 'OWNER' "
 				+ "AND status IN ('ACTIVE', 'SUSPENDED')", company.id())).isEqualTo(1);
 		assertThat(adminSeat).isNotNull();
+	}
+
+	@Test
+	void runOutsideASingleTransactionTheProcedureStopsBeforeItChangesAnything() throws Exception {
+		Person owner = person();
+		Company company = company(owner);
+		List<String> statements = statements(owner.email(), "TEST-2");
+
+		// Each statement in its own transaction, as psql does without --single-transaction.
+		assertThatThrownBy(() -> statements.forEach(jdbc::execute)).isInstanceOf(DataAccessException.class)
+			.rootCause()
+			.hasMessageContaining("division by zero");
+
+		assertThat(jdbc.queryForObject("SELECT status FROM app_user WHERE id = ?", String.class, owner.userId()))
+			.isEqualTo("ACTIVE");
+		assertThat(jdbc.queryForObject("SELECT status FROM membership WHERE id = ?", String.class, company.ownerSeat()))
+			.isEqualTo("ACTIVE");
+		assertThat(jdbc.queryForObject("SELECT ownership_resolution_at IS NULL FROM company WHERE id = ?",
+				Boolean.class, company.id())).isTrue();
+	}
+
+	@Test
+	void theAuditRecordsTheDatabaseLoginThatRanTheProcedure() throws Exception {
+		Person owner = person();
+		company(owner);
+
+		runProcedure(owner.email(), "TEST-3");
+
+		String login = jdbc.queryForObject("SELECT session_user", String.class);
+		assertThat(count("SELECT count(*) FROM audit_event WHERE event_type = 'account.status.changed' AND target_id = ? "
+				+ "AND reason_code = ?", owner.userId(), "operator_disable ticket=TEST-3 db_user=" + login)).isEqualTo(1);
 	}
 
 	@Test

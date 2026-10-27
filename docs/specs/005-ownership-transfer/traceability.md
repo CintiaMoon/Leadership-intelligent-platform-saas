@@ -1,9 +1,9 @@
 # SPEC-OWN Traceability (implementation status)
 
-- Updated: 2026-10-26, after the Phase 6 reviews and fixes. **Awaiting the user sign-off.**
+- Updated: 2026-10-27. **Slice 005 was signed off by the user on 2026-10-27** ("1. sign off. 2. yes. 3. yes", answering the closure questions below), with the open items listed at the end of the Phase 6 section.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL); for the frontend, in the web unit tests and Playwright.
 - Plan: `plan.md` (approved 2026-10-25, Q-01 to Q-19, D-176 to D-194). Spec approved the same day with AC-OWN-18 to AC-OWN-23 added.
-- Phases: 0 to 6 done. Phase 6 closes with the user sign-off (below). AC-OWN-06 and 09 are not finished (see their rows); everything else is Verified over HTTP as well as at the service, and AC-OWN-17 and 18 on PostgreSQL with the operator script.
+- Phases: 0 to 6 done; signed off. AC-OWN-06 and 09 are not finished (see their rows); everything else is Verified over HTTP as well as at the service, and AC-OWN-17 and 18 on PostgreSQL with the operator script.
 
 | AC | Status | Planned | Evidence so far |
 |---|---|---|---|
@@ -139,3 +139,9 @@ Two read-only reviews were run by separate review agents (security and code), ea
 
 ### Sign-off
 Slice 005 is **ready for your sign-off**, with the open items above (the staging rehearsal and slice 007 are the two that cannot be closed here). Not signed off by anyone yet.
+
+### Sign-off record (2026-10-27)
+The user answered the three closure questions of the Phase 6 section:
+1. **Sign-off:** "sign off". Slice 005 is signed off as it stands. Still open and not blocking the sign-off: the staging rehearsal of the operator scripts (the security owner's team; it still gates routine use of the disable procedure, D-142), an explicit outbox redelivery test for AC-OWN-06, and the second half of AC-OWN-09 in slice 007.
+2. **Sibling scripts:** "yes". `disable-account-and-flag-companies.sql` and `reverse-account-disable.sql` now have the single-transaction marker and guard, a final consistency guard and the `session_user` audit, like the ownership script (11 and 10 statements instead of 8 and 7). New tests: each script, run outside a transaction, stops before changing anything (`OwnerAccountDisableProcedureTests.runOutsideASingleTransactionTheProcedureStopsBeforeItChangesAnything`, `OwnerAccountReversalProcedureTests.runOutsideASingleTransactionTheReversalStopsBeforeItChangesAnything`), and the disable audit records the login (`theAuditRecordsTheDatabaseLoginThatRanTheProcedure`). Mutation check: making the marker guard always pass fails the new test in each class (restored). The final guards cannot be made to fail alone by anything the scripts can do on PostgreSQL, so they have no test of their own: they are a second line behind the Owner trigger and the earlier statements.
+3. **Session rotation after a completed acceptance:** "yes". An error after a completed acceptance (the session rotation failing after the commit) stays as it is, like Leave.
