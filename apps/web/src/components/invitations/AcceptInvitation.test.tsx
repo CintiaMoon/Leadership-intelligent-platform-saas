@@ -135,7 +135,17 @@ test("a conflict is explained without saying which of the two reasons it was", a
   render(<AcceptInvitation signedIn />);
   fireEvent.click(await screen.findByRole("button", { name: "Accept invitation" }));
 
-  expect((await screen.findByRole("alert")).textContent).toMatch(/already be a member.*member limit/);
+  expect((await screen.findByRole("alert")).textContent).toMatch(/already be a member.*not be accepting new members/);
+  expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+});
+
+test("a full company says the member limit is reached", async () => {
+  respond(409, problem("MEMBER_LIMIT_REACHED", 409));
+  openLink();
+  render(<AcceptInvitation signedIn />);
+  fireEvent.click(await screen.findByRole("button", { name: "Accept invitation" }));
+
+  expect((await screen.findByRole("alert")).textContent).toMatch(/reached the member limit of its plan/);
   expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
 });
 

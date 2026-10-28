@@ -32,7 +32,7 @@ File: `docs/runbooks/operations/sql/operator-assign-plan.sql`. One transaction, 
 6. **Checks the result and stops if it is wrong**: it prints state, plan, version, the plan's member limit and the number of ACTIVE members, then a last guard rolls everything back unless the company is ACTIVE on the newest version of the plan.
 
 ## Before a downgrade
-A downgrade removes nothing and suspends nobody (plan Q-18). If the company has more ACTIVE members than the new plan allows, they all stay, but **reactivating a member is refused with `MEMBER_LIMIT_REACHED`, and accepting an invitation is refused with a 409 conflict, until usage is below the limit**. Tell the requester before you run it. Look at the numbers first:
+A downgrade removes nothing and suspends nobody (plan Q-18). If the company has more ACTIVE members than the new plan allows, they all stay, but **reactivating a member is refused with `MEMBER_LIMIT_REACHED`, and accepting an invitation is refused with `MEMBER_LIMIT_REACHED`, until usage is below the limit**. Tell the requester before you run it. Look at the numbers first:
 
 ```
 psql -c "SELECT (SELECT count(*) FROM membership WHERE company_id = '<company id>' AND status = 'ACTIVE') AS active_members, l.value AS new_limit FROM plan p JOIN plan_limit l ON l.plan_id = p.id AND l.limit_key = 'ACTIVE_MEMBERS' WHERE p.code = '<STARTER or TEAM>' ORDER BY p.version DESC LIMIT 1"

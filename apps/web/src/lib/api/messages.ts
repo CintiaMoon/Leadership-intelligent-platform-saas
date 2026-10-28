@@ -54,6 +54,9 @@ function formMessage(
   if (code === "PLAN_RESTRICTED") {
     return PLAN_RESTRICTED_MESSAGE;
   }
+  if (context === "invitation" && code === "MEMBER_LIMIT_REACHED") {
+    return "This company has reached the member limit of its plan, so you can't join yet. Ask an administrator.";
+  }
   if (code === "MEMBER_LIMIT_REACHED") {
     return MEMBER_LIMIT_MESSAGE;
   }
@@ -61,8 +64,8 @@ function formMessage(
     return "This invitation link is invalid or has expired. Ask the person who invited you to send a new one.";
   }
   if (context === "invitation" && code === "CONFLICT") {
-    // The API answers both cases with the same code, so the text covers both (SPEC-INV Q-09).
-    return "You can't join this company with this invitation. You may already be a member, or the company may have reached its member limit. Ask an administrator.";
+    // Already a member and a restricted plan state are the same code on purpose (SPEC-INV Q-09); the text covers both.
+    return "You can't join this company with this invitation. You may already be a member, or the company may not be accepting new members. Ask an administrator.";
   }
   if (context === "invite" && code === "CONFLICT") {
     // Already a member and already invited are the same code on purpose (SPEC-INV); the text covers both.

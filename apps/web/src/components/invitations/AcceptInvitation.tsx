@@ -74,7 +74,7 @@ export function AcceptInvitation({ signedIn }: { signedIn: boolean }) {
       return;
     }
     const code = result.problem?.code;
-    if (code === "TOKEN_INVALID" || code === "CONFLICT") {
+    if (code === "TOKEN_INVALID" || code === "CONFLICT" || code === "MEMBER_LIMIT_REACHED") {
       // The invitation cannot be used by this person; keeping the token would only invite more failed attempts.
       clearInvitationToken();
       setOutcome({ kind: "refused", attempt, message: describeFailure(result, "invitation").form ?? INVALID });

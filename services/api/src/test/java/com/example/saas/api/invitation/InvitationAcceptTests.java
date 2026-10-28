@@ -185,6 +185,7 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 			MvcResult result = accept(invitee, issued.token());
 
 			assertThat(result.getResponse().getStatus()).as("after %d hours", hours).isEqualTo(409);
+			assertThat(parse(result).get("code").asString()).as("the state is not told to the invitee").isEqualTo("CONFLICT");
 			assertThat(status(issued.invitationId())).isEqualTo("PENDING");
 			assertThat(liveMemberships(company.id(), invitee.userId())).isZero();
 		}
