@@ -1,6 +1,6 @@
 -- Assign a plan to a company, or change its plan (SPEC-PLAN, AC-PLAN-21, D-35, plan Q-15).
 --
--- Run with psql in ONE transaction. All three variables are required:
+-- Run with psql in ONE transaction and with ON_ERROR_STOP. All three variables are required:
 --   psql --single-transaction --set ON_ERROR_STOP=1 -v company=<company uuid> -v plan=TEAM -v ticket=BILL-42 \
 --        -f operator-assign-plan.sql
 -- company: the id of ONE company (run the script once per company). plan: STARTER or TEAM, nothing else (the Trial is
@@ -8,6 +8,8 @@
 -- If a variable is missing psql sends the text unchanged, the statement fails, and nothing is committed.
 -- The integration test OperatorAssignPlanTests runs these statements against PostgreSQL. Keep them in step.
 -- Read docs/runbooks/operations/plan-change.md first.
+-- Run WITHOUT ON_ERROR_STOP the script quits before it does anything (the meta-commands below): the guards that follow
+-- stop the script only by raising an error, and psql carries on after an error unless ON_ERROR_STOP is set.
 -- Run WITHOUT --single-transaction the script refuses to go on (see the marker statements below).
 -- Idempotent: when the company is already ACTIVE on the latest version of that plan, nothing is changed and no audit
 -- event is written (AC-PLAN-11).
@@ -15,6 +17,18 @@
 --
 -- The guards divide by the number of rows that must exist, so that psql stops with an error when a condition is not met.
 -- (Do not write them as CASE ... ELSE 1 / 0: the planner folds that constant and fails always.)
+
+-- Quit at once, before anything else, unless ON_ERROR_STOP is set to a true value (psql meta-commands, not SQL).
+\if :{?ON_ERROR_STOP}
+\else
+\echo 'operator-assign-plan.sql: run psql with --set ON_ERROR_STOP=1. Nothing was changed.'
+\quit
+\endif
+\if :ON_ERROR_STOP
+\else
+\echo 'operator-assign-plan.sql: ON_ERROR_STOP must be on (1). Nothing was changed.'
+\quit
+\endif
 
 -- 0. Stop here, with an error and nothing changed, if a variable is malformed.
 SELECT 1 / (CASE WHEN :'ticket' ~ '^[A-Za-z0-9_-]{1,40}$' THEN 1 ELSE 0 END) AS ticket_ok;
@@ -110,7 +124,7 @@ SELECT now(), 'plan.entitlement.changed', changed.company_id, 'operator', 'compa
 
 -- 6. Check: the company is ACTIVE on the newest version of the plan. The first query shows it with the limit of the new
 -- plan next to the members now ACTIVE. A downgrade below that number removes and suspends nobody (Q-18): the members stay,
--- and until usage is below the limit a reactivation or an invitation acceptance is refused with MEMBER_LIMIT_REACHED.
+-- and until usage is below the limit a reactivation is refused with MEMBER_LIMIT_REACHED and an invitation acceptance with a 409.
 SELECT s.state, p.code AS plan, p.version AS plan_version,
        (SELECT l.value FROM plan_limit l WHERE l.plan_id = p.id AND l.limit_key = 'ACTIVE_MEMBERS') AS active_members_limit,
        (SELECT count(*) FROM membership m WHERE m.company_id = s.company_id AND m.status = 'ACTIVE') AS active_members

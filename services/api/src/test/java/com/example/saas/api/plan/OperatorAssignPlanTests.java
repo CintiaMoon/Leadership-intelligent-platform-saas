@@ -399,6 +399,40 @@ class OperatorAssignPlanTests extends PlanTestBase {
 				"EXPIRED_READ_ONLY");
 	}
 
+	@Test
+	void theScriptGivesUpAfterFiveSecondsOfWaitingForTheCompanyLock() throws Exception {
+		Company company = company();
+		List<String> statements = RunbookSql.statements(ASSIGN, variables(company.id(), "TEAM", "BILL-1"));
+		String before = snapshot(company.id());
+
+		CompletableFuture<Void> script = new CompletableFuture<>();
+		long[] waited = new long[1];
+		tx.executeWithoutResult(s -> {
+			locks.lockCompany(company.id());
+			long start = System.nanoTime();
+			CompletableFuture.runAsync(() -> {
+				try {
+					tx.executeWithoutResult(t -> statements.forEach(jdbc::execute));
+					script.complete(null);
+				}
+				catch (RuntimeException e) {
+					waited[0] = (System.nanoTime() - start) / 1_000_000;
+					script.completeExceptionally(e);
+				}
+			});
+			// Hold the lock well past the script's own 5 seconds; the script must give up by itself.
+			sleep(7500);
+			assertThat(script.isDone()).as("the script gave up while the lock was still held").isTrue();
+		});
+
+		assertThatThrownBy(() -> script.get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(DataAccessException.class)
+			.cause()
+			.rootCause()
+			.hasMessageContaining("lock timeout");
+		assertThat(waited[0]).as("it waited about 5 seconds, not less and not for ever").isBetween(4500L, 7000L);
+		assertThat(snapshot(company.id())).isEqualTo(before);
+	}
+
 	private static void sleep(long millis) {
 		try {
 			Thread.sleep(millis);

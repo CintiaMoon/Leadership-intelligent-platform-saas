@@ -137,6 +137,10 @@ test("a company moves through the trial, read-only, locked and active, and the s
     await expect(row(page, "Cy Agent").getByRole("button", { name: "Remove Cy Agent" })).toHaveAttribute("aria-disabled", "true");
     await expectNoSeriousA11yViolations(page);
     await shots(page, "members-locked");
+    await page.goto(`/companies/${team.companyId}/ownership`);
+    const transfer = page.getByRole("button", { name: "Transfer ownership" });
+    await expect(transfer).toHaveAttribute("aria-disabled", "true");
+    await expect(transfer).toHaveAccessibleDescription(/company is locked/);
     await page.goto(`/companies/${team.companyId}/plan`);
     await expect(page.getByText("Plan ended (locked)")).toBeVisible();
     await shots(page, "plan-locked");

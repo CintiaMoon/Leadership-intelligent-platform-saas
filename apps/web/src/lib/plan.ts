@@ -98,7 +98,7 @@ export const STATE_LABEL: Record<SubscriptionState, string> = {
   ACTIVE: "Active",
 };
 
-export type PlanAction = "invite" | "resend" | "revoke" | "changeRole" | "reactivate" | "suspend" | "remove";
+export type PlanAction = "invite" | "resend" | "revoke" | "changeRole" | "reactivate" | "suspend" | "remove" | "transfer";
 
 export type Gate = { allowed: true } | { allowed: false; reason: string };
 
@@ -112,14 +112,15 @@ function running(state: SubscriptionState): boolean {
  * Whether the subscription state lets the caller use a control, and if not, why (the reason is shown, never silently
  * hidden). `null` means the state is not known to this screen (the person cannot read the plan): the API decides.
  * Mirrors `CompanyPolicy`: inviting, resending, changing roles and reactivating need a running plan; revoking an
- * invitation, suspending and removing need the company not to be locked. A role the matrix never grants is not in
+ * invitation, suspending, removing and every step of an ownership transfer (start, cancel, accept) need the company not
+ * to be locked. A role the matrix never grants is not in
  * question here: the existing `memberActions` and `invitationActions` decide that first.
  */
 export function gate(action: PlanAction, state: SubscriptionState | null): Gate {
   if (state === null || running(state)) {
     return OPEN;
   }
-  const untilLocked = action === "revoke" || action === "suspend" || action === "remove";
+  const untilLocked = action === "revoke" || action === "suspend" || action === "remove" || action === "transfer";
   if (untilLocked && state !== "EXPIRED_LOCKED") {
     return OPEN;
   }

@@ -3,7 +3,6 @@ package com.example.saas.api.plan.application;
 import java.util.UUID;
 
 import com.example.saas.api.plan.domain.LimitKey;
-import com.example.saas.api.plan.domain.SubscriptionState;
 import com.example.saas.api.tenant.application.ActiveMemberLimit;
 import org.springframework.stereotype.Component;
 
@@ -14,8 +13,10 @@ import org.springframework.stereotype.Component;
  * counted. Inviting is never capped (D-159).
  *
  * <p>
- * A company in NO_PLAN is not limited here: it has no limit to compare with, and the gating of Q-08 refuses the
- * operation before this is asked. Expired states keep the Trial's limit, so they are counted like a trial.
+ * A company in NO_PLAN has no room: with no plan there is no limit to compare with, and the answer fails closed. The
+ * gating of Q-08 refuses the operation before this is asked, so no caller meets this today; it is here so that a
+ * future caller that skips the gate does not inherit an unlimited company (Phase 6 review). Expired states keep the
+ * Trial's limit, so they are counted like a trial.
  */
 @Component
 class PlanActiveMemberLimit implements ActiveMemberLimit {
@@ -28,9 +29,6 @@ class PlanActiveMemberLimit implements ActiveMemberLimit {
 
 	@Override
 	public boolean hasRoomForAnotherActiveMember(UUID companyId) {
-		if (entitlements.state(companyId) == SubscriptionState.NO_PLAN) {
-			return true;
-		}
 		return entitlements.hasRoomFor(companyId, LimitKey.ACTIVE_MEMBERS);
 	}
 
