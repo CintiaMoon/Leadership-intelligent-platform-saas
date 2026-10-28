@@ -94,6 +94,7 @@ export default async function OwnershipPage({ params }: { params: Promise<{ comp
         companyStatus={company.status}
         transfer={transfer}
         candidates={candidates}
+        planState={plan?.state ?? null}
       />
     </>
   );

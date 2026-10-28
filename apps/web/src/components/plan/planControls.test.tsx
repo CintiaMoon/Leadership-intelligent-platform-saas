@@ -10,6 +10,8 @@ vi.mock("next/navigation", () => ({
 import { InvitationsList, type InvitationRow } from "@/components/invitations/InvitationsList";
 import { InviteButton } from "@/components/invitations/InviteButton";
 import { MembersList, type MemberRow } from "@/components/companies/MembersList";
+import { OwnershipPanel } from "@/components/ownership/OwnershipPanel";
+import type { TransferView } from "@/lib/ownership";
 import { MEMBER_LIMIT_MESSAGE, PLAN_RESTRICTED_MESSAGE } from "@/lib/api/messages";
 import { toPlanView, type PlanView, type SubscriptionState } from "@/lib/plan";
 
@@ -230,4 +232,64 @@ test("once locked, revoking is off too", () => {
   fireEvent.click(revoke);
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(sent()).toBe(0);
+});
+
+// ---- ownership
+
+const pendingTransfer: TransferView = {
+  id: "t1",
+  status: "PENDING",
+  initiatorName: "Ana Silva",
+  recipientName: "Cy Dube",
+  youAreInitiator: true,
+  youAreRecipient: false,
+  expires: "Nov 2, 2026",
+} as TransferView;
+
+function panel(mode: "owner" | "recipient", state: SubscriptionState | null, transfer: TransferView | null, candidates = [{ id: "m1", name: "Cy Dube", role: "AGENT" }]) {
+  return render(
+    <>
+      <p id={PLAN_STATUS_ID}>banner</p>
+      <OwnershipPanel
+        mode={mode}
+        companyId={COMPANY}
+        companyName="Acme"
+        companyStatus="ACTIVE"
+        transfer={transfer}
+        candidates={candidates}
+        planState={state}
+      />
+    </>,
+  );
+}
+
+test("once the company is locked, starting, cancelling and accepting a transfer are off and send nothing", () => {
+  const start = panel("owner", "EXPIRED_LOCKED", null);
+  const startButton = screen.getByRole("button", { name: "Transfer ownership" });
+  expect(startButton.getAttribute("aria-disabled")).toBe("true");
+  expect(startButton.getAttribute("aria-describedby")).toBe(PLAN_STATUS_ID);
+  fireEvent.change(screen.getByLabelText("New Owner"), { target: { value: "m1" } });
+  fireEvent.click(startButton);
+  start.unmount();
+
+  const cancel = panel("owner", "EXPIRED_LOCKED", pendingTransfer);
+  const cancelButton = screen.getByRole("button", { name: "Cancel the request" });
+  expect(cancelButton.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(cancelButton);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  cancel.unmount();
+
+  panel("recipient", "EXPIRED_LOCKED", { ...pendingTransfer, youAreInitiator: false, youAreRecipient: true } as TransferView);
+  const accept = screen.getByRole("button", { name: "Accept ownership" });
+  expect(accept.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(accept);
+  expect(sent()).toBe(0);
+});
+
+test("while read-only, with no plan, or with an unknown state, the transfer steps work as before", () => {
+  for (const state of ["EXPIRED_READ_ONLY", "NO_PLAN", "TRIALING", "ACTIVE", null] as const) {
+    const { unmount } = panel("owner", state, null);
+    expect(screen.getByRole("button", { name: "Transfer ownership" }).getAttribute("aria-disabled"), String(state)).toBeNull();
+    unmount();
+  }
 });

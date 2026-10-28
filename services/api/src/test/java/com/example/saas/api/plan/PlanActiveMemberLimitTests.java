@@ -108,15 +108,15 @@ class PlanActiveMemberLimitTests extends PlanTestBase {
 	}
 
 	@Test
-	void aCompanyWithoutAPlanIsNotCountedHereBecauseTheGatingRefusesBeforeTheLimitIsAsked() {
+	void aCompanyWithoutAPlanHasNoRoomAndTheGatingRefusesBeforeTheLimitIsAsked() {
 		UUID user = newUser();
 		createCompany(user);
 		CompanyView noPlan = createCompany(user);
 		UUID target = member(noPlan.id(), "SUSPENDED");
 
-		// The limit itself has nothing to compare with and does not refuse...
-		assertThat(limit.hasRoomForAnotherActiveMember(noPlan.id())).isTrue();
-		// ...because reactivation is refused earlier, by the subscription state (403 PLAN_RESTRICTED).
+		// The limit itself fails closed: with no plan there is no room...
+		assertThat(limit.hasRoomForAnotherActiveMember(noPlan.id())).isFalse();
+		// ...but reactivation is refused earlier, by the subscription state (403 PLAN_RESTRICTED), so nobody meets this.
 		assertThatThrownBy(() -> memberships.reactivate(session(user), noPlan.id(), target))
 			.isInstanceOfSatisfying(PlanRestrictedException.class,
 					e -> assertThat(e.state()).isEqualTo(SubscriptionState.NO_PLAN));

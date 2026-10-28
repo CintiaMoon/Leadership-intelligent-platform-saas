@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Reads an operator script from the runbooks and turns it into statements the tests can run through JDBC: comment lines
- * dropped, each psql variable ({@code :'name'}) replaced by a quoted literal, one element per statement. A statement ends
+ * and psql meta-commands (lines starting with a backslash) dropped, each psql variable ({@code :'name'}) replaced by a quoted literal, one element per statement. A statement ends
  * at a semicolon at the end of a line; the scripts keep semicolons out of their comments so this is safe.
  */
 public final class RunbookSql {
@@ -21,7 +21,7 @@ public final class RunbookSql {
 		StringBuilder current = new StringBuilder();
 		List<String> out = new ArrayList<>();
 		for (String line : Files.readAllLines(script)) {
-			if (line.strip().startsWith("--")) {
+			if (line.strip().startsWith("--") || line.startsWith("\\")) {
 				continue;
 			}
 			String sql = line;

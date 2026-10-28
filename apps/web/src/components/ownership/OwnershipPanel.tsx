@@ -6,8 +6,10 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PasswordDialog } from "@/components/app/PasswordDialog";
 import { useActionRunner } from "@/components/app/useActionRunner";
 import { DANGER_BUTTON, PRIMARY_BUTTON } from "@/components/app/buttons";
+import { PLAN_STATUS_ID } from "@/components/plan/PlanBanner";
 import { send } from "@/lib/api/client";
 import type { Candidate, TransferView } from "@/lib/ownership";
+import { gate, type SubscriptionState } from "@/lib/plan";
 import { roleLabel } from "@/lib/roles";
 
 const SECTION = "mt-5 max-w-[560px] rounded-xl border border-line bg-surface p-5";
@@ -30,6 +32,7 @@ export function OwnershipPanel({
   companyStatus,
   transfer,
   candidates,
+  planState = null,
 }: {
   mode: "owner" | "recipient" | "none";
   companyId: string;
@@ -37,6 +40,8 @@ export function OwnershipPanel({
   companyStatus: string;
   transfer: TransferView | null;
   candidates: Candidate[];
+  /** The subscription state when the caller can read the plan; once the company is locked every step is off. */
+  planState?: SubscriptionState | null;
 }) {
   const { notice, noticeRef, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner(
     "transfer",
@@ -51,11 +56,17 @@ export function OwnershipPanel({
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const base = `/api/companies/${companyId}/ownership-transfers`;
+  const transferGate = gate("transfer", planState);
+  // A step the plan state refuses stays on the page, says it is off and points at the plan banner.
+  const refused = transferGate.allowed ? {} : { "aria-disabled": true as const, "aria-describedby": PLAN_STATUS_ID };
   const pending = transfer?.status === "PENDING" ? transfer : null;
   const expired = transfer?.status === "EXPIRED" ? transfer : null;
 
   function ask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!transferGate.allowed) {
+      return;
+    }
     const person = candidates.find((candidate) => candidate.id === choice);
     if (!person) {
       setChoiceError("Choose the member who should become the Owner.");
@@ -75,7 +86,7 @@ export function OwnershipPanel({
   }
 
   function accept() {
-    if (!transfer) {
+    if (!transfer || !transferGate.allowed) {
       return;
     }
     void run(
@@ -130,7 +141,8 @@ export function OwnershipPanel({
                   type="button"
                   className={DANGER_BUTTON}
                   aria-disabled={busy === pending.id || undefined}
-                  onClick={() => busy !== pending.id && setConfirmCancel(true)}
+                  {...refused}
+                  onClick={() => busy !== pending.id && transferGate.allowed && setConfirmCancel(true)}
                 >
                   Cancel the request
                 </button>
@@ -188,7 +200,7 @@ export function OwnershipPanel({
                     </p>
                   ) : null}
                   <div className="mt-5">
-                    <button type="submit" className={PRIMARY_BUTTON} aria-disabled={busy === "ask" || undefined}>
+                    <button type="submit" className={PRIMARY_BUTTON} aria-disabled={busy === "ask" || undefined} {...refused}>
                       {busy === "ask" ? "Sending…" : "Transfer ownership"}
                     </button>
                   </div>
@@ -214,6 +226,7 @@ export function OwnershipPanel({
                 type="button"
                 className={PRIMARY_BUTTON}
                 aria-disabled={busy === pending.id || undefined}
+                {...refused}
                 onClick={() => busy !== pending.id && accept()}
               >
                 {busy === pending.id ? "Accepting…" : "Accept ownership"}

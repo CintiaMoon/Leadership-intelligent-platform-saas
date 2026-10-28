@@ -17,7 +17,7 @@ import {
 } from "./plan";
 
 const STATES: SubscriptionState[] = ["NO_PLAN", "TRIALING", "EXPIRED_READ_ONLY", "EXPIRED_LOCKED", "ACTIVE"];
-const ACTIONS: PlanAction[] = ["invite", "resend", "revoke", "changeRole", "reactivate", "suspend", "remove"];
+const ACTIONS: PlanAction[] = ["invite", "resend", "revoke", "changeRole", "reactivate", "suspend", "remove", "transfer"];
 
 /** The spec's gating table (section 3a) for the controls this screen has: true means the state lets the control work. */
 const TABLE: Record<PlanAction, Record<SubscriptionState, boolean>> = {
@@ -28,6 +28,8 @@ const TABLE: Record<PlanAction, Record<SubscriptionState, boolean>> = {
   reactivate: { NO_PLAN: false, TRIALING: true, EXPIRED_READ_ONLY: false, EXPIRED_LOCKED: false, ACTIVE: true },
   suspend: { NO_PLAN: true, TRIALING: true, EXPIRED_READ_ONLY: true, EXPIRED_LOCKED: false, ACTIVE: true },
   remove: { NO_PLAN: true, TRIALING: true, EXPIRED_READ_ONLY: true, EXPIRED_LOCKED: false, ACTIVE: true },
+  // Start, cancel and accept an ownership transfer: allowed until the company is locked.
+  transfer: { NO_PLAN: true, TRIALING: true, EXPIRED_READ_ONLY: true, EXPIRED_LOCKED: false, ACTIVE: true },
 };
 
 test("every control in every state follows the spec table, and a refusal always says why", () => {

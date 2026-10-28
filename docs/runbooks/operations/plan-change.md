@@ -20,18 +20,19 @@ It never grants a Trial and never ends a subscription: the Trial is granted by t
 ## What the script does
 File: `docs/runbooks/operations/sql/operator-assign-plan.sql`. One transaction, one company at a time. The script:
 
+0. **Quits at once, before anything else, unless psql was started with `ON_ERROR_STOP` on** (`--set ON_ERROR_STOP=1`; it prints why and changes nothing). The guards below stop the script by raising an error, and psql carries on after an error unless `ON_ERROR_STOP` is set.
 1. **Checks the inputs** and stops with an error, committing nothing, if the ticket is malformed (letters, digits, `-`, `_`, up to 40), the plan is anything but exactly `STARTER` or `TEAM` (`TRIAL`, lower case and unknown codes are refused), or the company id is not a lower-case UUID. It then **refuses to go on unless it is running inside one transaction**: without `--single-transaction` every statement would commit on its own and the locks would be released between the checks and the writes.
 2. **Locks** the company row first (the application's lock order, D-32, D-125), then the subscription row. It gives up on a lock after 5 seconds; run it again. While the company lock is held no member change, invitation or ownership transfer can be in flight in that company, and every decision the application takes afterwards reads the new plan.
 3. **Checks the state** and stops with an error if the company does not exist, has no subscription row (a data fault: the script does not repair it), or the plan is not in the catalog. It uses the **newest version** of the plan code (AC-PLAN-16). Companies on a plan keep the version they have until an operator moves them.
 4. **Changes** the subscription: state `ACTIVE`, the plan, `state_changed_at`, `version`. The trial dates stay on the row as history; the API does not show them for an ACTIVE company and the sweep ignores it. The change is effective **at once**, including for a company whose trial had ended but whose end the sweep had not yet recorded. It changes nothing when the company is already ACTIVE on the newest version of that plan: a second run writes no audit event (AC-PLAN-11).
 5. **Audits** with `actor_type = 'operator'`. The reasons hold the ticket and the database login that ran the script, `session_user` (and the role it switched to, if that differs), because operators have no user ID yet:
-   - `plan.subscription.transitioned`: before and after state, reason `operator_assigned` (the company was not ACTIVE) or `operator_changed` (it was).
+   - `plan.subscription.transitioned`: before and after state, reason `operator_assigned` (the company was not ACTIVE) or `operator_changed` (it was). The before state is the **recorded** one: a trial whose end the sweep had not yet recorded shows `TRIALING` even if it had already ended, and no `trial_expired` or `read_only_ended` event is written for it afterwards (the sweep ignores ACTIVE companies).
    - `plan.entitlement.changed`, only when the plan row changes: before and after plan **code** (`TRIAL`, `STARTER`, `TEAM`; empty before for a company with no plan), the versions in the reason (`from_version=1 to_version=1`).
    No address and no name is written.
 6. **Checks the result and stops if it is wrong**: it prints state, plan, version, the plan's member limit and the number of ACTIVE members, then a last guard rolls everything back unless the company is ACTIVE on the newest version of the plan.
 
 ## Before a downgrade
-A downgrade removes nothing and suspends nobody (plan Q-18). If the company has more ACTIVE members than the new plan allows, they all stay, but **every reactivation of a member and every acceptance of an invitation is refused with `MEMBER_LIMIT_REACHED` until usage is below the limit**. Tell the requester before you run it. Look at the numbers first:
+A downgrade removes nothing and suspends nobody (plan Q-18). If the company has more ACTIVE members than the new plan allows, they all stay, but **reactivating a member is refused with `MEMBER_LIMIT_REACHED`, and accepting an invitation is refused with a 409 conflict, until usage is below the limit**. Tell the requester before you run it. Look at the numbers first:
 
 ```
 psql -c "SELECT (SELECT count(*) FROM membership WHERE company_id = '<company id>' AND status = 'ACTIVE') AS active_members, l.value AS new_limit FROM plan p JOIN plan_limit l ON l.plan_id = p.id AND l.limit_key = 'ACTIVE_MEMBERS' WHERE p.code = '<STARTER or TEAM>' ORDER BY p.version DESC LIMIT 1"
@@ -66,22 +67,23 @@ The new version reaches nobody by itself. To move a company to it, run this scri
 ## If it goes wrong
 - **An error from the script:** nothing was changed. Read the error: a division by zero names the failed condition in the column alias of the query (`ticket_ok`, `plan_is_starter_or_team`, `company_is_a_lower_case_uuid`, `inside_one_transaction`, `company_exists`, `subscription_exists`, `plan_exists_in_the_catalog`, `assignment_is_consistent`). Fix the input or the ticket, never the script.
 - **A lock timeout:** a long application transaction holds the company. Wait a minute and run it again.
-- **The wrong plan, found after the commit:** open a new ticket and run the script again with the right plan. Both changes stay in the audit trail. Do not edit `company_subscription` by hand: its triggers refuse the changes the state machine does not allow, and a hand edit would leave no audit row.
+- **The wrong plan, found after the commit:** open a new ticket and run the script again with the right plan. Both changes stay in the audit trail. Do not edit `company_subscription` by hand: its triggers refuse a change of state the state machine does not allow, but they do not stop an edit that keeps the state (the trial dates, the plan), and no hand edit leaves an audit row.
 - **A company the script refuses because it has no subscription row:** this should not happen (every company gets one when it is created, and the migration gave the existing ones `NO_PLAN`). Do not insert one by hand. Raise it with the engineering owner.
 
 ## Gaps to close
 - There is no operator endpoint or operator identity; the audit rows carry the ticket and the database role (see `operator-account-disable.md`).
 - There is no way to end or cancel a paid plan, and no `PAST_DUE` or `CANCELED` state: they belong to the billing slice (D-66).
 - The ticket is a checked string, not a proof: nothing in the database shows that it exists or was approved, so the two-person rule is procedural.
-- Not tested: a lock timeout of exactly 5 seconds (the lock-wait test proves the order of the locks, not the timeout value). The guards `plan_exists_in_the_catalog` and the transition check, and the final consistency guard, cannot be made to fail on their own through the database (the whitelist, the check constraints and the transition trigger stop first); they are second lines, and the mutation checks recorded in the traceability file say so.
+- The 5-second lock timeout is tested (`theScriptGivesUpAfterFiveSecondsOfWaitingForTheCompanyLock`: it gives up after about 5 seconds with a lock-timeout error, nothing changed). Not tested: the script's behaviour on a psql version other than 17.6. The guards `plan_exists_in_the_catalog` and the transition check, and the final consistency guard, cannot be made to fail on their own through the database (the whitelist, the check constraints and the transition trigger stop first); they are second lines, and the mutation checks recorded in the traceability file say so.
 - The script counts only members. When the team and assessment slices exist, the downgrade check must show their usage too.
 
 ## Test record
-Automated: `OperatorAssignPlanTests` (15 tests against PostgreSQL in every build; its mutation checks are listed in `docs/specs/006-plans-entitlements/traceability.md`).
+Automated: `OperatorAssignPlanTests` (16 tests against PostgreSQL in every build; its mutation checks are listed in `docs/specs/006-plans-entitlements/traceability.md`).
 
 Manual: see the table below. The staging rehearsal has **not** been done; record its date, the tester and the result here.
 
 | Date | Environment | Tester | Result |
 |---|---|---|---|
 | 2026-10-28 | local `psql` 17.6 inside a throwaway `postgres:17.6` container, migrations V1 to V15 applied | Claude (assistant) | Passed: a bad ticket, a missing variable and a run without `--single-transaction` stop the script with nothing written; a company with no subscription row is refused; NO_PLAN to TEAM, a repeat (no new audit rows) and TEAM to STARTER ended ACTIVE on the intended plan with 4 audit rows (`operator_assigned`, `operator_changed`, two `plan.entitlement.changed`). The application was not running, so effects through the API were not checked |
+| 2026-10-28 | local `psql` 17.6 inside a throwaway `postgres:17.6` container (slice 006 phase 6, after the security review) | Claude (assistant) | Passed: without `ON_ERROR_STOP`, and with it set to 0, the script quits before doing anything (no audit row, state unchanged); with `ON_ERROR_STOP=1` but no `--single-transaction` it stops at the `inside_one_transaction` guard; the correct run ends ACTIVE on TEAM with 2 audit rows |
 | (pending) | staging | product owner's team | not done |
