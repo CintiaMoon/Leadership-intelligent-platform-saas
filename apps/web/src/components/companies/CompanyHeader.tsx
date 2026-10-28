@@ -6,8 +6,8 @@ import { RoleBadge } from "./CompanyList";
 
 /**
  * The top of every company page (D-169): the company, the person's role, and the tab row (Members and Pending
- * invitations for Owners and Admins; Ownership for the Owner, and for anyone with an ownership request waiting; Plan and
- * Settings are added by their slices). Agents and Viewers have no tabs unless a request is waiting for them.
+ * invitations and Plan for Owners and Admins; Ownership for the Owner, and for anyone with an ownership request waiting;
+ * Settings is added by its slice). Agents and Viewers have no tabs unless a request is waiting for them.
  */
 export function CompanyHeader({
   companyId,
@@ -19,7 +19,7 @@ export function CompanyHeader({
   companyId: string;
   name: string;
   role: string;
-  active?: "members" | "invitations" | "ownership";
+  active?: "members" | "invitations" | "ownership" | "plan";
   /** An ownership request is waiting for this person to accept (D-192). */
   requestWaiting?: boolean;
 }) {
@@ -53,6 +53,13 @@ export function CompanyHeader({
                 className={tab("invitations")}
               >
                 Pending invitations
+              </Link>
+              <Link
+                href={`/companies/${companyId}/plan`}
+                aria-current={active === "plan" ? "page" : undefined}
+                className={tab("plan")}
+              >
+                Plan
               </Link>
             </>
           ) : null}

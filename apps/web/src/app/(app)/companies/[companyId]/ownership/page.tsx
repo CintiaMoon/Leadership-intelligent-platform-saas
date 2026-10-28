@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 
 import { CompanyHeader } from "@/components/companies/CompanyHeader";
 import { NotAvailable } from "@/components/companies/NotAvailable";
+import { PlanBanner } from "@/components/plan/PlanBanner";
+import { PlanEnded } from "@/components/plan/PlanEnded";
 import { OwnershipPanel } from "@/components/ownership/OwnershipPanel";
 import { ownershipView, toCandidates, waitingForYou } from "@/lib/ownership";
 import { toMemberRows } from "@/lib/rows";
 import { readApi } from "@/lib/server/api";
 import { loadCompany } from "@/lib/server/company";
 import { readTransfer } from "@/lib/server/ownership";
+import { loadPlan } from "@/lib/server/subscription";
 import { signInAgain } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Ownership" };
@@ -22,6 +25,9 @@ type MemberDto = Record<string, unknown>;
 export default async function OwnershipPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId } = await params;
   const loaded = await loadCompany(companyId);
+  if (loaded.kind === "restricted") {
+    return <PlanEnded />;
+  }
   if (loaded.kind === "unavailable") {
     return <NotAvailable />;
   }
@@ -68,6 +74,9 @@ export default async function OwnershipPage({ params }: { params: Promise<{ comp
     candidates = toCandidates(toMemberRows(members.data));
   }
 
+  // Only an Owner or an Admin can read the plan; for anyone else the banner is simply absent.
+  const plan = await loadPlan(incoming, config, company.id);
+
   return (
     <>
       <CompanyHeader
@@ -77,6 +86,7 @@ export default async function OwnershipPage({ params }: { params: Promise<{ comp
         active="ownership"
         requestWaiting={waitingForYou(transfer)}
       />
+      <PlanBanner plan={plan} now={new Date()} />
       <OwnershipPanel
         mode={mode}
         companyId={company.id}

@@ -8,7 +8,9 @@ import { useActionRunner } from "@/components/app/useActionRunner";
 import { DANGER_BUTTON, SECONDARY_BUTTON } from "@/components/app/buttons";
 import { RoleBadge } from "@/components/companies/CompanyList";
 import { send } from "@/lib/api/client";
+import { PLAN_STATUS_ID } from "@/components/plan/PlanBanner";
 import { invitationActions } from "@/lib/invitationActions";
+import { gate, type Gate, type SubscriptionState } from "@/lib/plan";
 
 export type InvitationRow = {
   id: string;
@@ -19,6 +21,11 @@ export type InvitationRow = {
   emailSent: boolean;
 };
 
+/** The attributes of a control the plan state refuses: it stays visible, says it is off, and points at the reason. */
+function refused(g: Gate) {
+  return g.allowed ? {} : { "aria-disabled": true as const, "aria-describedby": PLAN_STATUS_ID };
+}
+
 /**
  * The pending invitations of one company (P2, pending tab). The list never holds a token or a link: the API does not
  * return one. Resend and revoke are offered only where the caller may use them; the API decides every request.
@@ -28,11 +35,14 @@ export function InvitationsList({
   callerRole,
   companyStatus,
   invitations,
+  planState = null,
 }: {
   companyId: string;
   callerRole: string;
   companyStatus: string;
   invitations: InvitationRow[];
+  /** The subscription state when the caller can read the plan; the API checks every request. */
+  planState?: SubscriptionState | null;
 }) {
   const { notice, noticeRef, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("invitation", invitations);
   const [revoking, setRevoking] = useState<InvitationRow | null>(null);
@@ -40,6 +50,8 @@ export function InvitationsList({
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
   const base = `/api/companies/${companyId}/invitations`;
+  const resendGate = gate("resend", planState);
+  const revokeGate = gate("revoke", planState);
 
   function resend(invitation: InvitationRow) {
     void run(
@@ -102,7 +114,8 @@ export function InvitationsList({
                         className={SECONDARY_BUTTON}
                         aria-disabled={rowBusy || undefined}
                         aria-label={`Resend the invitation to ${invitation.email}`}
-                        onClick={() => !rowBusy && resend(invitation)}
+                        {...refused(resendGate)}
+                        onClick={() => !rowBusy && resendGate.allowed && resend(invitation)}
                       >
                         Resend
                       </button>
@@ -113,7 +126,8 @@ export function InvitationsList({
                         className={DANGER_BUTTON}
                         aria-disabled={rowBusy || undefined}
                         aria-label={`Revoke the invitation to ${invitation.email}`}
-                        onClick={() => !rowBusy && setRevoking(invitation)}
+                        {...refused(revokeGate)}
+                        onClick={() => !rowBusy && revokeGate.allowed && setRevoking(invitation)}
                       >
                         Revoke
                       </button>

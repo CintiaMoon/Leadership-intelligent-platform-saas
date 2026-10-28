@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { CompanyHeader } from "@/components/companies/CompanyHeader";
 import { LeaveCompany } from "@/components/companies/LeaveCompany";
 import { NotAvailable } from "@/components/companies/NotAvailable";
+import { PlanEnded } from "@/components/plan/PlanEnded";
 import { TransferBanner } from "@/components/ownership/TransferBanner";
 import { mayManageMembers } from "@/lib/memberActions";
 import { waitingForYou } from "@/lib/ownership";
@@ -20,6 +21,9 @@ export const metadata: Metadata = { title: "Company" };
 export default async function CompanyPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId } = await params;
   const loaded = await loadCompany(companyId);
+  if (loaded.kind === "restricted") {
+    return <PlanEnded />;
+  }
   if (loaded.kind === "unavailable") {
     return <NotAvailable />;
   }

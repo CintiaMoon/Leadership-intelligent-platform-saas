@@ -9,24 +9,31 @@ import { useModalDialog } from "@/components/app/useModalDialog";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "@/components/app/buttons";
 import { send, type ApiResult } from "@/lib/api/client";
 import { describeFailure, type FormError } from "@/lib/api/messages";
+import { PLAN_STATUS_ID } from "@/components/plan/PlanBanner";
 import { invitableRoles } from "@/lib/invitationActions";
+import { gate, type SubscriptionState } from "@/lib/plan";
 import { roleLabel } from "@/lib/roles";
 
 /**
  * "Invite someone" and its dialog (P3). One address and one role the caller may give. The dialog never shows or asks for
  * a token. Inviting an Admin with a stale login opens the password dialog and sends the same request once more (D-174).
- * The capacity warning of the brief waits for the plan data of slice 006 (AC-INV-26); creating is never capped here.
+ * While the plan state refuses invitations (read-only, no plan, locked) the button stays, marked as not available and
+ * pointing at the plan banner, and opens nothing (plan Q-19). The member limit does not stop an invitation: it applies
+ * when someone accepts (AC-INV-26).
  */
 export function InviteButton({
   companyId,
   callerRole,
   companyStatus,
   onPendingPage = false,
+  planState = null,
 }: {
   companyId: string;
   callerRole: string;
   companyStatus: string;
   onPendingPage?: boolean;
+  /** The subscription state when the caller can read the plan; the API checks every request. */
+  planState?: SubscriptionState | null;
 }) {
   const router = useRouter();
   const roles = invitableRoles(callerRole, companyStatus);
@@ -43,6 +50,13 @@ export function InviteButton({
 
   if (roles.length === 0) {
     return null;
+  }
+  if (!gate("invite", planState).allowed) {
+    return (
+      <button type="button" className={PRIMARY_BUTTON} aria-disabled="true" aria-describedby={PLAN_STATUS_ID}>
+        Invite someone
+      </button>
+    );
   }
 
   function close() {

@@ -5,6 +5,8 @@ import { InviteButton } from "@/components/invitations/InviteButton";
 import { LeaveCompany } from "@/components/companies/LeaveCompany";
 import { MembersList } from "@/components/companies/MembersList";
 import { NotAvailable } from "@/components/companies/NotAvailable";
+import { PlanBanner } from "@/components/plan/PlanBanner";
+import { PlanEnded } from "@/components/plan/PlanEnded";
 import { TransferBanner } from "@/components/ownership/TransferBanner";
 import { mayManageMembers } from "@/lib/memberActions";
 import { waitingForYou } from "@/lib/ownership";
@@ -12,6 +14,7 @@ import { toMemberRows } from "@/lib/rows";
 import { readApi } from "@/lib/server/api";
 import { loadCompany } from "@/lib/server/company";
 import { loadTransfer } from "@/lib/server/ownership";
+import { loadPlan } from "@/lib/server/subscription";
 import { signInAgain } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Members" };
@@ -22,6 +25,9 @@ type MemberDto = Record<string, unknown>;
 export default async function MembersPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId } = await params;
   const loaded = await loadCompany(companyId);
+  if (loaded.kind === "restricted") {
+    return <PlanEnded />;
+  }
   if (loaded.kind === "unavailable") {
     return <NotAvailable />;
   }
@@ -54,6 +60,7 @@ export default async function MembersPage({ params }: { params: Promise<{ compan
   // The Owner started any request, so only an Admin can be the one it is waiting for.
   const request = company.role === "OWNER" ? null : await loadTransfer(incoming, config, company.id);
   const waiting = waitingForYou(request);
+  const plan = await loadPlan(incoming, config, company.id);
 
   return (
     <>
@@ -65,6 +72,7 @@ export default async function MembersPage({ params }: { params: Promise<{ compan
         requestWaiting={waiting}
       />
       {waiting && request ? <TransferBanner companyId={company.id} initiatorName={request.initiatorName} /> : null}
+      <PlanBanner plan={plan} now={new Date()} />
       {company.status !== "ACTIVE" ? (
         <p className="mt-5 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink">
           This company is scheduled for deletion. Its members cannot be changed.
@@ -77,7 +85,12 @@ export default async function MembersPage({ params }: { params: Promise<{ compan
             <LeaveCompany companyId={company.id} companyName={company.name} role={company.role} />
           </div>
         </div>
-        <InviteButton companyId={company.id} callerRole={company.role} companyStatus={company.status} />
+        <InviteButton
+          companyId={company.id}
+          callerRole={company.role}
+          companyStatus={company.status}
+          planState={plan?.state ?? null}
+        />
       </div>
       <div className="mt-3">
         <MembersList
@@ -85,6 +98,7 @@ export default async function MembersPage({ params }: { params: Promise<{ compan
           callerRole={company.role}
           companyStatus={company.status}
           members={rows}
+          plan={plan}
         />
       </div>
     </>

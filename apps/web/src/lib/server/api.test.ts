@@ -45,6 +45,28 @@ test("a failure keeps only its status, never the server's text", async () => {
   expect(await readApi(new Headers(), "/api/v1/companies/x/members", config)).toEqual({ ok: false, status: 403 });
 });
 
+test("a failure keeps the stable code and subscription state of the problem, and nothing else of its body", async () => {
+  fetchMock.mockResolvedValue(
+    Response.json(
+      { code: "PLAN_RESTRICTED", subscriptionState: "EXPIRED_LOCKED", detail: "secret detail", message: "text" },
+      { status: 403 },
+    ),
+  );
+  expect(await readApi(new Headers(), "/api/v1/companies/x/members", config)).toEqual({
+    ok: false,
+    status: 403,
+    code: "PLAN_RESTRICTED",
+    subscriptionState: "EXPIRED_LOCKED",
+  });
+});
+
+test("a code or state that is not in the stable shape is dropped", async () => {
+  fetchMock.mockResolvedValue(Response.json({ code: "<script>alert(1)</script>", subscriptionState: 7 }, { status: 403 }));
+  expect(await readApi(new Headers(), "/api/v1/companies/x/members", config)).toEqual({ ok: false, status: 403 });
+  fetchMock.mockResolvedValue(new Response("not json", { status: 502 }));
+  expect(await readApi(new Headers(), "/api/v1/companies/x/members", config)).toEqual({ ok: false, status: 502 });
+});
+
 test("an unreachable API is status 0", async () => {
   fetchMock.mockRejectedValue(new Error("down"));
   expect(await readApi(new Headers(), "/api/v1/companies", config)).toEqual({ ok: false, status: 0 });

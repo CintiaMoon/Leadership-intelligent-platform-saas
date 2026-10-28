@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { ApiResult } from "@/lib/api/client";
-import { describeFailure } from "@/lib/api/messages";
+import { describeFailure, MEMBER_LIMIT_MESSAGE, PLAN_RESTRICTED_MESSAGE } from "@/lib/api/messages";
 
 type Retry = { id: string; request: () => Promise<ApiResult>; success: string };
 
@@ -53,6 +53,12 @@ export function useActionRunner(subject: "member" | "invitation" | "transfer", i
     }
     if (code === "CSRF_REJECTED") {
       return { text: describeFailure(result).form ?? "Your request could not be verified. Reload the page.", refresh: false };
+    }
+    if (code === "PLAN_RESTRICTED") {
+      return { text: `${PLAN_RESTRICTED_MESSAGE} The ${unit} was refreshed.`, refresh: true };
+    }
+    if (code === "MEMBER_LIMIT_REACHED") {
+      return { text: `${MEMBER_LIMIT_MESSAGE} The ${unit} was refreshed.`, refresh: true };
     }
     if (result.status === 403 || result.status === 404) {
       return { text: `That is not available to you any more. The ${unit} was refreshed.`, refresh: true };
