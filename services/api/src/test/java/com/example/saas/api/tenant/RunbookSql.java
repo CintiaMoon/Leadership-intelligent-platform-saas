@@ -12,12 +12,12 @@ import java.util.Map;
  * dropped, each psql variable ({@code :'name'}) replaced by a quoted literal, one element per statement. A statement ends
  * at a semicolon at the end of a line; the scripts keep semicolons out of their comments so this is safe.
  */
-final class RunbookSql {
+public final class RunbookSql {
 
 	private RunbookSql() {
 	}
 
-	static List<String> statements(Path script, Map<String, String> variables) throws IOException {
+	public static List<String> statements(Path script, Map<String, String> variables) throws IOException {
 		StringBuilder current = new StringBuilder();
 		List<String> out = new ArrayList<>();
 		for (String line : Files.readAllLines(script)) {

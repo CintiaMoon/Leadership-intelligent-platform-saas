@@ -11,6 +11,7 @@
 - Storage: an append-only table. The application database role has insert and select only; no update or delete. Purge keeps audit events for the retention period (SPEC-DEL).
 - Denied authorization attempts on the operations below are recorded with outcome `denied`.
 - A request refused because of the company's subscription state (SPEC-PLAN, `PLAN_RESTRICTED`) is recorded as `tenant.authorization.denied` with outcome `denied`, reason code `plan_restricted:<permission>` and the effective subscription state as the before value; at most one row per user, company, permission and state per window, like a permission denial.
+- An operator's plan assignment (`operator-assign-plan.sql`, SPEC-PLAN AC-PLAN-21) is recorded with actor type `operator`: `plan.subscription.transitioned` (before and after state; reason `operator_assigned` or `operator_changed`) and, when the plan row changes, `plan.entitlement.changed` (before and after plan code; reason `from_version=<n> to_version=<n>`). Both reasons end with `ticket=<ticket> db_user=<session_user>` (and `role=<current_user>` when it differs), since operators have no user ID yet. No address and no name.
 
 ## Events by domain (from the specs)
 | Domain | Events | Source |
