@@ -7,7 +7,9 @@ import { PasswordDialog } from "@/components/app/PasswordDialog";
 import { useActionRunner } from "@/components/app/useActionRunner";
 import { DANGER_BUTTON, SECONDARY_BUTTON } from "@/components/app/buttons";
 import { send } from "@/lib/api/client";
+import { PLAN_STATUS_ID } from "@/components/plan/PlanBanner";
 import { memberActions } from "@/lib/memberActions";
+import { atMemberLimit, gate, MEMBER_LIMIT_REASON, reactivateGate, type Gate, type PlanView } from "@/lib/plan";
 import { roleLabel, withArticle } from "@/lib/roles";
 
 import { RoleBadge } from "./CompanyList";
@@ -27,6 +29,13 @@ type Confirm = { kind: "suspend" | "remove"; member: MemberRow };
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: "Active", SUSPENDED: "Suspended" };
 
+const LIMIT_NOTE_ID = "member-limit-note";
+
+/** The attributes of a control the plan state refuses: it stays visible, says it is off, and points at the reason. */
+function refused(g: Gate, reasonId: string) {
+  return g.allowed ? {} : { "aria-disabled": true as const, "aria-describedby": reasonId };
+}
+
 /**
  * The members of one company with the actions the caller may take (P2). What is shown comes from `memberActions`; the
  * API decides every request. After any answer the list is read again, so a stale row corrects itself.
@@ -36,11 +45,14 @@ export function MembersList({
   callerRole,
   companyStatus,
   members,
+  plan = null,
 }: {
   companyId: string;
   callerRole: string;
   companyStatus: string;
   members: MemberRow[];
+  /** The company's plan when the caller can read it. Only decides what to show: the API checks every request. */
+  plan?: PlanView | null;
 }) {
   const { notice, noticeRef, busy, run, reauthOpen, reauthenticated, cancelReauth } = useActionRunner("member", members);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -48,6 +60,15 @@ export function MembersList({
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const base = `/api/companies/${companyId}/members`;
+  const state = plan?.state ?? null;
+  const atLimit = atMemberLimit(plan);
+  const changeRoleGate = gate("changeRole", state);
+  const suspendGate = gate("suspend", state);
+  const removeGate = gate("remove", state);
+  const reactivationGate = reactivateGate(state, atLimit);
+  // A reactivation held back by the member limit points at the limit note; every other refusal at the plan banner.
+  const reactivationByLimit = !reactivationGate.allowed && reactivateGate(state, false).allowed;
+  const anySuspended = members.some((member) => member.status === "SUSPENDED");
 
   function changeRole(member: MemberRow, role: string) {
     void run(member.id, () => send("PATCH", `${base}/${member.id}`, { role }), `${member.displayName} is now ${withArticle(role)}.`);
@@ -81,6 +102,11 @@ export function MembersList({
       <div ref={noticeRef} tabIndex={-1} role="status" aria-live="polite" className={`outline-none ${notice ? "mb-4" : ""}`}>
         {notice ? <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink">{notice}</p> : null}
       </div>
+      {atLimit && anySuspended ? (
+        <p id={LIMIT_NOTE_ID} className="mb-4 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink">
+          {MEMBER_LIMIT_REASON}
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-2" aria-label="Members">
         {members.map((member) => {
           const actions = memberActions(callerRole, companyStatus, member);
@@ -115,8 +141,10 @@ export function MembersList({
                       <select
                         id={`role-${member.id}`}
                         value={member.role}
+                        disabled={!changeRoleGate.allowed}
+                        aria-describedby={changeRoleGate.allowed ? undefined : PLAN_STATUS_ID}
                         aria-disabled={rowBusy || undefined}
-                        onChange={(event) => !rowBusy && changeRole(member, event.target.value)}
+                        onChange={(event) => !rowBusy && changeRoleGate.allowed && changeRole(member, event.target.value)}
                         className="h-10 rounded-md border border-line bg-panel px-2 text-base text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-disabled:opacity-60 sm:h-[29px] sm:text-xs"
                       >
                         <option value={member.role}>{roleLabel(member.role)}</option>
@@ -134,7 +162,8 @@ export function MembersList({
                       className={SECONDARY_BUTTON}
                       aria-disabled={rowBusy || undefined}
                       aria-label={`Reactivate ${member.displayName}`}
-                      onClick={() => !rowBusy && reactivate(member)}
+                      {...refused(reactivationGate, reactivationByLimit ? LIMIT_NOTE_ID : PLAN_STATUS_ID)}
+                      onClick={() => !rowBusy && reactivationGate.allowed && reactivate(member)}
                     >
                       Reactivate
                     </button>
@@ -145,7 +174,8 @@ export function MembersList({
                       className={SECONDARY_BUTTON}
                       aria-disabled={rowBusy || undefined}
                       aria-label={`Suspend ${member.displayName}`}
-                      onClick={() => !rowBusy && setConfirm({ kind: "suspend", member })}
+                      {...refused(suspendGate, PLAN_STATUS_ID)}
+                      onClick={() => !rowBusy && suspendGate.allowed && setConfirm({ kind: "suspend", member })}
                     >
                       Suspend
                     </button>
@@ -156,7 +186,8 @@ export function MembersList({
                       className={DANGER_BUTTON}
                       aria-disabled={rowBusy || undefined}
                       aria-label={`Remove ${member.displayName}`}
-                      onClick={() => !rowBusy && setConfirm({ kind: "remove", member })}
+                      {...refused(removeGate, PLAN_STATUS_ID)}
+                      onClick={() => !rowBusy && removeGate.allowed && setConfirm({ kind: "remove", member })}
                     >
                       Remove
                     </button>

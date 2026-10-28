@@ -16,6 +16,10 @@ const FIELD_MESSAGES: Record<string, string> = {
     "This password appears in known data breaches. Choose a different one.",
 };
 
+/** The plan state refused a request the person was allowed to try (SPEC-PLAN, `PLAN_RESTRICTED`, `MEMBER_LIMIT_REACHED`). */
+export const PLAN_RESTRICTED_MESSAGE = "The company's plan does not allow this right now. Reload the page to see why.";
+export const MEMBER_LIMIT_MESSAGE = "The plan's member limit is reached. This works again when fewer members are active.";
+
 type Failure = Extract<ApiResult, { ok: false }>;
 
 export type FormError = {
@@ -46,6 +50,12 @@ function formMessage(
 ): string {
   if (code === "INVALID_CREDENTIALS" && context === "login") {
     return "The email or password is incorrect, or the account can't sign in yet.";
+  }
+  if (code === "PLAN_RESTRICTED") {
+    return PLAN_RESTRICTED_MESSAGE;
+  }
+  if (code === "MEMBER_LIMIT_REACHED") {
+    return MEMBER_LIMIT_MESSAGE;
   }
   if (context === "invitation" && code === "TOKEN_INVALID") {
     return "This invitation link is invalid or has expired. Ask the person who invited you to send a new one.";

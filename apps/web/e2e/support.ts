@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
@@ -206,4 +207,73 @@ export async function makeTeam(page: Page, roles: ("ADMIN" | "AGENT" | "VIEWER")
   }
   await owner.dispose();
   return { ownerEmail, companyId: company.id, companyName, members };
+}
+
+/**
+ * Runs one SQL statement against the throwaway E2E database, for setting up what no screen or API can: a company at a
+ * given point of its subscription (the clock cannot be moved from a browser). Uses `psql` when it is installed (CI),
+ * otherwise the `e2e-postgres` container of the README. Never used against anything but the E2E database.
+ */
+export function sql(statement: string): void {
+  const port = process.env.E2E_DB_PORT ?? "55432";
+  const env = { ...process.env, PGPASSWORD: process.env.E2E_DB_PASSWORD ?? "e2e-local-only" };
+  const args = ["-v", "ON_ERROR_STOP=1", "-q", "-c", statement];
+  try {
+    execFileSync("psql", ["-h", "localhost", "-p", port, "-U", "saas", "-d", "saas_e2e", ...args], { env, stdio: "pipe" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+    execFileSync("docker", ["exec", "-e", "PGPASSWORD=e2e-local-only", "e2e-postgres", "psql", "-U", "saas", "-d", "saas_e2e", ...args], {
+      stdio: "pipe",
+    });
+  }
+}
+
+export type PlanPosition =
+  /** A running Trial with this many whole days left. */
+  | { kind: "trial"; daysLeft: number }
+  | { kind: "read-only" }
+  | { kind: "locked" }
+  | { kind: "active"; plan: "STARTER" | "TEAM" };
+
+/** Puts a company's subscription at a position, the way the time and an operator would, directly in the E2E database. */
+export function placeSubscription(companyId: string, position: PlanPosition): void {
+  const id = `'${companyId}'`;
+  if (!/^[0-9a-f-]{36}$/.test(companyId)) {
+    throw new Error("not a company id");
+  }
+  const trialStartedAgo = (interval: string) =>
+    `UPDATE company_subscription SET state = 'TRIALING', plan_id = (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), ` +
+    `trial_started_at = x.s, trial_ends_at = x.s + interval '336 hours', read_only_ends_at = x.s + interval '672 hours' ` +
+    `FROM (SELECT now() - interval '${interval}' AS s) x WHERE company_id = ${id}`;
+  switch (position.kind) {
+    case "trial":
+      // Started (14 - daysLeft) days and an hour ago, so there are daysLeft days less an hour left: still daysLeft days.
+      return sql(trialStartedAgo(`${(14 - position.daysLeft) * 24 + 1} hours`));
+    case "read-only":
+      return sql(trialStartedAgo("20 days"));
+    case "locked":
+      return sql(trialStartedAgo("40 days"));
+    case "active":
+      return sql(
+        `UPDATE company_subscription SET state = 'ACTIVE', plan_id = (SELECT id FROM plan WHERE code = '${position.plan}' AND version = 1) ` +
+          `WHERE company_id = ${id}`,
+      );
+  }
+}
+
+/** Adds ACTIVE members with made-up accounts until the company has this many, for the member limit. */
+export function fillActiveMembers(companyId: string, total: number): void {
+  if (!/^[0-9a-f-]{36}$/.test(companyId)) {
+    throw new Error("not a company id");
+  }
+  sql(
+    `WITH have AS (SELECT count(*) AS n FROM membership WHERE company_id = '${companyId}' AND status = 'ACTIVE'), ` +
+      `u AS (INSERT INTO app_user (email_normalized, email_original, display_name, password_hash, email_verified_at, created_at, updated_at) ` +
+      `SELECT 'filler.' || gen_random_uuid() || '@example.com', 'filler@example.com', 'Filler ' || g, 'x', now(), now(), now() ` +
+      `FROM have, generate_series(1, greatest(${total} - (SELECT n FROM have), 0)) g RETURNING id) ` +
+      `INSERT INTO membership (company_id, user_id, role, status, created_at, updated_at) ` +
+      `SELECT '${companyId}', id, 'VIEWER', 'ACTIVE', now(), now() FROM u`,
+  );
 }

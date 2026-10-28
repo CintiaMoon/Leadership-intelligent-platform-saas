@@ -38,5 +38,9 @@ npx playwright install chromium
 npm run build
 npm run e2e
 ```
+A git-ignored `services/api/src/main/resources/application-local.yml` is packaged into the jar and overrides the database, cookie and
+credential settings of the E2E run (it hard-codes port 5432 and its own credentials), so the API then cannot start under Playwright. Build the jar from
+a clean checkout, as CI does, or move that file away while you build it.  
+
 Ports can be changed with `E2E_WEB_PORT`, `E2E_API_PORT`, `E2E_DB_PORT`, `E2E_SMTP_PORT`, and `E2E_MAILPIT_URL`.
 CI runs the same steps in the `e2e` job.
