@@ -7,7 +7,21 @@
 -- If a variable is missing psql sends the text unchanged, the statement fails, and nothing is committed.
 -- The integration test OwnerAccountDisableProcedureTests runs these statements against PostgreSQL. Keep them in step.
 -- Read docs/runbooks/operations/operator-account-disable.md first. Idempotent: a second run changes nothing.
+-- Run WITHOUT ON_ERROR_STOP the script quits before it does anything (the meta-commands below): the guards that follow
+-- stop the script only by raising an error, and psql carries on after an error unless ON_ERROR_STOP is set.
 -- Statements end at a semicolon at the end of a line, and comments contain none, so the test can split them.
+
+-- Quit at once, before anything else, unless ON_ERROR_STOP is set to a true value (psql meta-commands, not SQL).
+\if :{?ON_ERROR_STOP}
+\else
+\echo 'disable-account-and-flag-companies.sql: run psql with --set ON_ERROR_STOP=1. Nothing was changed.'
+\quit
+\endif
+\if :ON_ERROR_STOP
+\else
+\echo 'disable-account-and-flag-companies.sql: ON_ERROR_STOP must be on (1). Nothing was changed.'
+\quit
+\endif
 
 -- 0. Stop here, with an error and nothing changed, if the ticket is malformed or the account does not exist. The
 -- division by zero is the error. (Do not write it as CASE ... ELSE 1 / 0: the planner folds that constant and fails always.)
