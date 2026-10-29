@@ -350,8 +350,8 @@ class PlanSchemaTests extends AuthIntegrationTest {
 		switch (to) {
 			case "NO_PLAN" -> jdbc.update("UPDATE company_subscription SET state = 'NO_PLAN', plan_id = NULL, "
 					+ "trial_started_at = NULL, trial_ends_at = NULL, read_only_ends_at = NULL WHERE company_id = ?", company);
-			case "ACTIVE" -> jdbc.update("UPDATE company_subscription SET state = 'ACTIVE', plan_id = ? WHERE company_id = ?",
-					plan("TEAM"), company);
+			case "ACTIVE" -> jdbc.update("UPDATE company_subscription SET state = 'ACTIVE', "
+					+ "plan_id = CASE WHEN state = 'ACTIVE' THEN plan_id ELSE ? END WHERE company_id = ?", plan("TEAM"), company);
 			default -> jdbc.update("UPDATE company_subscription SET state = ?, plan_id = ?, trial_started_at = ?, "
 					+ "trial_ends_at = ?, read_only_ends_at = ? WHERE company_id = ?", to, plan("TRIAL"), ts(START), ts(ends),
 					ts(readOnlyEnds), company);
@@ -390,14 +390,51 @@ class PlanSchemaTests extends AuthIntegrationTest {
 	}
 
 	@Test
-	void aPlanChangeWhileActiveIsAllowedAndAnOperatorCanLeaveEveryStateForActive() {
+	void aPlanChangeWhileActiveIsAllowedOnlyInsideTheOperatorScriptAndAnOperatorCanLeaveEveryStateForActive() {
 		UUID company = subscriptionIn("ACTIVE");
-		assertThatCode(() -> jdbc.update("UPDATE company_subscription SET plan_id = ? WHERE company_id = ?", plan("TEAM"), company))
-			.doesNotThrowAnyException();
+		assertThatThrownBy(() -> jdbc.update("UPDATE company_subscription SET plan_id = ? WHERE company_id = ?", plan("TEAM"), company))
+			.as("without the operator marker").isInstanceOf(DataAccessException.class)
+			.hasMessageContaining("operator plan script");
+		assertThatCode(() -> tx.executeWithoutResult(status -> {
+			jdbc.queryForObject("SELECT set_config('app.operator_plan_tx', 'yes', true)", String.class);
+			jdbc.update("UPDATE company_subscription SET plan_id = ? WHERE company_id = ?", plan("TEAM"), company);
+		})).as("with it").doesNotThrowAnyException();
+		assertThat(jdbc.queryForObject("SELECT plan_id FROM company_subscription WHERE company_id = ?", UUID.class, company))
+			.isEqualTo(plan("TEAM"));
 		for (String from : List.of("TRIALING", "EXPIRED_READ_ONLY", "EXPIRED_LOCKED", "NO_PLAN")) {
 			UUID c = subscriptionIn(from);
 			assertThatCode(() -> changeState(c, "ACTIVE")).as(from).doesNotThrowAnyException();
 		}
+	}
+
+	@Test
+	void theTrialDatesNeverChangeOnceSetNotEvenWithTheState() {
+		for (String state : List.of("TRIALING", "EXPIRED_READ_ONLY", "EXPIRED_LOCKED")) {
+			UUID company = subscriptionIn(state);
+			Instant later = START.plusSeconds(3600);
+			assertThatThrownBy(() -> jdbc.update("UPDATE company_subscription SET trial_started_at = ?, trial_ends_at = ?, "
+					+ "read_only_ends_at = ? WHERE company_id = ?", ts(later), ts(plusHours(later, TRIAL_HOURS)),
+					ts(plusHours(later, 2 * TRIAL_HOURS)), company))
+				.as(state).isInstanceOf(DataAccessException.class).hasMessageContaining("trial dates");
+			assertThatThrownBy(() -> jdbc.update("UPDATE company_subscription SET trial_ends_at = ? WHERE company_id = ?",
+					ts(plusHours(START, 1)), company)).as(state + ", one date").isInstanceOf(DataAccessException.class);
+			assertThat(jdbc.queryForObject("SELECT trial_started_at FROM company_subscription WHERE company_id = ?",
+					Timestamp.class, company)).as(state).isEqualTo(ts(START));
+		}
+	}
+
+	@Test
+	void theTrialDatesStayWhenAnOperatorMovesTheCompanyToActiveAndATimeTransitionKeepsThePlan() {
+		UUID locked = subscriptionIn("EXPIRED_LOCKED");
+		assertThatCode(() -> changeState(locked, "ACTIVE")).doesNotThrowAnyException();
+		assertThat(jdbc.queryForObject("SELECT trial_started_at FROM company_subscription WHERE company_id = ?",
+				Timestamp.class, locked)).isEqualTo(ts(START));
+
+		UUID trial = subscriptionIn("TRIALING");
+		assertThatThrownBy(() -> jdbc.update("UPDATE company_subscription SET state = 'EXPIRED_READ_ONLY', plan_id = ? "
+				+ "WHERE company_id = ?", plan("TEAM"), trial)).isInstanceOf(DataAccessException.class);
+		assertThatCode(() -> jdbc.update("UPDATE company_subscription SET state = 'EXPIRED_READ_ONLY' WHERE company_id = ?",
+				trial)).doesNotThrowAnyException();
 	}
 
 	// ---- the trial grant

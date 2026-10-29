@@ -62,7 +62,7 @@ class PlanGateUnderLockTests extends PlanTestBase {
 	/** What the clock does when the read-only window ends: the instants move, the stored state is left to the sweep. */
 	private void lockTheCompany(UUID companyId) {
 		Instant start = clock.instant().minus(WINDOW.multipliedBy(2).plusHours(1));
-		jdbc.update("UPDATE company_subscription SET trial_started_at = ?, trial_ends_at = ?, read_only_ends_at = ? "
+		TrialDateRewrite.update(jdbc, "UPDATE company_subscription SET trial_started_at = ?, trial_ends_at = ?, read_only_ends_at = ? "
 				+ "WHERE company_id = ?", Timestamp.from(start), Timestamp.from(start.plus(WINDOW)),
 				Timestamp.from(start.plus(WINDOW).plus(WINDOW)), companyId);
 	}
@@ -154,7 +154,7 @@ class PlanGateUnderLockTests extends PlanTestBase {
 		assertRestrictedAsLocked(cancel);
 
 		// Back to a running trial for the second request, which is accepted by the recipient.
-		jdbc.update("UPDATE company_subscription SET trial_started_at = ?, trial_ends_at = ?, read_only_ends_at = ? "
+		TrialDateRewrite.update(jdbc, "UPDATE company_subscription SET trial_started_at = ?, trial_ends_at = ?, read_only_ends_at = ? "
 				+ "WHERE company_id = ?", Timestamp.from(clock.instant()), Timestamp.from(clock.instant().plus(WINDOW)),
 				Timestamp.from(clock.instant().plus(WINDOW).plus(WINDOW)), companyId);
 		Throwable accept = refusedWhileTheStateChangesUnderTheLock(companyId,
