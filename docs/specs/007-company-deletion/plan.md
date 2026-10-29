@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-DEL (slice 007)
 
-- Status: **Proposed 2026-10-29, awaiting your approval.** Nothing is built. Questions Q-01 to Q-20 are proposals; each becomes a decision (D-218 and following in the register) when you approve it.
+- Status: **Proposed 2026-10-29, awaiting your approval.** Nothing is built. Questions Q-01 to Q-20 are proposals; Q-21 to Q-26 are your answers of 2026-10-29 to the gap review (marked *decided*); each becomes a decision (D-218 and following in the register) when you approve it.
 - Spec: `docs/specs/007-company-deletion/spec.md` (SPEC-DEL, Draft; the decisions D-31, D-37 to D-39, D-42, D-53, D-57 to D-60 inside it were decided 2026-10-16/17).
 - Related: SPEC-TEN (matrix, pending-deletion rule, lifecycle), SPEC-MEM (D-54 flag), SPEC-OWN (transfer cancelled by a request, D-31, D-32), SPEC-PLAN (deletion allowed in every plan state, `user_trial_grant` kept, D-216), SPEC-AUTH (10-minute recent authentication, D-15), ADR-001, the register (D-05 outbox, D-100 retention).
 - Date: 2026-10-29. Written from the spec, the register and the code as merged through PR #86; no code was changed.
@@ -48,6 +48,12 @@
 | Q-18 | Spec amendments | SPEC-DEL becomes Approved with: the state list of Q-03 (PURGED/TOMBSTONED means the row is gone and a tombstone exists), the cancel deadline wording of Q-06, the later-state rule of Q-07, the alert wording of Q-13, the outbox column of Q-10, no collected reason (Q-05), and the replay as an operator command (Q-15). The register rows D-40, D-41 and D-61 stay Proposed until legal and verification confirm |
 | Q-19 | Operator controls | `purge-dry-run-and-enable.md` is finished: reading the dry-run report, the conditions to enable (a second approver, a recent restore test, the dry-run reviewed), resuming PURGE_FAILED, and a test record. The first production enablement is the DevOps lead's, not this slice's (D-42) |
 | Q-20 | Hand-offs from slice 006 | `user_trial_grant` and the `tenant.company.created` audit rows survive the purge (tests). Every write added here re-checks the lifecycle and the plan state under the company lock. DB roles (a runtime role that cannot run the purge's `DELETE`s outside the job) are an open item for the deployment slice |
+| Q-21 | Proof of deletion | **Decided 2026-10-29 (option A).** The `company.purged` audit event and the tombstone are the evidence. No downloadable confirmation is built; it stays cheap to add later because both already hold the data |
+| Q-22 | Logs, caches and search indexes | **Decided 2026-10-29 (option B).** The assumption of D-41 that logs hold no tenant content is verified, not assumed: Phase 6 includes a log-content check (what the API, the BFF and the mail path write about a company, a member or an invitation) and its result is recorded in the traceability and the privacy note. Anything found goes to the purge design before the closure |
+| Q-23 | Backups and secondary copies | **Decided 2026-10-29 (option A).** The ledger replay covers the database only. Every later slice that adds a store (files, queues, analytics) adds an inventory line and a purge handler or a documented exception in its own plan |
+| Q-24 | Restore drill | **Decided 2026-10-29 (option b).** A scheduled restore drill that restores a snapshot and runs the replay (Q-15), recorded in `restore-from-backup.md` with date, tester and result. Owner: the DevOps lead. The first drill is part of the closure, with a throwaway database; the schedule itself belongs to the deployment slice |
+| Q-25 | Observability | **Decided 2026-10-29 (option b).** Beyond the final-failure log line and gauge (Q-13): metrics for companies pending, due, queued, purging, failed and purged (counters and gauges, no company IDs as labels), and an alert condition when a company stays due for more than a set time after `purge_at` (the worker is stuck or disabled while deletions are waiting). Paging stays in the deployment slice (D-08) and is recorded as open |
+| Q-26 | Abuse of request and cancel | **Decided 2026-10-29 (option b).** A tight per-company and per-user rate limit on both endpoints (through the existing rate limiter, failing closed like the other sensitive routes), and a cooldown on the emails: at most one deletion email wave per company per hour, so a request-cancel loop cannot flood the Owner and the Admins. The request and the cancel still succeed and are audited; only the repeated email is held back, and the audit event says so |
 
 ## 4. Phases
 ### Phase 0: approvals
@@ -57,19 +63,19 @@ This plan approved or amended; Q-02 answered; D-218 and following recorded; SPEC
 `V17` (Q-03, Q-10): the status values and lifecycle columns with their CHECKs and the transition trigger, the `company_tombstone` table (insert-only, three columns, no foreign key, no update or delete), `outbox_event.company_id` with its backfill. Schema tests with mutation checks on every constraint and trigger; the migration on a database with V1 to V16 data.
 
 ### Phase 2: domain and service
-`CompanyLifecycle` (pure transitions), `DeletionService` with request and cancel (Q-05, Q-06), the transfer cancellation, the emails and audit events (Q-09), the configured grace period. PostgreSQL tests: concurrent requests (exactly one transition), request against cancel, request against an ownership-transfer accept, the exact deadline (one millisecond before, at, after), rollback when the outbox write fails.
+`CompanyLifecycle` (pure transitions), `DeletionService` with request and cancel (Q-05, Q-06), the transfer cancellation, the emails and audit events (Q-09), the configured grace period. The rate limit and the email cooldown (Q-26). PostgreSQL tests: concurrent requests (exactly one transition), a request-cancel loop (one email wave per hour, every request audited), request against cancel, request against an ownership-transfer accept, the exact deadline (one millisecond before, at, after), rollback when the outbox write fails.
 
 ### Phase 3: gating, contract and API
 The policy change to "not ACTIVE" (Q-07, Q-08), the authorization service and the under-lock re-checks, the two endpoints and the lifecycle fields on the company view, OpenAPI, `schema.d.ts`, Postman. HTTP tests: every role in every lifecycle state, one test per state-changing matrix row in PENDING_DELETION, the step-up requirement, 404 for non-members, tenant isolation, the denial audit. This phase does not depend on D-40, D-41 or D-61.
 
 ### Phase 4: purge engine (starts after Q-02)
-`PurgeHandler`s and the registry, the worker with claim and lease, dry-run, the disabled default, the retry and backoff, the tombstone and the completion audit event, the manifest test, the verification query, the ledger replay (Q-11 to Q-16). PostgreSQL tests: early execution, a stale job against a restored company, duplicate workers (many threads), crash and retry (a failing handler at each position), five failures end in PURGE_FAILED, dry-run deletes nothing, disabled default, tombstone content, `user_trial_grant` and audit events kept, the replay, with mutation checks on the guards.
+`PurgeHandler`s and the registry, the worker with claim and lease, dry-run, the disabled default, the retry and backoff, the tombstone and the completion audit event, the manifest test, the verification query, the ledger replay, the pending/due/failed metrics and the stuck-worker condition (Q-11 to Q-16, Q-25). PostgreSQL tests: early execution, a stale job against a restored company, duplicate workers (many threads), crash and retry (a failing handler at each position), five failures end in PURGE_FAILED, dry-run deletes nothing, disabled default, tombstone content, `user_trial_grant` and audit events kept, the replay, with mutation checks on the guards.
 
 ### Phase 5: frontend
 The Owner's "Delete company" action with recent-authentication handling, the pending page with the date and Cancel, what other members and later states see, tests, Playwright (request, pending, cancel, a non-Owner), axe, keyboard pass, screenshots at three widths.
 
 ### Phase 6: review and closure
-Read-only security and code reviews (the purge gets the closest look), fixes, traceability, `purge-dry-run-and-enable.md` and `restore-from-backup.md` finished, the privacy note about the 40-day backups, the unrun checks and open items listed, closure for your sign-off.
+Read-only security and code reviews (the purge gets the closest look), the log-content check (Q-22), a restore drill with the replay on a throwaway database (Q-24), fixes, traceability, `purge-dry-run-and-enable.md` and `restore-from-backup.md` finished, the privacy note about the 40-day backups, the unrun checks and open items listed, closure for your sign-off.
 
 ## 5. Expected files (approximate)
 - Backend: `V17__company_lifecycle_and_tombstone.sql`; `tenant/deletion/**` (domain: lifecycle; application: `DeletionService`, emails, `PurgeWorker`, `PurgeRegistry`, `LedgerReplay`; web: controller and DTOs); a `PurgeHandler` in each of `tenant`, `invitation`, `tenant/ownership`, `plan` and the outbox package; `CompanyStatus`, `CompanyPolicy`, `CompanyAuthorizationService`, `CompanyView`, the outbox writers (company ID), the two email handlers; configuration properties.
@@ -105,12 +111,13 @@ Read-only security and code reviews (the purge gets the closest look), fixes, tr
 - **Outbox rows without a company.** Q-10 adds the column and backfills it; rows it cannot attribute stay and are listed in the traceability.
 - **Backups and restores.** Purged data stays in backups up to 40 days (D-40); the ledger replay (Q-15) is the control and is part of the restore runbook. The privacy note must say so.
 - **Proposed decisions (D-40, D-41, D-61).** Phase 4 does not start before Q-02 is answered. If legal changes them, the purge handlers and the tombstone are the places that change.
-- **An alert that nobody receives.** Q-13 produces a log line and a metric; wiring it to paging belongs to the deployment slice and is recorded as open.
+- **An alert that nobody receives.** Q-13 and Q-25 produce a log line, metrics and an alert condition; wiring them to paging belongs to the deployment slice and is recorded as open.
+- **Logs may hold company content.** D-41 is an assumption until Q-22's check runs in Phase 6; a finding changes the purge design, not just the note.
 
 ## 9. Checks to run
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint and the API-type drift check, web unit tests, typecheck, lint, build, Playwright, the CI jobs, `V17` validated on an empty database and on one with V1 to V16 data, the purge run with real data in a throwaway database (dry-run first), the ledger replay against a restored snapshot. Checks not run are listed in the traceability file.
 
 ## 10. Approval (pending)
-1. Q-01 to Q-20 approved as written or amended. **Q-02 in particular:** are D-40, D-41 and D-61 the working basis, and has the security owner approved D-39 and D-42 (🔒)?
+1. Q-01 to Q-20 approved as written or amended (Q-21 to Q-26 are already your answers). **Q-02 in particular:** are D-40, D-41 and D-61 the working basis, and has the security owner approved D-39 and D-42 (🔒)?
 2. SPEC-DEL approved with the amendments of Q-18.
 3. The phase order approved, each phase its own PR; each phase still needs your go-ahead to start.
