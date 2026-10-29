@@ -1,6 +1,6 @@
 # Implementation Plan: SPEC-DEL (slice 007)
 
-- Status: **Proposed 2026-10-29, awaiting your approval of the whole plan.** Nothing is built. On 2026-10-29 you accepted the proposals for the open questions, so Q-02, Q-05, Q-10, Q-13, Q-14 and Q-27 to Q-38 are marked *decided* and Q-21 to Q-26 were your earlier answers; Q-01, Q-03, Q-04, Q-06 to Q-09, Q-11, Q-12 and Q-15 to Q-20 are still proposals until you approve the plan as a whole.
+- Status: **Approved 2026-10-29** (user: "plan approved"). Questions Q-01 to Q-38 are recorded as D-218 to D-255 in the register. The security owner's approval of D-39 and D-42 is recorded (2026-10-29). Phase 0 is this recording; every later phase is its own PR and still needs your go-ahead to start. D-40, D-41 and D-61 stay Proposed (the working basis of Q-02): legal's confirmation of D-40 and D-61 is required before the purge is enabled in production, not before it is built.
 - Spec: `docs/specs/007-company-deletion/spec.md` (SPEC-DEL, Draft; the decisions D-31, D-37 to D-39, D-42, D-53, D-57 to D-60 inside it were decided 2026-10-16/17).
 - Related: SPEC-TEN (matrix, pending-deletion rule, lifecycle), SPEC-MEM (D-54 flag), SPEC-OWN (transfer cancelled by a request, D-31, D-32), SPEC-PLAN (deletion allowed in every plan state, `user_trial_grant` kept, D-216), SPEC-AUTH (10-minute recent authentication, D-15), ADR-001, the register (D-05 outbox, D-100 retention).
 - Date: 2026-10-29. Written from the spec, the register and the code as merged through PR #86; no code was changed.
@@ -129,7 +129,7 @@ Read-only security and code reviews (the purge gets the closest look), the log-c
 ## 9. Checks to run
 `./mvnw verify` (Testcontainers PostgreSQL), contract lint and the API-type drift check, web unit tests, typecheck, lint, build, Playwright, the CI jobs, `V17` validated on an empty database and on one with V1 to V16 data, the purge run with real data in a throwaway database (dry-run first), the ledger replay against a restored snapshot. Checks not run are listed in the traceability file.
 
-## 10. Approval (pending)
+## 10. Approval (done 2026-10-29)
 1. Q-01, Q-03, Q-04, Q-06 to Q-09, Q-11, Q-12 and Q-15 to Q-20 approved as written or amended (Q-02, Q-05, Q-10, Q-13, Q-14 and Q-21 to Q-38 are already your answers). Still to record: the security owner's approval of D-39 and D-42 (🔒) with a name and a date, and legal's confirmation of D-40 and D-61, both required before the purge is enabled in production, not before it is built.
 2. SPEC-DEL approved with the amendments of Q-18.
 3. The phase order approved, each phase its own PR; each phase still needs your go-ahead to start.
