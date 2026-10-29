@@ -82,6 +82,32 @@ SELECT 1 / count(*) AS transition_is_allowed
  WHERE s.company_id = :'company'::uuid
    AND s.state IN ('NO_PLAN', 'TRIALING', 'EXPIRED_READ_ONLY', 'EXPIRED_LOCKED', 'ACTIVE');
 
+-- 4b. Record the time transitions that are due and that the sweep has not recorded yet, one hop at a time (the
+-- transition trigger allows only TRIALING to EXPIRED_READ_ONLY and EXPIRED_READ_ONLY to EXPIRED_LOCKED). They are written as
+-- the sweep writes them: the system as the actor, the reasons trial_expired and read_only_ended, the moment of this run.
+-- So the assignment below starts from the true state and the audit trail has no gap. Nothing is written when nothing is due.
+WITH moved AS (
+    UPDATE company_subscription s
+       SET state = 'EXPIRED_READ_ONLY', state_changed_at = now(), updated_at = now(), version = s.version + 1
+     WHERE s.company_id = :'company'::uuid AND s.state = 'TRIALING' AND now() >= s.trial_ends_at
+ RETURNING s.company_id)
+INSERT INTO audit_event (occurred_at, event_type, company_id, actor_type, target_type, target_id, outcome, before_value,
+                         after_value, reason_code)
+SELECT now(), 'plan.subscription.transitioned', moved.company_id, 'system', 'company_subscription', moved.company_id,
+       'success', 'TRIALING', 'EXPIRED_READ_ONLY', 'trial_expired'
+  FROM moved;
+
+WITH moved AS (
+    UPDATE company_subscription s
+       SET state = 'EXPIRED_LOCKED', state_changed_at = now(), updated_at = now(), version = s.version + 1
+     WHERE s.company_id = :'company'::uuid AND s.state = 'EXPIRED_READ_ONLY' AND now() >= s.read_only_ends_at
+ RETURNING s.company_id)
+INSERT INTO audit_event (occurred_at, event_type, company_id, actor_type, target_type, target_id, outcome, before_value,
+                         after_value, reason_code)
+SELECT now(), 'plan.subscription.transitioned', moved.company_id, 'system', 'company_subscription', moved.company_id,
+       'success', 'EXPIRED_READ_ONLY', 'EXPIRED_LOCKED', 'read_only_ended'
+  FROM moved;
+
 -- 5. Assign the plan. The row changes only when the company is not already ACTIVE on the newest version of this plan
 -- (idempotence), and exactly then the audit events are written. The transition event names the states, the entitlement
 -- event names the plan codes and the reason the versions. The reasons hold the ticket and the database login that ran

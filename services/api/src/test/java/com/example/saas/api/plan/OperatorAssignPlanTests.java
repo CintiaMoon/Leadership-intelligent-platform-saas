@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import com.example.saas.api.plan.application.EntitlementService;
+import com.example.saas.api.plan.application.SubscriptionSweep;
 import com.example.saas.api.plan.domain.SubscriptionState;
 import com.example.saas.api.tenant.RunbookSql;
 import com.example.saas.api.tenant.application.CompanyLocks;
@@ -34,7 +35,7 @@ class OperatorAssignPlanTests extends PlanTestBase {
 	private static final Path ASSIGN = Path.of("..", "..", "docs", "runbooks", "operations", "sql",
 			"operator-assign-plan.sql");
 
-	private static final int ASSIGN_STATEMENTS = 15;
+	private static final int ASSIGN_STATEMENTS = 17;
 
 	private static final Duration WINDOW = Duration.ofHours(336);
 
@@ -43,6 +44,9 @@ class OperatorAssignPlanTests extends PlanTestBase {
 
 	@Autowired
 	private EntitlementService entitlements;
+
+	@Autowired
+	private SubscriptionSweep sweep;
 
 	@Autowired
 	private MembershipService memberships;
@@ -182,7 +186,78 @@ class OperatorAssignPlanTests extends PlanTestBase {
 
 		assertThat(entitlements.state(company.id())).isEqualTo(SubscriptionState.ACTIVE);
 		assertThat(entitlements.describe(company.id()).plan().code()).isEqualTo("STARTER");
-		assertThat(audit(company.id(), "plan.subscription.transitioned").get(0)).containsEntry("before_value", "TRIALING");
+		assertThat(audit(company.id(), "plan.subscription.transitioned").get(0)).containsEntry("before_value",
+				"EXPIRED_LOCKED");
+	}
+
+	/** The system's own transition events of one company, ordered by reason (both hops of one run carry the same instant), as the sweep writes them. */
+	private List<Map<String, Object>> systemTransitions(UUID companyId) {
+		return jdbc.queryForList("SELECT event_type, actor_type, target_type, target_id, outcome, before_value, after_value, "
+				+ "reason_code FROM audit_event WHERE company_id = ? AND actor_type = 'system' "
+				+ "AND reason_code IN ('trial_expired', 'read_only_ended') ORDER BY reason_code", companyId);
+	}
+
+	@Test
+	void theTimeTransitionsThatAreDueAreRecordedBeforeTheAssignmentAsTheSweepWritesThem() throws Exception {
+		Company readOnly = company();
+		giveTrialStartedAgo(readOnly.id(), WINDOW.plusDays(1));
+		Company locked = company();
+		giveTrialStartedAgo(locked.id(), WINDOW.multipliedBy(2).plusDays(1));
+		Company running = company();
+		giveTrialStartedAgo(running.id(), Duration.ofDays(1));
+		Company recorded = company();
+		giveTrialStartedAgo(recorded.id(), WINDOW.multipliedBy(2).plusDays(1));
+		record(recorded.id(), "EXPIRED_READ_ONLY");
+
+		for (Company company : List.of(readOnly, locked, running, recorded)) {
+			assign(company.id(), "TEAM");
+		}
+
+		assertThat(systemTransitions(readOnly.id())).extracting(e -> e.get("reason_code"), e -> e.get("before_value"),
+				e -> e.get("after_value")).containsExactly(
+						org.assertj.core.groups.Tuple.tuple("trial_expired", "TRIALING", "EXPIRED_READ_ONLY"));
+		assertThat(audit(readOnly.id(), "plan.subscription.transitioned").get(0)).containsEntry("before_value",
+				"EXPIRED_READ_ONLY");
+		assertThat(systemTransitions(locked.id())).extracting(e -> e.get("reason_code"), e -> e.get("before_value"),
+				e -> e.get("after_value")).containsExactlyInAnyOrder(
+						org.assertj.core.groups.Tuple.tuple("trial_expired", "TRIALING", "EXPIRED_READ_ONLY"),
+						org.assertj.core.groups.Tuple.tuple("read_only_ended", "EXPIRED_READ_ONLY", "EXPIRED_LOCKED"));
+		assertThat(audit(locked.id(), "plan.subscription.transitioned").get(0)).containsEntry("before_value",
+				"EXPIRED_LOCKED");
+		assertThat(systemTransitions(running.id())).as("nothing is due").isEmpty();
+		assertThat(audit(running.id(), "plan.subscription.transitioned").get(0)).containsEntry("before_value", "TRIALING");
+		assertThat(systemTransitions(recorded.id())).extracting(e -> e.get("reason_code")).as("only the missing hop")
+			.containsExactly("read_only_ended");
+	}
+
+	@Test
+	void anActiveCompanyGetsNoTimeTransitionAndASecondRunWritesNothing() throws Exception {
+		Company company = company();
+		giveTrialStartedAgo(company.id(), WINDOW.multipliedBy(2).plusDays(1));
+		assign(company.id(), "TEAM");
+		long audited = count("SELECT count(*) FROM audit_event WHERE company_id = ?", company.id());
+
+		assign(company.id(), "TEAM");
+
+		assertThat(count("SELECT count(*) FROM audit_event WHERE company_id = ?", company.id())).isEqualTo(audited);
+		assertThat(systemTransitions(company.id())).hasSize(2);
+	}
+
+	@Test
+	void theScriptWritesTheSameEventsAsTheSweepForTheSameSituation() throws Exception {
+		Company bySweep = company();
+		giveTrialStartedAgo(bySweep.id(), WINDOW.multipliedBy(2).plusDays(1));
+		Company byScript = company();
+		giveTrialStartedAgo(byScript.id(), WINDOW.multipliedBy(2).plusDays(1));
+
+		assign(byScript.id(), "TEAM");
+		sweep.runOnce();
+
+		List<Map<String, Object>> expected = systemTransitions(bySweep.id());
+		assertThat(expected).hasSize(2);
+		assertThat(systemTransitions(byScript.id())).usingRecursiveComparison().ignoringFields("target_id")
+			.isEqualTo(expected);
+		assertThat(stateOf(bySweep.id())).isEqualTo("EXPIRED_LOCKED");
 	}
 
 	@Test
