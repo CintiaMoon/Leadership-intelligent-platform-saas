@@ -124,7 +124,7 @@ SELECT now(), 'plan.entitlement.changed', changed.company_id, 'operator', 'compa
 
 -- 6. Check: the company is ACTIVE on the newest version of the plan. The first query shows it with the limit of the new
 -- plan next to the members now ACTIVE. A downgrade below that number removes and suspends nobody (Q-18): the members stay,
--- and until usage is below the limit a reactivation is refused with MEMBER_LIMIT_REACHED and an invitation acceptance with a 409.
+-- and until usage is below the limit a reactivation is refused with MEMBER_LIMIT_REACHED and an invitation acceptance with MEMBER_LIMIT_REACHED.
 SELECT s.state, p.code AS plan, p.version AS plan_version,
        (SELECT l.value FROM plan_limit l WHERE l.plan_id = p.id AND l.limit_key = 'ACTIVE_MEMBERS') AS active_members_limit,
        (SELECT count(*) FROM membership m WHERE m.company_id = s.company_id AND m.status = 'ACTIVE') AS active_members

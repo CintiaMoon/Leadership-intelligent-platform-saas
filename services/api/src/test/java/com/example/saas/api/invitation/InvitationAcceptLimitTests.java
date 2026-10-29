@@ -24,6 +24,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static com.example.saas.api.auth.AuthApi.STRONG_PASSWORD;
@@ -99,9 +100,13 @@ class InvitationAcceptLimitTests extends AuthIntegrationTest {
 	}
 
 	private int accept(Invitee invitee) throws Exception {
+		return acceptResponse(invitee).getStatus();
+	}
+
+	private MockHttpServletResponse acceptResponse(Invitee invitee) throws Exception {
 		String ip = freshIp();
 		return api.send(HttpMethod.POST, "/api/v1/invitations/accept", json("token", invitee.token()), invitee.cookie(),
-				api.sessionCsrf(invitee.cookie(), ip), ip).getResponse().getStatus();
+				api.sessionCsrf(invitee.cookie(), ip), ip).getResponse();
 	}
 
 	@Test
@@ -116,7 +121,9 @@ class InvitationAcceptLimitTests extends AuthIntegrationTest {
 		}
 		Invitee late = invitee(company);
 
-		assertThat(accept(late)).as("no room left").isEqualTo(409);
+		MockHttpServletResponse refused = acceptResponse(late);
+		assertThat(refused.getStatus()).as("no room left").isEqualTo(409);
+		assertThat(refused.getContentAsString()).contains("\"MEMBER_LIMIT_REACHED\"");
 
 		assertThat(count("SELECT count(*) FROM membership WHERE company_id = ? AND user_id = ?", company.id(),
 				late.userId())).isZero();

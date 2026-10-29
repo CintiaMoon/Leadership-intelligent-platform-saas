@@ -511,8 +511,9 @@ export interface paths {
          *     Every reason the invitation itself cannot be used returns the same 422 `TOKEN_INVALID`: unknown, expired
          *     (7 days after it was last issued), revoked, replaced by a resend, already used, the signed-in address does not
          *     match, the company is pending deletion or gone, or the inviter can no longer grant the role. Only after the
-         *     address matched can the answer differ: 409 `CONFLICT` if the user is already an ACTIVE or SUSPENDED member
-         *     (nothing changes and the invitation stays pending) or the company has no room for another active member. The
+         *     address matched can the answer differ: 409 `CONFLICT` if the user is already an ACTIVE or SUSPENDED member or the
+         *     company's subscription state does not allow new members (nothing changes and the invitation stays pending), and
+         *     409 `MEMBER_LIMIT_REACHED` if the company has no room for another active member under its plan. The
          *     user becomes a member with the invited role, in one transaction with the end of the invitation. Following a link
          *     never verifies an address.
          *
@@ -876,7 +877,7 @@ export interface components {
          *     step-up is older than 10 minutes; call `POST /api/v1/auth/step-up` and retry. `PLAN_RESTRICTED` (403) is returned
          *     when the caller's role holds the permission but the company's subscription state does not allow it; the problem
          *     then carries `subscriptionState`. `MEMBER_LIMIT_REACHED` (409) is returned when the plan's limit on active members
-         *     is reached (reactivating a member); accepting an invitation keeps its own 409 `CONFLICT` wording.
+         *     is reached (reactivating a member, accepting an invitation).
          * @enum {string}
          */
         ErrorCode: "VALIDATION_FAILED" | "REQUEST_REJECTED" | "INVALID_CREDENTIALS" | "TOKEN_INVALID" | "UNAUTHENTICATED" | "FORBIDDEN" | "PLAN_RESTRICTED" | "NOT_FOUND" | "CONFLICT" | "MEMBER_LIMIT_REACHED" | "CSRF_REJECTED" | "REAUTHENTICATION_REQUIRED" | "RATE_LIMITED" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";

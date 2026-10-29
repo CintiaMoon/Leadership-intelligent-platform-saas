@@ -20,6 +20,7 @@ import com.example.saas.api.tenant.application.ActiveMemberLimit;
 import com.example.saas.api.tenant.application.CompanyLocks;
 import com.example.saas.api.tenant.application.PlanGate;
 import com.example.saas.api.tenant.application.CompanyNotFoundException;
+import com.example.saas.api.tenant.application.MemberLimitReachedException;
 import com.example.saas.api.tenant.domain.CompanyPolicy;
 import com.example.saas.api.tenant.domain.CompanyStatus;
 import com.example.saas.api.tenant.domain.MembershipStatus;
@@ -35,8 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  * invitation is locked after it and re-read; everything is checked under the locks, so a concurrent resend, revoke,
  * accept, membership change or deletion request cannot slip between the checks and the write. Every reason the
  * invitation itself is unusable throws {@link TokenInvalidException}, so the caller sees one answer (AC-INV-22). Only
- * after the signed-in address matched can the answer differ ({@link InvitationConflictException}: already a member, or no
- * room), which tells the rightful invitee something they are entitled to know.
+ * after the signed-in address matched can the answer differ ({@link InvitationConflictException}: already a member or a
+ * restricted subscription state; {@link MemberLimitReachedException}: no room), which tells the rightful invitee
+ * something they are entitled to know.
  */
 @Component
 class InvitationAcceptTransactions {
@@ -104,10 +106,14 @@ class InvitationAcceptTransactions {
 			throw new InvitationConflictException();
 		}
 		// Accepting adds a member, so it needs a running subscription, checked under the lock together with the limit
-		// (plan Q-10, Q-11). The invitee is not a member and is not told the state: the page shows its own wording.
-		if (!CompanyPolicy.stateAllowsInvitationAcceptance(planGate.state(companyId))
-				|| !memberLimit.hasRoomForAnotherActiveMember(companyId)) {
+		// (plan Q-10, Q-11). The invitee is not a member and is not told the state: a restricted state is the generic
+		// conflict. A full company is MEMBER_LIMIT_REACHED (plan Q-11, Q-18, D-212), said only to an invitee whose
+		// address matched.
+		if (!CompanyPolicy.stateAllowsInvitationAcceptance(planGate.state(companyId))) {
 			throw new InvitationConflictException();
+		}
+		if (!memberLimit.hasRoomForAnotherActiveMember(companyId)) {
+			throw new MemberLimitReachedException();
 		}
 
 		Membership membership = memberships.saveAndFlush(Membership.activate(companyId, userId, invitation.getRole(), now));

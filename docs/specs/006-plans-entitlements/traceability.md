@@ -34,7 +34,7 @@
 | AC-PLAN-25 | Verified | Phase 2 | `SubscriptionLifecycleTests.eightSimultaneousFirstCompaniesOfOneUserYieldExactlyOneTrial` (through `SubscriptionService.startFor`); at the schema `PlanSchemaTests.simultaneousFirstCompanyGrantsForOneUserAdmitExactlyOne` |
 | AC-MEM-17 | Verified (closed here) | Phases 2, 3 | `PlanActiveMemberLimitTests` (the plan-based limit replaces the unlimited default), `ReactivationLimitHookTests` (409 `MEMBER_LIMIT_REACHED`, the member stays suspended), `PlanGatingHttpTests.reactivatingAtTheLimitIsRefusedWithTheMemberLimitCode` |
 | AC-INV-12 | Verified (closed here) | Phases 2, 3 | `InvitationAcceptLimitTests` (acceptance at the limit through the real `ActiveMemberLimit` hook, which is now the plan limit) and `PlanActiveMemberLimitTests`; creating an invitation is never capped by the limit (`PlanGatingHttpTests.whileTheTrialRunsTheMatrixAloneDecidesAndNothingIsRestricted`) |
-| AC-INV-26 | Verified (closed here) | Phases 2, 3 | `InvitationAcceptTests.anInvitationCannotBeAcceptedWhileTheCompanyIsReadOnlyOrLockedAndItStaysPending` and the member limit above; the invitation page keeps its own 409 `CONFLICT` wording |
+| AC-INV-26 | Verified (closed here) | Phases 2, 3 | `InvitationAcceptTests.anInvitationCannotBeAcceptedWhileTheCompanyIsReadOnlyOrLockedAndItStaysPending` and the member limit above; a restricted state stays the generic 409 `CONFLICT`, a full company is 409 `MEMBER_LIMIT_REACHED` (`InvitationAcceptLimitTests`, decided after Phase 6) |
 | AC-TEN-12 | Verified | Phase 3 | `PlanGatingHttpTests.noRouteChangesAPlanAndAClientSuppliedPlanIsIgnored` (POST, PUT, PATCH and DELETE on the subscription path are refused); `MANAGE_PLANS` has no endpoint |
 | AC-TEN-14 | Verified in the gating table; no export operation exists yet to call over HTTP | Phase 3 | `StateGatingParityTest` (`EXPORT_DATA` per matrix while the subscription is TRIALING or ACTIVE, rejected otherwise) |
 
@@ -72,7 +72,7 @@
 - **Derived decisions, not asked (for your check):**
   1. The denial audit of a state refusal is a `tenant.authorization.denied` row with reason `plan_restricted:<permission>` and the state as the before value, once per user, company, permission and state per window, like a permission denial.
   2. An Admin reading the plan in EXPIRED_LOCKED gets 403 `PLAN_RESTRICTED` (the caller is a member), not 404.
-  3. Accepting an invitation in a restricted state is a 409 `CONFLICT` after the address matched, the same answer as the member limit, so the invitee is not told the company's plan state.
+  3. Accepting an invitation in a restricted state is a 409 `CONFLICT` after the address matched, so the invitee is not told the company's plan state. (Over the member limit it was the same answer; you decided after Phase 6 that it is `MEMBER_LIMIT_REACHED`.)
   4. Revoking and resending share one matrix permission, so the state table has a separate function for revoking; the parity test checks both rows.
   5. A permission added to the matrix without a rule for the plan states stops the application at startup (the static initializer), so it cannot stay open silently.
   6. `EntitlementService.permits` of Q-23 is the `CompanyPolicy` method, not an `EntitlementService` method.
@@ -102,7 +102,7 @@ Two independent read-only reviews of the whole slice as merged in #75 to #80 (th
 
 | Finding (review) | Verdict | What was done |
 |---|---|---|
-| Acceptance over the member limit answers 409 `CONFLICT`, the spec says `MEMBER_LIMIT_REACHED` (code F-1, medium) | Confirmed, and a conflict between two approved texts: SPEC-PLAN says over the limit is `MEMBER_LIMIT_REACHED`; SPEC-INV keeps a generic `CONFLICT` for acceptance so an invitee is not told about the company's plan (Phase 3 derived decision 3) | **Not changed: your decision (question 1).** The runbook and script texts were corrected to say what happens today |
+| Acceptance over the member limit answers 409 `CONFLICT`, the spec says `MEMBER_LIMIT_REACHED` (code F-1, medium) | Confirmed, and a conflict between two approved texts: SPEC-PLAN says over the limit is `MEMBER_LIMIT_REACHED`; SPEC-INV keeps a generic `CONFLICT` for acceptance so an invitee is not told about the company's plan (Phase 3 derived decision 3) | **Decided by you after Phase 6: `MEMBER_LIMIT_REACHED`; done in the follow-up PR** (a restricted state stays `CONFLICT`) |
 | Operator script depends on `ON_ERROR_STOP`, which it cannot enforce (security F-1, low) | Confirmed | Fixed in `operator-assign-plan.sql`: psql meta-commands quit before anything unless `ON_ERROR_STOP` is on. Run with real `psql` in a throwaway container: quits when unset or 0, stops at the transaction guard with 1 and no `--single-transaction`, and the correct run still works. The sibling slice 005 scripts have the same weakness (question 2) |
 | The second (under-lock) state check had no test that fails without it (code F-3, low) | Confirmed | `PlanGateUnderLockTests` (4 tests): a request passes the early check, waits for the company lock, the state is moved to locked meanwhile and committed, and the request must be refused. Mutation checks, each restored: the under-lock gate removed from reactivation, invitation create, transfer start, transfer cancel and transfer accept (one test fails each) |
 | AC-PLAN-21 marked Verified though guards survive removal (code F-2, medium) | Confirmed overstatement | Marked "Verified with exceptions"; added the 5-second lock-timeout test (the script gives up after about 5 seconds, nothing changed) |
@@ -119,7 +119,7 @@ Two independent read-only reviews of the whole slice as merged in #75 to #80 (th
 | A committed default for `app.rate-limit.hmac-key` although its comment says "Required, no default" (security F-8) | Confirmed; slice 001, outside this slice | **Not changed** (question 7) |
 
 **Questions for you**
-1. Acceptance over the member limit: keep the generic 409 `CONFLICT` (SPEC-INV, no information about the company's plan; today's behaviour, now documented) or return `MEMBER_LIMIT_REACHED` as SPEC-PLAN Q-11, Q-18 and D-212 read?
+1. **Decided: `MEMBER_LIMIT_REACHED`.** Was: acceptance over the member limit: keep the generic 409 `CONFLICT` (SPEC-INV, no information about the company's plan; today's behaviour, now documented) or return `MEMBER_LIMIT_REACHED` as SPEC-PLAN Q-11, Q-18 and D-212 read?
 2. Add the same `ON_ERROR_STOP` guard to the slice 005 scripts (`operator-ownership-transfer.sql`, the account-disable and reversal scripts)? Their tests would not change.
 3. Should the plan script write the due `trial_expired` and `read_only_ended` events before assigning, or is the documented "recorded state" enough?
 4. Add a V16 trigger change that refuses changing the trial dates once set (and a same-state plan swap outside the operator script)?
