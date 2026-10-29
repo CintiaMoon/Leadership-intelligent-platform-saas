@@ -39,7 +39,7 @@ It is not idempotent on purpose: a second run finds the flag cleared and stops w
    ```
    psql -c "SELECT m.id, m.role, m.status, u.email_original, u.status AS account FROM membership m JOIN app_user u ON u.id = m.user_id WHERE m.company_id = '<company id>' ORDER BY m.role, m.created_at"
    ```
-3. Run the script in **one transaction**. All five variables are required; a missing one makes the statement fail and nothing is committed.
+3. Run the script in **one transaction** and with `ON_ERROR_STOP` on: without it the script quits before doing anything and says so. All five variables are required; a missing one makes the statement fail and nothing is committed.
    ```
    psql --single-transaction --set ON_ERROR_STOP=1 \
         -v email=old.owner@example.com -v recipient=new.owner@example.com \
@@ -73,4 +73,5 @@ Manual: see the table below. The staging rehearsal that D-142 asks for has **not
 | Date | Environment | Tester | Result |
 |---|---|---|---|
 | 2026-10-26 | local `psql` 17 in the dev Postgres container, throwaway copy of the development database | Claude (assistant) | Passed: bad ticket and missing variable stop the script; the transfer ends with one Owner, flag cleared, nothing pending, 6 audit rows, 2 outbox rows; a second run stops. Notices not sent (no application running). Details in the SPEC-OWN traceability |
+| 2026-10-29 | local `psql` 17.6 inside a throwaway `postgres:17.6` container, migrations V1 to V15 applied (slice 006 follow-up, Phase 6 question 2) | Claude (assistant) | Passed: without `ON_ERROR_STOP` and with it set to 0 the script quits before doing anything and prints why; with `ON_ERROR_STOP=1` it runs on to its first guard. Nothing was written (0 audit rows). The data paths were not rerun with psql: the integration tests cover them |
 | (pending) | staging | security owner's team | not done |

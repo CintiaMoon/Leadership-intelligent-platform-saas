@@ -120,7 +120,7 @@ Two independent read-only reviews of the whole slice as merged in #75 to #80 (th
 
 **Questions for you**
 1. **Decided: `MEMBER_LIMIT_REACHED`.** Was: acceptance over the member limit: keep the generic 409 `CONFLICT` (SPEC-INV, no information about the company's plan; today's behaviour, now documented) or return `MEMBER_LIMIT_REACHED` as SPEC-PLAN Q-11, Q-18 and D-212 read?
-2. Add the same `ON_ERROR_STOP` guard to the slice 005 scripts (`operator-ownership-transfer.sql`, the account-disable and reversal scripts)? Their tests would not change.
+2. **Decided: yes, done in the follow-up PR (three scripts; `RunbookScriptGuardTest`; real psql check).** Was: Add the same `ON_ERROR_STOP` guard to the slice 005 scripts (`operator-ownership-transfer.sql`, the account-disable and reversal scripts)? Their tests would not change.
 3. Should the plan script write the due `trial_expired` and `read_only_ended` events before assigning, or is the documented "recorded state" enough?
 4. Add a V16 trigger change that refuses changing the trial dates once set (and a same-state plan swap outside the operator script)?
 5. **Decided: yes, accepted.** Was: Accept that ownership-transfer reads and an already queued invitation email are not gated by plan state?

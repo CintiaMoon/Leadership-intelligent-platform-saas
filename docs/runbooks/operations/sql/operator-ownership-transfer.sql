@@ -12,10 +12,24 @@
 -- Read docs/runbooks/operations/operator-ownership-transfer.md first.
 -- Run WITHOUT --single-transaction the script refuses to go on (see the marker statements below).
 -- Not idempotent on purpose: a second run finds the flag cleared and stops with an error, changing nothing.
+-- Run WITHOUT ON_ERROR_STOP the script quits before it does anything (the meta-commands below): the guards that follow
+-- stop the script only by raising an error, and psql carries on after an error unless ON_ERROR_STOP is set.
 -- Statements end at a semicolon at the end of a line, and comments contain none, so the test can split them.
 --
 -- The guards divide by the number of rows that must exist, so that psql stops with an error when a condition is not met.
 -- (Do not write them as CASE ... ELSE 1 / 0: the planner folds that constant and fails always.)
+
+-- Quit at once, before anything else, unless ON_ERROR_STOP is set to a true value (psql meta-commands, not SQL).
+\if :{?ON_ERROR_STOP}
+\else
+\echo 'operator-ownership-transfer.sql: run psql with --set ON_ERROR_STOP=1. Nothing was changed.'
+\quit
+\endif
+\if :ON_ERROR_STOP
+\else
+\echo 'operator-ownership-transfer.sql: ON_ERROR_STOP must be on (1). Nothing was changed.'
+\quit
+\endif
 
 -- 0. Stop here, with an error and nothing changed, if a variable is malformed.
 SELECT 1 / (CASE WHEN :'ticket' ~ '^[A-Za-z0-9_-]{1,40}$' THEN 1 ELSE 0 END) AS ticket_ok;
