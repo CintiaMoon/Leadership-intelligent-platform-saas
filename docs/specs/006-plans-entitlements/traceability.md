@@ -1,6 +1,6 @@
 # SPEC-PLAN Traceability (implementation status)
 
-- Updated: 2026-10-28, after Phase 6 (independent reviews, fixes and closure). Status: **implemented, awaiting your sign-off**. Open questions for you are listed at the end of the Phase 6 section.
+- Updated: 2026-10-28, after Phase 6 (independent reviews, fixes and closure). Status: **implemented, awaiting your sign-off**. Open questions for you (2, 3, 4 and 7 remain; 1, 5 and 6 are decided) are listed at the end of the Phase 6 section.
 - "Verified" will mean the test exists and was run and passed in `./mvnw verify` (Testcontainers PostgreSQL); for the frontend, in the web unit tests and Playwright.
 - Plan: `plan.md` (approved 2026-10-27, Q-01 to Q-23, D-195 to D-217). Spec approved the same day with AC-PLAN-21 to AC-PLAN-25 and the gating, existing-companies, endpoint and operator sections added.
 - Phases: 0 to 5 done and merged; 6 (review and closure) implemented on its branch, awaiting merge.
@@ -113,19 +113,19 @@ Two independent read-only reviews of the whole slice as merged in #75 to #80 (th
 | Ownership-transfer reads and an invitation email already queued are not gated by plan state (code F-6, security F-5) | Confirmed, tiny: the caller is a member and a party, and acceptance is refused | Recorded as accepted for your sign-off (question 5) |
 | One DB login does everything, so the V15 triggers are not a boundary against SQL injection or a leaked credential (security F-2) | Confirmed, known (roles were deferred, D-88) | Open item for the deployment slice: a migrator role and a runtime role with `SELECT` only on `plan*` |
 | `@Authorized` gates once, before the lock, so a future write endpoint that relies on it alone gets no under-lock check (security F-4) | Confirmed, correct for today's reads | Hand-off to the slice 007 and 008 plans: every write re-checks under the company lock, as the existing ones do |
-| The backfill grants a Trial slot from `tenant.company.created` audit rows (code F-8) | Confirmed, an unasked decision of Phase 1 | Recorded; it holds as long as those audit rows are kept (question 6) |
+| The backfill grants a Trial slot from `tenant.company.created` audit rows (code F-8) | Confirmed, an unasked decision of Phase 1 | Recorded; it holds as long as those audit rows are kept (question 6, confirmed by you: the rule stands and those audit rows must not be pruned) |
 | `describe()` reads several statements in READ COMMITTED (security F-6), sweep head-of-line batch (code F-10), one Trial per user not per person (security F-7) | Confirmed, no security impact | Recorded, no change |
 | Stale traceability rows (code F-11) | Confirmed | Fixed: header, AC-PLAN-02, AC-PLAN-16. `npm run gen:api:check`: no drift |
-| A committed default for `app.rate-limit.hmac-key` although its comment says "Required, no default" (security F-8) | Confirmed; slice 001, outside this slice | **Not changed** (question 7) |
+| A committed default for `app.rate-limit.hmac-key` although its comment says "Required, no default" (security F-8) | Confirmed; slice 001, outside this slice | **Fixed after Phase 6 (question 7): no default, the old value is refused** |
 
 **Questions for you**
 1. **Decided: `MEMBER_LIMIT_REACHED`.** Was: acceptance over the member limit: keep the generic 409 `CONFLICT` (SPEC-INV, no information about the company's plan; today's behaviour, now documented) or return `MEMBER_LIMIT_REACHED` as SPEC-PLAN Q-11, Q-18 and D-212 read?
 2. Add the same `ON_ERROR_STOP` guard to the slice 005 scripts (`operator-ownership-transfer.sql`, the account-disable and reversal scripts)? Their tests would not change.
 3. Should the plan script write the due `trial_expired` and `read_only_ended` events before assigning, or is the documented "recorded state" enough?
 4. Add a V16 trigger change that refuses changing the trial dates once set (and a same-state plan swap outside the operator script)?
-5. Accept that ownership-transfer reads and an already queued invitation email are not gated by plan state?
-6. Confirm the Phase 1 backfill rule (a Trial slot for every existing creator, derived from audit rows), and that those audit rows are not pruned.
-7. Remove the committed default of `app.rate-limit.hmac-key` and fail at start-up when it is unset (a slice 001 fix)?
+5. **Decided: yes, accepted.** Was: Accept that ownership-transfer reads and an already queued invitation email are not gated by plan state?
+6. **Decided: yes, confirmed.** Was: Confirm the Phase 1 backfill rule (a Trial slot for every existing creator, derived from audit rows), and that those audit rows are not pruned.
+7. **Decided: yes, done in the follow-up PR (default removed, old value refused).** Was: Remove the committed default of `app.rate-limit.hmac-key` and fail at start-up when it is unset (a slice 001 fix)?
 
 **Unrun checks and limits (the whole slice)**
 - The staging rehearsal of `operator-assign-plan.sql` (the product owner's team's, D-209). The runbook stays **Draft** until then.

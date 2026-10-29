@@ -31,6 +31,14 @@ class SecretQualityTest {
 	}
 
 	@Test
+	void aValueOnceCommittedToTheRepositoryIsRefused() {
+		assertThatThrownBy(() -> SecretQuality.requireNotPlaceholder("x",
+				"vQ8mZ2xKp7N4aR1sT9wE3yH6uJ0cL5dF8gB2nM4xA7kP1rS6tV9zQ3eW5hY0iO2l"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("published");
+	}
+
+	@Test
 	void aGeneratedValueIsAccepted() {
 		assertThatCode(() -> SecretQuality.requireNotPlaceholder("x", "q7Zr0pV2mT9xLw4Kc8NfB1uYhJd3GsEa5OiRnXk6AvM="))
 			.doesNotThrowAnyException();
