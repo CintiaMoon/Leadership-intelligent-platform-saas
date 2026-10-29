@@ -19,7 +19,7 @@ Emergency (credential leaked): do steps 2 to 5 without waiting, then review `aud
 ## CSRF signing key (`CSRF_HMAC_KEY`) and rate-limit key (`RATE_LIMIT_HMAC_KEY`)
 Each is a single value, with no overlap mechanism. Changing it has these effects:
 - CSRF key: every pre-login CSRF token issued before the change is rejected. The web app fetches a fresh token for each submit, so users see at most one "request could not be verified" message. Safe at any time.
-- Rate-limit key: all counters restart from zero (identifiers are stored as keyed hashes), which briefly removes lockout state. Rotate at a quiet time and not during an attack.
+- Rate-limit key: until PR "remove the committed rate-limit key" the repository shipped a default value for it (still in git history). Any environment that started without `RATE_LIMIT_HMAC_KEY` used that public value: set a generated one (`openssl rand -base64 48`). The API now refuses to start without the key and refuses that value. All counters restart from zero (identifiers are stored as keyed hashes), which briefly removes lockout state. Rotate at a quiet time and not during an attack.
 
 ## Database and SMTP/SES credentials
 Not yet covered: SES wiring waits for D-08. Add the procedure when the production database role model is set up.
