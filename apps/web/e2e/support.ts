@@ -258,8 +258,10 @@ export function placeSubscription(companyId: string, position: PlanPosition): vo
       return sql(trialStartedAgo("40 days"));
     case "active":
       return sql(
-        `UPDATE company_subscription SET state = 'ACTIVE', plan_id = (SELECT id FROM plan WHERE code = '${position.plan}' AND version = 1) ` +
-          `WHERE company_id = ${id}`,
+        // A plan change while ACTIVE is the operator's: the database wants the marker the operator script sets (V16).
+        `BEGIN; SELECT set_config('app.operator_plan_tx', 'yes', true); ` +
+          `UPDATE company_subscription SET state = 'ACTIVE', plan_id = (SELECT id FROM plan WHERE code = '${position.plan}' AND version = 1) ` +
+          `WHERE company_id = ${id}; COMMIT`,
       );
   }
 }
