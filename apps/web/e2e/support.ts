@@ -243,10 +243,11 @@ export function placeSubscription(companyId: string, position: PlanPosition): vo
   if (!/^[0-9a-f-]{36}$/.test(companyId)) {
     throw new Error("not a company id");
   }
+  // The database refuses to rewrite trial dates (V16), so a test that moves time switches the triggers off for this one transaction.
   const trialStartedAgo = (interval: string) =>
-    `UPDATE company_subscription SET state = 'TRIALING', plan_id = (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), ` +
+    `BEGIN; SET LOCAL session_replication_role = replica; UPDATE company_subscription SET state = 'TRIALING', plan_id = (SELECT id FROM plan WHERE code = 'TRIAL' AND version = 1), ` +
     `trial_started_at = x.s, trial_ends_at = x.s + interval '336 hours', read_only_ends_at = x.s + interval '672 hours' ` +
-    `FROM (SELECT now() - interval '${interval}' AS s) x WHERE company_id = ${id}`;
+    `FROM (SELECT now() - interval '${interval}' AS s) x WHERE company_id = ${id}; COMMIT`;
   switch (position.kind) {
     case "trial":
       // Started (14 - daysLeft) days and an hour ago, so there are daysLeft days less an hour left: still daysLeft days.

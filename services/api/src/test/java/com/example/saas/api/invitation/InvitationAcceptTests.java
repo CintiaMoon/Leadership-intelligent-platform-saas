@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 
+import com.example.saas.api.plan.TrialDateRewrite;
 import com.example.saas.api.auth.AuthApi;
 import com.example.saas.api.auth.AuthIntegrationTest;
 import com.example.saas.api.auth.RecordingEmailSender;
@@ -167,7 +168,7 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 
 	/** Moves the trial back in time by whole hours, so the company is read-only (337) or locked (673 and more). */
 	private void agedTrial(UUID companyId, int hours) {
-		jdbc.update("UPDATE company_subscription SET trial_started_at = trial_started_at - make_interval(hours => ?), "
+		TrialDateRewrite.update(jdbc, "UPDATE company_subscription SET trial_started_at = trial_started_at - make_interval(hours => ?), "
 				+ "trial_ends_at = trial_ends_at - make_interval(hours => ?), "
 				+ "read_only_ends_at = read_only_ends_at - make_interval(hours => ?) WHERE company_id = ?", hours, hours,
 				hours, companyId);
@@ -198,7 +199,7 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 		Issued issued = issue(company, company.owner(), email, Role.VIEWER);
 		Person invitee = person(email);
 		// The trial ends in one hour, so it is still running.
-		jdbc.update("UPDATE company_subscription SET trial_started_at = now() - interval '335 hours', "
+		TrialDateRewrite.update(jdbc, "UPDATE company_subscription SET trial_started_at = now() - interval '335 hours', "
 				+ "trial_ends_at = now() - interval '335 hours' + interval '336 hours', "
 				+ "read_only_ends_at = now() - interval '335 hours' + interval '672 hours' WHERE company_id = ?",
 				company.id());
