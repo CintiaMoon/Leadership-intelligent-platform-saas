@@ -10,7 +10,8 @@ import org.springframework.session.web.http.DefaultCookieSerializer;
 
 @Configuration
 @EnableConfigurationProperties({ AppProperties.class, PasswordHashProperties.class, SessionProperties.class,
-		com.example.saas.api.retention.RetentionProperties.class })
+		com.example.saas.api.retention.RetentionProperties.class,
+		com.example.saas.api.tenant.deletion.application.DeletionProperties.class })
 class AuthConfig {
 
 	/**

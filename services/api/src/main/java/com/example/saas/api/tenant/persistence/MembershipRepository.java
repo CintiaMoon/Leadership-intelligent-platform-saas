@@ -82,4 +82,7 @@ public interface MembershipRepository extends Repository<Membership, UUID> {
 	@CrossTenantByDesign(reason = "lists the companies of the authenticated user")
 	List<Membership> findByUserIdAndStatus(UUID userId, MembershipStatus status);
 
+	/** The company's memberships in one status, for the notices of a deletion request. */
+	List<Membership> findByCompanyIdAndStatus(UUID companyId, MembershipStatus status);
+
 }

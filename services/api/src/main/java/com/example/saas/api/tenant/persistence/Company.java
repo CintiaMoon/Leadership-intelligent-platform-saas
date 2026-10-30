@@ -37,6 +37,17 @@ public class Company {
 	@Column(name = "ownership_resolution_at")
 	private Instant ownershipResolutionAt;
 
+	/** Set when a deletion is requested and cleared by a cancellation (SPEC-DEL); the database keeps them in step with the status. */
+	@Column(name = "deletion_requested_at")
+	private Instant deletionRequestedAt;
+
+	@Column(name = "deletion_requested_by")
+	private UUID deletionRequestedBy;
+
+	/** The earliest moment the purge may begin: the request plus the grace period. */
+	@Column(name = "purge_at")
+	private Instant purgeAt;
+
 	@Version
 	private long version;
 
@@ -72,6 +83,36 @@ public class Company {
 
 	public Instant getOwnershipResolutionAt() {
 		return ownershipResolutionAt;
+	}
+
+	public Instant getDeletionRequestedAt() {
+		return deletionRequestedAt;
+	}
+
+	public UUID getDeletionRequestedBy() {
+		return deletionRequestedBy;
+	}
+
+	public Instant getPurgeAt() {
+		return purgeAt;
+	}
+
+	/** ACTIVE to PENDING_DELETION. The caller holds the company lock and has checked the state. */
+	public void requestDeletion(UUID requestedBy, Instant now, Instant purgeAt) {
+		this.status = CompanyStatus.PENDING_DELETION;
+		this.deletionRequestedAt = now;
+		this.deletionRequestedBy = requestedBy;
+		this.purgeAt = purgeAt;
+		this.updatedAt = now;
+	}
+
+	/** PENDING_DELETION to ACTIVE: the request is cleared. The caller holds the company lock and has checked the deadline. */
+	public void cancelDeletion(Instant now) {
+		this.status = CompanyStatus.ACTIVE;
+		this.deletionRequestedAt = null;
+		this.deletionRequestedBy = null;
+		this.purgeAt = null;
+		this.updatedAt = now;
 	}
 
 }

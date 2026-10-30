@@ -21,8 +21,8 @@ class InvitationRulesTest {
 	private static final Set<Role> LOWER = Set.of(Role.AGENT, Role.VIEWER);
 
 	private static Outcome expected(Operation op, Role actor, Role invited, CompanyStatus company) {
-		// While a company is pending deletion no invitation operation is allowed to anyone (SPEC-TEN).
-		if (company == CompanyStatus.PENDING_DELETION) {
+		// While a company is anything but ACTIVE (pending deletion, being purged) no invitation operation is allowed to anyone.
+		if (company != CompanyStatus.ACTIVE) {
 			return Outcome.FORBIDDEN;
 		}
 		// Only an Owner or an Admin handles invitations at all.
@@ -58,7 +58,7 @@ class InvitationRulesTest {
 				}
 			}
 		}
-		assertThat(checked).isEqualTo(2 * 3 * 4 * 5);
+		assertThat(checked).isEqualTo(CompanyStatus.values().length * 3 * 4 * 5);
 	}
 
 	@Test

@@ -105,6 +105,12 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem(ErrorCode.CONFLICT, request.getRequestURI()));
 	}
 
+	@ExceptionHandler(com.example.saas.api.tenant.deletion.application.DeletionConflictException.class)
+	ResponseEntity<Object> handleDeletionConflict(com.example.saas.api.tenant.deletion.application.DeletionConflictException ex,
+			HttpServletRequest request) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem(ErrorCode.CONFLICT, request.getRequestURI()));
+	}
+
 	@ExceptionHandler(InvitationConflictException.class)
 	ResponseEntity<Object> handleInvitationConflict(InvitationConflictException ex, HttpServletRequest request) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem(ErrorCode.CONFLICT, request.getRequestURI()));
