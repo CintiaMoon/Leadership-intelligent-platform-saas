@@ -50,10 +50,12 @@ class CompanyApiTests extends AuthIntegrationTest {
 	private UUID insertCompany(UUID ownerId, String status) {
 		return tx.execute(s -> {
 			UUID companyId = jdbc.queryForObject(
-					"INSERT INTO company (name, status, created_at, updated_at) VALUES ('Seeded', ?, now(), now()) "
-							+ "RETURNING id",
-					UUID.class, status);
+					"INSERT INTO company (name, created_at, updated_at) VALUES ('Seeded', now(), now()) RETURNING id",
+					UUID.class);
 			join(companyId, ownerId, "OWNER", "ACTIVE");
+			if (status.equals("PENDING_DELETION")) {
+				TestLifecycle.markPendingDeletion(jdbc, companyId);
+			}
 			return companyId;
 		});
 	}

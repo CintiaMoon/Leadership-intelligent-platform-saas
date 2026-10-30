@@ -163,7 +163,7 @@ class TenantIsolationTests extends AuthIntegrationTest {
 	@Test
 	void whilePendingDeletionOnlyTheOwnerReadsAndNobodyWritesExceptTheCancellation() throws Exception {
 		Team team = team();
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, team.companyId());
 
 		for (Permission permission : Permission.values()) {
 			for (Role role : Role.values()) {

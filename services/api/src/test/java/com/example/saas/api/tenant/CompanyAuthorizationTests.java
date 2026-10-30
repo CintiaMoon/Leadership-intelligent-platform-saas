@@ -172,7 +172,7 @@ class CompanyAuthorizationTests extends AuthIntegrationTest {
 		Member agent = member();
 		join(companyId, agent, "AGENT", "ACTIVE");
 
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", companyId);
+		TestLifecycle.markPendingDeletion(jdbc, companyId);
 
 		assertThat(status(owner, companyId, "view-company-details")).isEqualTo(200);
 		assertThat(status(owner, companyId, "edit-core-records")).isEqualTo(403);

@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
 
+import com.example.saas.api.tenant.TestLifecycle;
 import com.example.saas.api.MutableClock;
 import com.example.saas.api.MutableClockConfiguration;
 import com.example.saas.api.auth.AuthApi;
@@ -239,7 +240,7 @@ class OwnershipTransferApiTests extends AuthIntegrationTest {
 	void noOwnershipOperationIsAllowedWhileTheCompanyIsPendingDeletion() throws Exception {
 		Team team = team();
 		UUID id = started(team, Role.ADMIN);
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, team.companyId());
 
 		assertThat(status(initiate(team.person(Role.OWNER), team.companyId(), team.seat(Role.AGENT)))).isEqualTo(403);
 		assertThat(status(send(team.person(Role.OWNER), HttpMethod.POST, transfers(team.companyId()) + "/" + id + "/cancel", null)))
