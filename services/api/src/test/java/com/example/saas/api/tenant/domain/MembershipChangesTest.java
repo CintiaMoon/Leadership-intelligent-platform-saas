@@ -24,8 +24,8 @@ class MembershipChangesTest {
 	/** The rules as the spec states them, one question at a time. */
 	private static Outcome expected(MembershipOperation op, Role actor, Role target, MembershipStatus status,
 			boolean self, Role newRole, CompanyStatus company) {
-		// While a company is pending deletion nothing in this slice is allowed to anyone (AC-DEL-12).
-		if (company == CompanyStatus.PENDING_DELETION) {
+		// While a company is anything but ACTIVE (pending deletion, being purged) nothing here is allowed to anyone (AC-DEL-12).
+		if (company != CompanyStatus.ACTIVE) {
 			return Outcome.FORBIDDEN;
 		}
 		boolean touchesAdminRole = op == MembershipOperation.CHANGE_ROLE
@@ -97,7 +97,7 @@ class MembershipChangesTest {
 				}
 			}
 		}
-		assertThat(checked).isEqualTo(2 * 5 * 4 * 4 * 3 * 2 * 5);
+		assertThat(checked).isEqualTo(CompanyStatus.values().length * 5 * 4 * 4 * 3 * 2 * 5);
 	}
 
 	@Test

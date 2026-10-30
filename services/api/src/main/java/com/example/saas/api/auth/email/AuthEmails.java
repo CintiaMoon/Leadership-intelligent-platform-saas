@@ -52,6 +52,45 @@ public class AuthEmails {
 	}
 
 	/**
+	 * The company deletion emails (SPEC-DEL, plan Q-09, Q-27). They go to members, but the company name is still text a
+	 * user chose, so the subjects are fixed and the name appears only in the body, in quotes (D-165). No person's name and
+	 * no secret: the link opens a page that needs a login.
+	 *
+	 * @param purgeAt the earliest moment the data is deleted; used by the requested and notice texts
+	 */
+	public EmailMessage companyDeletion(String eventType, String to, java.util.UUID companyId, String companyName,
+			java.time.Instant purgeAt) {
+		String link = properties.publicBaseUrl() + "/companies/" + companyId;
+		String when = purgeAt == null ? "" : java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+			.withZone(java.time.ZoneOffset.UTC)
+			.format(purgeAt) + " (UTC)";
+		return switch (eventType) {
+			case "COMPANY_DELETION_REQUESTED" -> new EmailMessage(to, "A company deletion was requested", """
+					Hello,
+
+					Deletion of the company \"%s\" was requested. All its data will be permanently deleted on or after %s unless the Owner cancels before then. The Owner can cancel here, after signing in:
+
+					%s
+
+					Until then the company is closed to everyone but its Owner.
+					""".formatted(companyName, when, link));
+			case "COMPANY_DELETION_CANCELLED" -> new EmailMessage(to, "A company deletion was cancelled", """
+					Hello,
+
+					The scheduled deletion of the company \"%s\" was cancelled. Nothing was deleted and the company is available again:
+
+					%s
+					""".formatted(companyName, link));
+			case "COMPANY_DELETION_NOTICE" -> new EmailMessage(to, "A company you belong to is scheduled for deletion", """
+					Hello,
+
+					The company \"%s\" is scheduled to be permanently deleted on or after %s. Until then it is closed to everyone but its Owner. If you think this is a mistake, contact the Owner of the company.
+					""".formatted(companyName, when));
+			default -> throw new IllegalArgumentException(eventType);
+		};
+	}
+
+	/**
 	 * The ownership transfer emails (SPEC-OWN, D-185). They go to members of the company, but the company name is still
 	 * text chosen by a user, so the subjects are fixed and the name appears only in the body, in quotes (the pattern of
 	 * D-165). No person's name, no secret: the link opens a page that needs a login and, to accept, a fresh password.

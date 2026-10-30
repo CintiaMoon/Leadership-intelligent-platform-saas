@@ -77,4 +77,22 @@ class CompanyPolicyTest {
 		}
 	}
 
+	/** Every status but ACTIVE is closed in the same way, so a status added later fails closed (slice 007 plan, Q-07, Q-08). */
+	@Test
+	void everyStatusButActiveIsClosedLikePendingDeletion() {
+		for (CompanyStatus status : CompanyStatus.values()) {
+			if (status == CompanyStatus.ACTIVE) {
+				continue;
+			}
+			for (Permission permission : Permission.values()) {
+				for (Role role : Role.values()) {
+					assertThat(CompanyPolicy.permits(role, permission, status, Role.AGENT))
+						.as("%s / %s while %s", permission, role, status)
+						.isEqualTo(CompanyPolicy.permits(role, permission, CompanyStatus.PENDING_DELETION, Role.AGENT));
+				}
+			}
+		}
+		assertThat(CompanyStatus.values()).as("a new status needs a decision here").hasSize(5);
+	}
+
 }
