@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.example.saas.api.tenant.TestLifecycle;
 import com.example.saas.api.auth.AuthIntegrationTest;
 import com.example.saas.api.auth.RecordingEmailSender;
 import com.example.saas.api.auth.domain.TokenCodec;
@@ -181,7 +182,7 @@ class InvitationDeliveryTests extends AuthIntegrationTest {
 				+ "expires_at = now() - interval '1 day' WHERE id = ?", expired.id());
 		Seed other = company("Closing Co");
 		service.create(other.owner(), other.companyId(), deleting, Role.AGENT);
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", other.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, other.companyId());
 
 		drainOutbox();
 

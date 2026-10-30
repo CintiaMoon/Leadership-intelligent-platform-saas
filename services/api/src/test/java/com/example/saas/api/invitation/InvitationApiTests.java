@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.example.saas.api.tenant.TestLifecycle;
 import com.example.saas.api.MutableClock;
 import com.example.saas.api.MutableClockConfiguration;
 import com.example.saas.api.auth.AuthApi;
@@ -216,7 +217,7 @@ class InvitationApiTests extends AuthIntegrationTest {
 		Team team = team();
 		Person owner = team.person(Role.OWNER);
 		UUID existing = created(owner, team.companyId(), "AGENT");
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, team.companyId());
 
 		assertThat(invite(owner, team.companyId(), guest(), "AGENT").getResponse().getStatus()).isEqualTo(403);
 		assertThat(send(owner, HttpMethod.POST, invitations(team.companyId()) + "/" + existing + "/resend", null)

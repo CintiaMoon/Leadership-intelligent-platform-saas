@@ -9,6 +9,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import com.example.saas.api.tenant.TestLifecycle;
 import com.example.saas.api.auth.email.EmailMessage;
 import com.example.saas.api.common.ValidationFailedException;
 import com.example.saas.api.invitation.application.InvitationService;
@@ -196,7 +197,7 @@ class OwnershipTransferServiceTests extends OwnershipTestBase {
 	@Test
 	void aCompanyBeingDeletedCannotStartATransfer() {
 		Team team = team();
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, team.companyId());
 
 		assertThatThrownBy(() -> startToAdmin(team)).isInstanceOf(PermissionDeniedException.class);
 	}
@@ -370,7 +371,7 @@ class OwnershipTransferServiceTests extends OwnershipTestBase {
 	void aCompanyThatIsBeingDeletedOrWhoseOwnerIsNoLongerActiveCannotCompleteATransfer() {
 		Team deleting = team();
 		TransferView first = startToAdmin(deleting);
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", deleting.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, deleting.companyId());
 		assertThatThrownBy(() -> service.accept(session(deleting.admin()), deleting.companyId(), first.id()))
 			.as("pending deletion").isInstanceOf(OwnershipConflictException.class);
 

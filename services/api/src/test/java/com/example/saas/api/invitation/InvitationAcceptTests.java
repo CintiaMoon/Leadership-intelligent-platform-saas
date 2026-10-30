@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 
+import com.example.saas.api.tenant.TestLifecycle;
 import com.example.saas.api.plan.TrialDateRewrite;
 import com.example.saas.api.auth.AuthApi;
 import com.example.saas.api.auth.AuthIntegrationTest;
@@ -307,7 +308,7 @@ class InvitationAcceptTests extends AuthIntegrationTest {
 		String closingEmail = guest();
 		Issued inClosing = issue(closing, closing.owner(), closingEmail, Role.AGENT);
 		Person closingInvitee = person(closingEmail);
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", closing.id());
+		TestLifecycle.markPendingDeletion(jdbc, closing.id());
 		answers.add(accept(closingInvitee, inClosing.token()));
 
 		assertThat(answers).hasSize(7);

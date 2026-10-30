@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import com.example.saas.api.tenant.TestLifecycle;
 import com.example.saas.api.auth.AuthIntegrationTest;
 import com.example.saas.api.common.ValidationFailedException;
 import com.example.saas.api.invitation.application.InvitationConflictException;
@@ -287,7 +288,7 @@ class InvitationServiceTests extends AuthIntegrationTest {
 	void noInvitationOperationIsAllowedWhileTheCompanyIsPendingDeletion() {
 		Team team = team();
 		InvitationView existing = service.create(team.owner().session(), team.companyId(), guest(), Role.AGENT);
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, team.companyId());
 
 		assertThatThrownBy(() -> service.create(team.owner().session(), team.companyId(), guest(), Role.AGENT))
 			.isInstanceOf(PermissionDeniedException.class);

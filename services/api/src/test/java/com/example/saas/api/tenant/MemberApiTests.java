@@ -599,7 +599,7 @@ class MemberApiTests extends AuthIntegrationTest {
 	@Test
 	void whileACompanyIsPendingDeletionNoMemberChangeIsAllowedToAnyone() throws Exception {
 		Team team = team();
-		jdbc.update("UPDATE company SET status = 'PENDING_DELETION' WHERE id = ?", team.companyId());
+		TestLifecycle.markPendingDeletion(jdbc, team.companyId());
 		Person owner = team.person(Role.OWNER);
 		Person admin = team.person(Role.ADMIN);
 		String agentPath = member(team.companyId(), team.membership(Role.AGENT));
