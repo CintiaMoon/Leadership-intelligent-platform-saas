@@ -127,7 +127,7 @@ public final class CompanyPolicy {
 	 * A conditional cell with no target is denied.
 	 */
 	public static boolean permits(Role role, Permission permission, CompanyStatus companyStatus, Role targetRole) {
-		if (companyStatus != CompanyStatus.ACTIVE && !allowedWhilePendingDeletion(role, permission)) {
+		if (companyStatus != CompanyStatus.ACTIVE && !allowedWhileClosed(companyStatus, role, permission)) {
 			return false;
 		}
 		return switch (grant(role, permission)) {
@@ -189,12 +189,19 @@ public final class CompanyPolicy {
 	}
 
 	/**
-	 * While a company is anything but ACTIVE only the Owner may act, and only to read or to cancel the deletion
-	 * (SPEC-TEN "Pending deletion"; AC-DEL-12, AC-DEL-14). Whether a cancellation is still possible in a purge state is
-	 * decided by the deletion service under the lock (state and deadline); phase 3 narrows the reads of the later states.
+	 * What is left once a company is anything but ACTIVE (SPEC-DEL AC-DEL-12, 14, 29). While the deletion is pending only
+	 * the Owner may act, and only to read or to cancel it. Once the purge is queued, running or failed nobody may do
+	 * anything but the Owner reading the company's details, which is how the screen learns the company is being deleted: a
+	 * cancellation is no longer possible there.
 	 */
-	private static boolean allowedWhilePendingDeletion(Role role, Permission permission) {
-		return role == Role.OWNER && (!permission.stateChanging() || permission == Permission.CANCEL_COMPANY_DELETION);
+	private static boolean allowedWhileClosed(CompanyStatus status, Role role, Permission permission) {
+		if (role != Role.OWNER) {
+			return false;
+		}
+		if (status == CompanyStatus.PENDING_DELETION) {
+			return !permission.stateChanging() || permission == Permission.CANCEL_COMPANY_DELETION;
+		}
+		return permission == Permission.VIEW_COMPANY_DETAILS;
 	}
 
 }

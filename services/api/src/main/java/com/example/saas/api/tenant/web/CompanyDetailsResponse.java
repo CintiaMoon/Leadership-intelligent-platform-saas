@@ -7,10 +7,12 @@ import com.example.saas.api.tenant.application.CompanyView;
 import com.example.saas.api.tenant.domain.CompanyStatus;
 import com.example.saas.api.tenant.domain.Role;
 
-record CompanyDetailsResponse(UUID id, String name, CompanyStatus status, Role role, Instant createdAt) {
+record CompanyDetailsResponse(UUID id, String name, CompanyStatus status, Role role, Instant createdAt,
+		Instant deletionRequestedAt, Instant purgeAt) {
 
 	static CompanyDetailsResponse of(CompanyView view) {
-		return new CompanyDetailsResponse(view.id(), view.name(), view.status(), view.role(), view.createdAt());
+		return new CompanyDetailsResponse(view.id(), view.name(), view.status(), view.role(), view.createdAt(),
+				view.deletionRequestedAt(), view.purgeAt());
 	}
 
 }

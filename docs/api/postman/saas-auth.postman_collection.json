@@ -1262,6 +1262,96 @@
           ]
         },
         {
+          "name": "Request company deletion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-BFF-Credential",
+                "value": "{{bffCredential}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{origin}}"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/companies/{{companyId}}/deletion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{{companyId}}",
+                "deletion"
+              ]
+            },
+            "description": "Run as the Owner, with a login or step-up within 10 minutes (403 REAUTHENTICATION_REQUIRED otherwise). No body. The company becomes PENDING_DELETION and the response carries the earliest moment of the purge (30 days). 409 if the company is not ACTIVE or is flagged for ownership resolution."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel company deletion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-BFF-Credential",
+                "value": "{{bffCredential}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{origin}}"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/companies/{{companyId}}/deletion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{{companyId}}",
+                "deletion"
+              ]
+            },
+            "description": "Run as the Owner; no recent login needed. 409 if the deletion is not pending or its deadline has passed. The company is ACTIVE again."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Log out",
           "request": {
             "method": "POST",

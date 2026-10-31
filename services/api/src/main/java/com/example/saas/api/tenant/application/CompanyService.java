@@ -86,12 +86,12 @@ public class CompanyService {
 	public CompanyView get(AuthorizedCompany authorized) {
 		Company company = companies.findById(authorized.companyId()).orElseThrow(CompanyNotFoundException::new);
 		return new CompanyView(company.getId(), company.getName(), company.getStatus(), authorized.role(),
-				company.getCreatedAt());
+				company.getCreatedAt(), company.getDeletionRequestedAt(), company.getPurgeAt());
 	}
 
 	private static CompanyView view(Company company, Membership membership) {
 		return new CompanyView(company.getId(), company.getName(), company.getStatus(), membership.getRole(),
-				company.getCreatedAt());
+				company.getCreatedAt(), company.getDeletionRequestedAt(), company.getPurgeAt());
 	}
 
 }

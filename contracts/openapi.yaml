@@ -38,6 +38,8 @@ tags:
     description: Handing a company's ownership to another active member (SPEC-OWN).
   - name: Plans
     description: The company's plan, subscription state, features and limits, read only (SPEC-PLAN).
+  - name: Deletion
+    description: Requesting and cancelling the deletion of a company (SPEC-DEL).
 paths:
   /api/v1/auth/csrf:
     get:
@@ -368,7 +370,7 @@ paths:
       summary: List the caller's companies
       description: |
         The companies in which the caller has an ACTIVE membership, with the caller's role in each.
-        A company that is PENDING_DELETION is listed only for its Owner (AC-DEL-14).
+        A company that is PENDING_DELETION, PURGE_QUEUED, PURGING or PURGE_FAILED is listed only for its Owner (AC-DEL-14).
       security:
         - bffCredential: []
           sessionCookie: []
@@ -388,7 +390,9 @@ paths:
       tags: [Companies]
       operationId: getCompany
       summary: Get a company
-      description: Requires the "View company details" permission (SPEC-TEN matrix).
+      description: |
+        Requires the "View company details" permission (SPEC-TEN matrix). While the company is not ACTIVE only its Owner
+        has it, and the response then carries the time of the deletion request and the earliest moment of the purge.
       security:
         - bffCredential: []
           sessionCookie: []
@@ -412,6 +416,91 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/companies/{companyId}/deletion:
+    post:
+      tags: [Deletion]
+      operationId: requestCompanyDeletion
+      summary: Request the deletion of the company
+      description: |
+        Only the Owner may ask (403 for every other member, 404 for someone who is not an ACTIVE member), in any
+        subscription state, and only with a login or step-up within the last 10 minutes (403
+        `REAUTHENTICATION_REQUIRED`). The request has no body and no reason is collected. The company must be ACTIVE and
+        must not be flagged for ownership resolution (409). In one transaction a pending ownership transfer is cancelled,
+        the company becomes PENDING_DELETION, the earliest moment of the purge is set 30 days after the request, and the
+        Owner and the Admins are emailed (every other active member gets a notice). Until the deletion is cancelled or the
+        data is deleted the company is closed to everyone but its Owner. At most 5 requests and cancellations per user and
+        10 per company per hour (429; a refused request does not use the allowance up; an unavailable counter store
+        returns 503). At most one email of each kind is sent per company per hour; the request still succeeds.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The company, PENDING_DELETION, with the request time and the earliest moment of the purge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      tags: [Deletion]
+      operationId: cancelCompanyDeletion
+      summary: Cancel a pending deletion
+      description: |
+        Only the Owner may cancel (403 for every other member, 404 for someone who is not an ACTIVE member). No recent
+        authentication is needed. The deletion must be pending and its deadline must not have passed: the state and the
+        deadline are checked together under the company lock (409 otherwise). Once the purge is queued, running or failed
+        the Owner can no longer act (403). The company becomes ACTIVE again and the Owner and the Admins are emailed.
+        Counts toward the same limits as the request.
+      security:
+        - bffCredential: []
+          sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The company, ACTIVE again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/companies/{companyId}/subscription:
     get:
       tags: [Plans]
@@ -1262,7 +1351,12 @@ components:
       description: The caller's role in one company. Decided by the server; never accepted from a request.
     CompanyStatus:
       type: string
-      enum: [ACTIVE, PENDING_DELETION]
+      enum: [ACTIVE, PENDING_DELETION, PURGE_QUEUED, PURGING, PURGE_FAILED]
+      description: |
+        ACTIVE is the only state in which a company works. PENDING_DELETION is the grace period of a deletion request:
+        the company is closed to everyone but its Owner, who can read it and cancel the deletion. PURGE_QUEUED, PURGING
+        and PURGE_FAILED mean the grace period has ended and the data is being deleted: nobody can do anything, and
+        the Owner can only read the company's details. A client must treat any value it does not know as closed.
     CreateCompanyRequest:
       type: object
       required: [name]
@@ -1302,6 +1396,29 @@ components:
         createdAt:
           type: string
           format: date-time
+        deletionRequestedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the deletion was requested; null while the company is ACTIVE.
+        purgeAt:
+          type: [string, 'null']
+          format: date-time
+          description: The earliest moment the data is deleted (the request plus 30 days); null while the company is ACTIVE.
+    DeletionStatus:
+      type: object
+      required: [status]
+      description: The company's status after a deletion request or a cancellation.
+      properties:
+        status:
+          $ref: '#/components/schemas/CompanyStatus'
+        requestedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the deletion was requested; null after a cancellation.
+        purgeAt:
+          type: [string, 'null']
+          format: date-time
+          description: The earliest moment the data is deleted; null after a cancellation.
     SubscriptionState:
       type: string
       description: |
