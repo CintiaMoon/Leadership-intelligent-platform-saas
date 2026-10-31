@@ -1,5 +1,7 @@
 package com.example.saas.api.tenant.domain;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,18 +79,37 @@ class CompanyPolicyTest {
 		}
 	}
 
-	/** Every status but ACTIVE is closed in the same way, so a status added later fails closed (slice 007 plan, Q-07, Q-08). */
+	/**
+	 * Once the purge is queued, running or failed nobody may do anything but the Owner reading the company's details, which
+	 * is how the screen learns the company is being deleted (SPEC-DEL AC-DEL-29). A new status fails closed.
+	 */
 	@Test
-	void everyStatusButActiveIsClosedLikePendingDeletion() {
+	void inThePurgeStatesOnlyTheOwnerMayReadTheCompanyDetails() {
+		for (CompanyStatus status : List.of(CompanyStatus.PURGE_QUEUED, CompanyStatus.PURGING, CompanyStatus.PURGE_FAILED)) {
+			for (Permission permission : Permission.values()) {
+				for (Role role : Role.values()) {
+					boolean expected = role == Role.OWNER && permission == Permission.VIEW_COMPANY_DETAILS;
+					assertThat(CompanyPolicy.permits(role, permission, status, Role.AGENT))
+						.as("%s / %s while %s", permission, role, status)
+						.isEqualTo(expected);
+				}
+			}
+		}
+	}
+
+	@Test
+	void noStatusButActiveIsMoreOpenThanPendingDeletion() {
 		for (CompanyStatus status : CompanyStatus.values()) {
 			if (status == CompanyStatus.ACTIVE) {
 				continue;
 			}
 			for (Permission permission : Permission.values()) {
 				for (Role role : Role.values()) {
-					assertThat(CompanyPolicy.permits(role, permission, status, Role.AGENT))
-						.as("%s / %s while %s", permission, role, status)
-						.isEqualTo(CompanyPolicy.permits(role, permission, CompanyStatus.PENDING_DELETION, Role.AGENT));
+					if (CompanyPolicy.permits(role, permission, status, Role.AGENT)) {
+						assertThat(CompanyPolicy.permits(role, permission, CompanyStatus.PENDING_DELETION, Role.AGENT))
+							.as("%s / %s while %s is open, so it must be open while pending", permission, role, status)
+							.isTrue();
+					}
 				}
 			}
 		}

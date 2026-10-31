@@ -53,7 +53,7 @@ class CompanyCreator {
 				company.getId(), "success", null);
 		subscriptions.startFor(userId, company.getId(), now);
 		return new CompanyView(company.getId(), company.getName(), company.getStatus(), Role.OWNER,
-				company.getCreatedAt());
+				company.getCreatedAt(), null, null);
 	}
 
 }

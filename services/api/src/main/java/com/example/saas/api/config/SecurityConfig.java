@@ -84,6 +84,9 @@ class SecurityConfig {
 				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/ownership-transfers",
 						"/api/v1/companies/*/ownership-transfers/*/accept", "/api/v1/companies/*/ownership-transfers/*/cancel")
 					.authenticated()
+				// Company deletion (SPEC-DEL): the Owner requests and cancels. The service decides who may, before any lock.
+				.requestMatchers(HttpMethod.POST, "/api/v1/companies/*/deletion").authenticated()
+				.requestMatchers(HttpMethod.DELETE, "/api/v1/companies/*/deletion").authenticated()
 				// Accepting an invitation needs a verified session; the address match is done by the service.
 				.requestMatchers(HttpMethod.POST, "/api/v1/invitations/accept").authenticated()
 				.anyRequest().denyAll())

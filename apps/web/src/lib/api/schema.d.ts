@@ -230,7 +230,7 @@ export interface paths {
         /**
          * List the caller's companies
          * @description The companies in which the caller has an ACTIVE membership, with the caller's role in each.
-         *     A company that is PENDING_DELETION is listed only for its Owner (AC-DEL-14).
+         *     A company that is PENDING_DELETION, PURGE_QUEUED, PURGING or PURGE_FAILED is listed only for its Owner (AC-DEL-14).
          */
         get: operations["listCompanies"];
         put?: never;
@@ -259,12 +259,49 @@ export interface paths {
         };
         /**
          * Get a company
-         * @description Requires the "View company details" permission (SPEC-TEN matrix).
+         * @description Requires the "View company details" permission (SPEC-TEN matrix). While the company is not ACTIVE only its Owner
+         *     has it, and the response then carries the time of the deletion request and the earliest moment of the purge.
          */
         get: operations["getCompany"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/companies/{companyId}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request the deletion of the company
+         * @description Only the Owner may ask (403 for every other member, 404 for someone who is not an ACTIVE member), in any
+         *     subscription state, and only with a login or step-up within the last 10 minutes (403
+         *     `REAUTHENTICATION_REQUIRED`). The request has no body and no reason is collected. The company must be ACTIVE and
+         *     must not be flagged for ownership resolution (409). In one transaction a pending ownership transfer is cancelled,
+         *     the company becomes PENDING_DELETION, the earliest moment of the purge is set 30 days after the request, and the
+         *     Owner and the Admins are emailed (every other active member gets a notice). Until the deletion is cancelled or the
+         *     data is deleted the company is closed to everyone but its Owner. At most 5 requests and cancellations per user and
+         *     10 per company per hour (429; a refused request does not use the allowance up; an unavailable counter store
+         *     returns 503). At most one email of each kind is sent per company per hour; the request still succeeds.
+         */
+        post: operations["requestCompanyDeletion"];
+        /**
+         * Cancel a pending deletion
+         * @description Only the Owner may cancel (403 for every other member, 404 for someone who is not an ACTIVE member). No recent
+         *     authentication is needed. The deletion must be pending and its deadline must not have passed: the state and the
+         *     deadline are checked together under the company lock (409 otherwise). Once the purge is queued, running or failed
+         *     the Owner can no longer act (403). The company becomes ACTIVE again and the Owner and the Admins are emailed.
+         *     Counts toward the same limits as the request.
+         */
+        delete: operations["cancelCompanyDeletion"];
         options?: never;
         head?: never;
         patch?: never;
@@ -691,8 +728,14 @@ export interface components {
          * @enum {string}
          */
         Role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER";
-        /** @enum {string} */
-        CompanyStatus: "ACTIVE" | "PENDING_DELETION";
+        /**
+         * @description ACTIVE is the only state in which a company works. PENDING_DELETION is the grace period of a deletion request:
+         *     the company is closed to everyone but its Owner, who can read it and cancel the deletion. PURGE_QUEUED, PURGING
+         *     and PURGE_FAILED mean the grace period has ended and the data is being deleted: nobody can do anything, and
+         *     the Owner can only read the company's details. A client must treat any value it does not know as closed.
+         * @enum {string}
+         */
+        CompanyStatus: "ACTIVE" | "PENDING_DELETION" | "PURGE_QUEUED" | "PURGING" | "PURGE_FAILED";
         CreateCompanyRequest: {
             /**
              * @description 1 to 100 Unicode code points after NFKC normalization and trimming. Control, format (bidi overrides,
@@ -715,6 +758,30 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description When the deletion was requested; null while the company is ACTIVE.
+             */
+            deletionRequestedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description The earliest moment the data is deleted (the request plus 30 days); null while the company is ACTIVE.
+             */
+            purgeAt?: string | null;
+        };
+        /** @description The company's status after a deletion request or a cancellation. */
+        DeletionStatus: {
+            status: components["schemas"]["CompanyStatus"];
+            /**
+             * Format: date-time
+             * @description When the deletion was requested; null after a cancellation.
+             */
+            requestedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description The earliest moment the data is deleted; null after a cancellation.
+             */
+            purgeAt?: string | null;
         };
         /**
          * @description The effective state of a subscription. `TRIALING` until the trial end instant, then `EXPIRED_READ_ONLY` for 14
@@ -1377,6 +1444,68 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    requestCompanyDeletion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The company, PENDING_DELETION, with the request time and the earliest moment of the purge. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    cancelCompanyDeletion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token from `GET /api/v1/auth/csrf` (D-75). */
+                "X-CSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The company, ACTIVE again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Unavailable"];
         };
     };
     getSubscription: {
